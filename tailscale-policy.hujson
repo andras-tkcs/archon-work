@@ -1,0 +1,48 @@
+// Tailscale policy for the Archon runner VMs.
+// Admin console -> Access controls -> paste / merge into your policy file.
+// Replaces the default allow-all: merge by hand if your tailnet has shares,
+// subnet routers or other tags.
+{
+	// Who may hand out tag:runner (needed before you can generate a tagged auth key).
+	"tagOwners": {
+		"tag:runner": ["autogroup:admin"],
+	},
+
+	"grants": [
+		// Your own devices keep reaching each other, as with the default policy.
+		{"src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"]},
+
+		// You -> runner VMs: Archon UI via Tailscale Serve (HTTPS) and Tailscale SSH.
+		{"src": ["autogroup:member"], "dst": ["tag:runner"], "ip": ["tcp:443", "tcp:22"]},
+
+		// Runners -> runners: uncomment only if several VMs must talk to each other.
+		// {"src": ["tag:runner"], "dst": ["tag:runner"], "ip": ["*"]},
+
+		// Deliberately absent: tag:runner -> your laptop/iPad/other machines.
+		// An agent on the VM can't reach the rest of your tailnet.
+	],
+
+	"ssh": [
+		// Agent user on runners: no browser re-check (Tailscale identity is enough).
+		{
+			"action": "accept",
+			"src":    ["autogroup:member"],
+			"dst":    ["tag:runner"],
+			"users":  ["agent"],
+		},
+		// Root on runners: re-confirm in the browser (valid 12 h).
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["tag:runner"],
+			"users":  ["root"],
+		},
+		// Default rule for your own devices, kept.
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+	],
+}
