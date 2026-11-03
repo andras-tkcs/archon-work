@@ -6,6 +6,7 @@ You drive it from a browser (iPad) via Archon's web UI, and get Slack notificati
 
 ```
 iPad (Safari, Tailscale app) ──HTTPS over tailnet──▶ VM: Tailscale Serve ─▶ Archon :3090 ─▶ Claude Code + gh + git
+                                                                         └─:8443─▶ code-server (VS Code: worktrees, diffs)
 Slack  ◀──────────── Socket Mode (outbound only) ────────────────────────────┘
 ```
 
@@ -28,7 +29,8 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 3. Pick the machine's tag (`TS_TAG`, default `tag:runner`). For another tag, render the
    policy with it: `sed 's/tag:runner/tag:<your-tag>/g' tailscale-policy.hujson`
 4. Admin console → **Access controls**: paste/merge the policy. It defines the tag, lets
-   your devices reach tagged machines only on HTTPS (Archon) and SSH, allows Tailscale SSH
+   your devices reach tagged machines only on HTTPS (Archon on 443, code-server on 8443)
+   and SSH, allows Tailscale SSH
    as `agent` (and as `root` with a browser re-check), and gives the tagged machines
    **no** access to your other devices. It replaces the default allow-all policy, so merge
    by hand if you use shares, subnet routers or other tags.
@@ -71,9 +73,10 @@ curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/<tag>/bootstrap.sh \
          GIT_NAME="Your Name" GIT_EMAIL="you@example.com" bash
 ```
 
-It installs base tools, GitHub CLI, Tailscale (with Tailscale SSH), Claude Code and Archon,
-turns on unattended upgrades, creates an `agent` user (no sudo), registers
-`archon.service`, sets up the firewall and Tailscale Serve. The Archon service is
+It installs base tools, GitHub CLI, Tailscale (with Tailscale SSH), Claude Code, Archon and
+code-server (VS Code in the browser), turns on unattended upgrades, creates an `agent` user
+(no sudo), registers `archon.service` and `code-server@agent.service`, sets up the firewall
+and Tailscale Serve. The Archon service is
 **enabled but not started** until Claude is logged in.
 
 | Variable | Default | |
@@ -83,6 +86,7 @@ turns on unattended upgrades, creates an `agent` user (no sudo), registers
 | `TS_TAG` | `tag:runner` | Tailscale tag of the machine; must match the policy and the auth key. Re-runs warn if the machine doesn't carry it |
 | `AGENT_USER` | `agent` | User that runs Claude Code + Archon |
 | `ARCHON_PORT` | `3090` | |
+| `CODE_SERVER_PORT` | `8080` | Local port of code-server (loopback only); the tailnet URL is always `:8443` |
 | `GIT_NAME`, `GIT_EMAIL` | – | Commit identity for the agents. With GitHub email privacy on, use the noreply address (`<id>+<user>@users.noreply.github.com`, see github.com/settings/emails), otherwise pushes fail with `GH007` |
 | `UPGRADE` | `1` | `0` = only install what's missing and re-apply config; upgrade nothing |
 | `AUTO_REBOOT` | `1` | Unattended upgrades may reboot when a kernel/libc update needs it |
@@ -133,12 +137,20 @@ if the tokens are set, starts Archon and checks `/api/health`. The summary print
   (🔄 → ✅/❌, a live status message, buttons for approval gates). Runs started from the web
   UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
   Slack (`/archon …` or `/archon-workflow run …`).
+- **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
+  runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
+  It opens `~agent/.archon/workspaces`, where Archon keeps its clones and worktrees
+  (`<owner>/<repo>/worktrees/<branch>`). Open the worktree of the run you want
+  (**File → Open Folder…**); the **Source Control** panel then lists the changed files and
+  shows side-by-side diffs, refreshing as the agent edits. It runs as `agent` with no
+  password, behind the tailnet policy like Archon — avoid editing files a run is working on.
 - **Raw terminal:** `ssh agent@<TS_HOSTNAME>` over Tailscale, then `tmux` + `claude`.
 
 ## Operations
 
 ```bash
 journalctl -u archon -f              # logs
+journalctl -u code-server@agent -f   # code-server logs
 sudo systemctl restart archon        # after editing ~agent/.archon/.env
 curl -s localhost:3090/api/health    # health (shows Slack once connected)
 ```
@@ -156,8 +168,8 @@ sudo unattended-upgrade --dry-run --debug   # what would be upgraded now
 less /var/log/unattended-upgrades/unattended-upgrades.log
 ```
 
-Claude Code updates itself. Archon is **not** auto-updated (an update restarts it); use the
-script for that.
+Claude Code updates itself. Archon and code-server are **not** auto-updated (an update
+restarts them); use the script for that.
 
 ### Upgrading with the script
 
@@ -168,8 +180,9 @@ Re-running `bootstrap.sh` is the upgrade path. Each run:
 - updates Archon **only if a newer release exists**. In that case it stops the service
   (running workflows are interrupted), replaces the binary, re-adds the Claude provider
   (required after every Archon update) and starts it again,
-- re-applies config (unattended-upgrades, systemd unit, firewall, Tailscale Serve) and installs
-  anything new, e.g. the Slack plugin once its tokens are in `.env`,
+- reinstalls code-server from its latest release (restarted only if the version changed),
+- re-applies config (unattended-upgrades, systemd unit, code-server config, firewall,
+  Tailscale Serve) and installs anything new, e.g. the Slack plugin once its tokens are in `.env`,
 - restarts Archon only when its binary, `.env` or unit changed. Otherwise a running Archon
   is left alone.
 
@@ -181,6 +194,8 @@ More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its o
 
 - Archon binds to all interfaces and its web login is off on a single-user SQLite setup,
   so **the firewall plus your tailnet ACLs are the access control**. Keep both.
+- code-server listens on loopback only and has no password: anyone who reaches `:8443`
+  through the tailnet gets an editor and a terminal as `agent`. Same trust boundary as Archon.
 - The `agent` user has no sudo; agents run with broad tool permissions inside it.
 - Secrets live only in `~agent/.archon/.env` (mode 600) and Claude's/gh's own credential
   stores on the VM. Never commit them; `.gitignore` covers `.env` files.
@@ -196,6 +211,7 @@ More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its o
 | `ssh agent@<vm>` denied or hangs, or *not tagged* warning | Policy not applied, or the VM doesn't carry `TS_TAG` (admin console → Machines → Edit ACL tags) |
 | `tailscale up` fails with a tags error | The tag isn't in the policy's `tagOwners`, or the auth key is tagged with a different tag |
 | `tailscale serve failed` | Enable MagicDNS + HTTPS certificates in the Tailscale admin console, re-run |
+| `…:8443` doesn't load, Archon does | The tailnet policy lacks `tcp:8443` (re-paste `tailscale-policy.hujson`), or check `systemctl status code-server@agent` |
 | Service crash-loops | Claude not logged in as `agent`, check `journalctl -u archon -n 50` |
 | `archon not found after install` | The installer should put it in `/usr/local/bin`; check `~/.archon/install.json` and `archon doctor` |
 | Runs fail after an Archon update | Provider missing: `sudo -iu agent archon provider add claude`, then `sudo systemctl restart archon` |
