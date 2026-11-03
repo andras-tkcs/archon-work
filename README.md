@@ -1,0 +1,184 @@
+# Archon runner VM
+ 
+One-command setup for a Linux VM that runs **Claude Code** with **Archon** as the workflow
+engine (research → plan → code → review pipelines, each in its own git worktree).
+You drive it from a browser (iPad) via Archon's web UI, and get Slack notifications.
+ 
+```
+iPad (Safari, Tailscale app) ──HTTPS over tailnet──▶ VM: Tailscale Serve ─▶ Archon :3090 ─▶ Claude Code + gh + git
+Slack  ◀──────────── Socket Mode (outbound only) ────────────────────────────┘
+```
+ 
+Nothing is exposed to the public internet except SSH (and you can close that too).
+ 
+| File | What it is |
+|---|---|
+| `bootstrap.sh` | Installer **and** updater, run as root. Baseline: a fresh Ubuntu 24.04 machine. Re-run it any time. |
+| `slack-app-manifest.yml` | Paste into Slack to create the Archon app in one step. |
+ 
+---
+ 
+## 1. Before: one-time setup outside the VM
+ 
+### Tailscale
+1. Create a tailnet (or use yours) and install the **Tailscale app on the iPad**.
+2. Admin console → **DNS**: enable **MagicDNS** and **HTTPS Certificates**
+   (required for the `https://<vm>.<tailnet>.ts.net` URL).
+3. Admin console → **Settings → Keys → Generate auth key**: one-off, pre-approved.
+   Optionally tag it (e.g. `tag:runner`) and limit access with ACLs, because anyone on
+   the tailnet who can reach the VM can use the Archon UI.
+### Hetzner
+1. Create a server: **Ubuntu 24.04**, your SSH key.
+   - Archon's x86 binary needs a CPU with **AVX2**. **ARM (CAX)** servers avoid the question
+     and are cheaper; CAX21 (4 vCPU / 8 GB) is a reasonable start for a few parallel runs.
+2. Attach a **Cloud Firewall**: inbound TCP 22 and UDP 41641 only (the script sets the same
+   rules in `ufw`, the cloud firewall is the second layer).
+### GitHub
+Decide which identity the agents push as: your account, or a separate bot account
+(recommended: easy to revoke, clear in history). You'll log in with `gh` on the VM later.
+ 
+### Slack (optional, for notifications)
+1. <https://api.slack.com/apps> → **Create New App → From an app manifest** → pick the
+   workspace → paste `slack-app-manifest.yml`.
+2. **Basic Information → App-Level Tokens → Generate**, scope `connections:write`
+   → copy the `xapp-…` token.
+3. **Install to Workspace** → copy the **Bot User OAuth Token** `xoxb-…`.
+4. Your Slack member ID (profile → ⋯ → *Copy member ID*) for the allow-list.
+### This repo
+Public is fine (no secrets in it). Because you'll `curl | sudo bash` it, protect `main`
+and run a **tag or commit SHA** rather than a moving branch.
+ 
+---
+ 
+## 2. Run the bootstrap
+ 
+SSH in as root (from a laptop or an iPad SSH app) and run:
+ 
+```bash
+curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/<tag>/bootstrap.sh \
+  | sudo TS_AUTHKEY=tskey-auth-xxxx TS_HOSTNAME=runner1 \
+         GIT_NAME="Your Name" GIT_EMAIL="you@example.com" bash
+```
+ 
+It installs base tools, GitHub CLI, Tailscale (with Tailscale SSH), Claude Code and Archon,
+turns on unattended upgrades, creates an `agent` user (no sudo), registers
+`archon.service`, sets up the firewall and Tailscale Serve. The Archon service is
+**enabled but not started** until Claude is logged in.
+ 
+| Variable | Default | |
+|---|---|---|
+| `TS_AUTHKEY` | – | Without it, run `sudo tailscale up --ssh` yourself and re-run |
+| `TS_HOSTNAME` | VM hostname | Name in the tailnet / URL |
+| `AGENT_USER` | `agent` | User that runs Claude Code + Archon |
+| `ARCHON_PORT` | `3090` | |
+| `GIT_NAME`, `GIT_EMAIL` | – | Commit identity for the agents |
+| `UPGRADE` | `1` | `0` = only install what's missing and re-apply config; upgrade nothing |
+| `AUTO_REBOOT` | `1` | Unattended upgrades may reboot when a kernel/libc update needs it |
+| `REBOOT_TIME` | `03:00` | When that reboot may happen (VM clock: UTC on Hetzner, i.e. 04:00 in Budapest in winter) |
+| `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
+ 
+Variables are not remembered between runs: pass the ones you need each time
+(`TS_AUTHKEY` is only needed until the machine has joined the tailnet).
+ 
+---
+ 
+## 3. After: one-time logins on the VM
+ 
+```bash
+sudo -iu agent
+ 
+claude                      # choose /login, sign in with your Claude subscription, then /exit
+gh auth login               # GitHub.com → HTTPS → login with browser/device code
+gh auth setup-git
+echo "GH_TOKEN=$(gh auth token)" >> ~/.archon/.env
+ 
+# Slack (optional): edit ~/.archon/.env and fill in
+#   SLACK_BOT_TOKEN=xoxb-...  SLACK_APP_TOKEN=xapp-...  SLACK_ALLOWED_USER_IDS=U0123...
+nano ~/.archon/.env
+ 
+exit
+```
+ 
+Then re-run the bootstrap (same command as above). This time it installs the Slack plugin
+if the tokens are set, starts Archon and checks `/api/health`. The summary prints the URL.
+ 
+### Check it works
+1. On the iPad (Tailscale on): open `https://<TS_HOSTNAME>.<tailnet>.ts.net`, add a
+   repository, and run something small, e.g. ask `archon-assist` to summarise the repo.
+2. Slack: invite the bot to a channel (`/invite @archon`) or DM it, then
+   `/archon-workflow list`.
+3. Once Tailscale SSH works from your devices (`ssh agent@<TS_HOSTNAME>`), close public SSH:
+   `curl … | sudo LOCK_SSH_TO_TAILSCALE=1 bash` and remove port 22 from the Hetzner firewall.
+---
+ 
+## Daily use
+ 
+- **Prompting / oversight:** the Archon web UI. Runs, their steps and worktrees are in one
+  place; approval gates wait for you there.
+- **Slack notifications:** Archon reports to the **Slack thread a run was started from**
+  (🔄 → ✅/❌, a live status message, buttons for approval gates). Runs started from the web
+  UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
+  Slack (`/archon …` or `/archon-workflow run …`).
+- **Raw terminal:** `ssh agent@<TS_HOSTNAME>` over Tailscale, then `tmux` + `claude`.
+## Operations
+ 
+```bash
+journalctl -u archon -f              # logs
+sudo systemctl restart archon        # after editing ~agent/.archon/.env
+curl -s localhost:3090/api/health    # health (shows Slack once connected)
+```
+ 
+### Automatic updates (unattended-upgrades)
+ 
+Runs daily without you: Ubuntu security **and** `-updates` packages, plus the GitHub CLI and
+Tailscale repos; old kernels and unused dependencies are removed. If an update needs a
+reboot, the VM reboots at `REBOOT_TIME` (`AUTO_REBOOT=0` turns that off, then reboot
+yourself when the script warns *reboot pending*). Archon comes back on its own after a reboot,
+but a workflow running at that moment is interrupted.
+ 
+```bash
+sudo unattended-upgrade --dry-run --debug   # what would be upgraded now
+less /var/log/unattended-upgrades/unattended-upgrades.log
+```
+ 
+Claude Code updates itself. Archon is **not** auto-updated (an update restarts it); use the
+script for that.
+ 
+### Upgrading with the script
+ 
+Re-running `bootstrap.sh` is the upgrade path. Each run:
+ 
+- upgrades all apt packages,
+- runs `claude update`,
+- updates Archon **only if a newer release exists**. In that case it stops the service
+  (running workflows are interrupted), replaces the binary, re-adds the Claude provider
+  (required after every Archon update) and starts it again,
+- re-applies config (unattended-upgrades, systemd unit, firewall, Tailscale Serve) and installs
+  anything new, e.g. the Slack plugin once its tokens are in `.env`,
+- restarts Archon only when its binary, `.env` or unit changed. Otherwise a running Archon
+  is left alone.
+To change config without upgrading anything: `curl … | sudo UPGRADE=0 bash`.
+ 
+More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its own Archon.
+ 
+## Security notes
+ 
+- Archon binds to all interfaces and its web login is off on a single-user SQLite setup,
+  so **the firewall plus your tailnet ACLs are the access control**. Keep both.
+- The `agent` user has no sudo; agents run with broad tool permissions inside it.
+- Secrets live only in `~agent/.archon/.env` (mode 600) and Claude's/gh's own credential
+  stores on the VM. Never commit them; `.gitignore` covers `.env` files.
+- `SLACK_ALLOWED_USER_IDS` empty = anyone in the workspace can start agents on your VM.
+- Your Tailscale auth key ends up in shell history when passed on the command line;
+  use a one-off key, or prefix the command with a space if `HISTCONTROL=ignorespace`.
+## Troubleshooting
+ 
+| Symptom | Fix |
+|---|---|
+| `CPU has no AVX2` | Use an ARM (CAX) server, or another x86 type |
+| `tailscale serve failed` | Enable MagicDNS + HTTPS certificates in the Tailscale admin console, re-run |
+| Service crash-loops | Claude not logged in as `agent`, check `journalctl -u archon -n 50` |
+| `archon not found after install` | The installer should put it in `/usr/local/bin`; check `~/.archon/install.json` and `archon doctor` |
+| Runs fail after an Archon update | Provider missing: `sudo -iu agent archon provider add claude`, then `sudo systemctl restart archon` |
+| `baseline is Ubuntu 24.04` | The script only supports Ubuntu; reinstall the VM with the Ubuntu 24.04 image |
+| Slack bot silent | Both tokens set? Plugin installed (`~/.archon/.slack-plugin-added`)? Bot invited to the channel? Reinstall the Slack app after changing scopes |
