@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "kind": "workflow-pack",
+  "name": "devflow",
+  "description": "The devflow toolkit (andras-tkcs/claude-toolkit) as Archon runs: plan, implement, review, definition of done, one PR watched until a person merges it; plus quick edits, docs review, security audit, repository configuration and Dependabot repair",
+  "compatibility": { "archon": ">=0.13.0" },
+  "entrypoints": {
+    "devflow-ship": "devflow-ship/devflow-ship.yaml",
+    "devflow-quick": "devflow-quick/devflow-quick.yaml",
+    "devflow-docs": "devflow-docs/devflow-docs.yaml",
+    "devflow-audit": "devflow-audit/devflow-audit.yaml",
+    "devflow-config": "devflow-config/devflow-config.yaml",
+    "devflow-deps": "devflow-deps/devflow-deps.yaml"
+  }
+}
