@@ -2,6 +2,8 @@
 // Admin console -> Access controls -> paste / merge into your policy file.
 // Replaces the default allow-all: merge by hand if your tailnet has shares,
 // subnet routers or other tags.
+// Uses tag:runner (bootstrap.sh default). If you run bootstrap.sh with another
+// TS_TAG, render it first:  sed 's/tag:runner/tag:<your-tag>/g' tailscale-policy.hujson
 {
 	// Who may hand out tag:runner (needed before you can generate a tagged auth key).
 	"tagOwners": {

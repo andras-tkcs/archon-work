@@ -15,7 +15,7 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 |---|---|
 | `bootstrap.sh` | Installer **and** updater, run as root. Baseline: a fresh Ubuntu 24.04 machine. Re-run it any time. |
 | `slack-app-manifest.yml` | Paste into Slack to create the Archon app in one step. |
-| `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules. |
+| `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
 
 ---
 
@@ -25,14 +25,16 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 1. Create a tailnet (or use yours) and install the **Tailscale app on the iPad**.
 2. Admin console → **DNS**: enable **MagicDNS** and **HTTPS Certificates**
    (required for the `https://<vm>.<tailnet>.ts.net` URL).
-3. Admin console → **Access controls**: paste/merge `tailscale-policy.hujson`. It defines
-   `tag:runner`, lets your devices reach runners only on HTTPS (Archon) and SSH, allows
-   Tailscale SSH as `agent` (and as `root` with a browser re-check), and gives runners
+3. Pick the machine's tag (`TS_TAG`, default `tag:runner`). For another tag, render the
+   policy with it: `sed 's/tag:runner/tag:<your-tag>/g' tailscale-policy.hujson`
+4. Admin console → **Access controls**: paste/merge the policy. It defines the tag, lets
+   your devices reach tagged machines only on HTTPS (Archon) and SSH, allows Tailscale SSH
+   as `agent` (and as `root` with a browser re-check), and gives the tagged machines
    **no** access to your other devices. It replaces the default allow-all policy, so merge
    by hand if you use shares, subnet routers or other tags.
-4. Admin console → **Settings → Keys → Generate auth key**: one-off, pre-approved,
-   **tagged `tag:runner`**. Tagged machines don't expire with your login and are covered
-   by the policy above.
+5. Admin console → **Settings → Keys → Generate auth key**: one-off, pre-approved,
+   **tagged with the same tag** (the script also requests `TS_TAG` when joining). Tagged
+   machines don't expire with your login and are covered by the policy above.
 
 ### Hetzner
 1. Create a server: **Ubuntu 24.04**, your SSH key.
@@ -65,7 +67,7 @@ SSH in as root (from a laptop or an iPad SSH app) and run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/<tag>/bootstrap.sh \
-  | sudo TS_AUTHKEY=tskey-auth-xxxx TS_HOSTNAME=runner1 \
+  | sudo TS_AUTHKEY=tskey-auth-xxxx TS_HOSTNAME=runner1 TS_TAG=tag:runner \
          GIT_NAME="Your Name" GIT_EMAIL="you@example.com" bash
 ```
 
@@ -78,6 +80,7 @@ turns on unattended upgrades, creates an `agent` user (no sudo), registers
 |---|---|---|
 | `TS_AUTHKEY` | – | Without it, run `sudo tailscale up --ssh` yourself and re-run |
 | `TS_HOSTNAME` | VM hostname | Name in the tailnet / URL |
+| `TS_TAG` | `tag:runner` | Tailscale tag of the machine; must match the policy and the auth key. Re-runs warn if the machine doesn't carry it |
 | `AGENT_USER` | `agent` | User that runs Claude Code + Archon |
 | `ARCHON_PORT` | `3090` | |
 | `GIT_NAME`, `GIT_EMAIL` | – | Commit identity for the agents. With GitHub email privacy on, use the noreply address (`<id>+<user>@users.noreply.github.com`, see github.com/settings/emails), otherwise pushes fail with `GH007` |
@@ -87,7 +90,8 @@ turns on unattended upgrades, creates an `agent` user (no sudo), registers
 | `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
 
 Variables are not remembered between runs: pass the ones you need each time
-(`TS_AUTHKEY` is only needed until the machine has joined the tailnet).
+(`TS_AUTHKEY` is only needed until the machine has joined the tailnet; keep passing
+`TS_TAG` if it isn't the default, so the tag check stays right).
 
 ---
 
@@ -189,7 +193,8 @@ More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its o
 | Symptom | Fix |
 |---|---|
 | `CPU has no AVX2` | Use an ARM (CAX) server, or another x86 type |
-| `ssh agent@<vm>` denied or hangs | Policy not applied, or the VM isn't tagged `tag:runner` (admin console → Machines → Edit ACL tags) |
+| `ssh agent@<vm>` denied or hangs, or *not tagged* warning | Policy not applied, or the VM doesn't carry `TS_TAG` (admin console → Machines → Edit ACL tags) |
+| `tailscale up` fails with a tags error | The tag isn't in the policy's `tagOwners`, or the auth key is tagged with a different tag |
 | `tailscale serve failed` | Enable MagicDNS + HTTPS certificates in the Tailscale admin console, re-run |
 | Service crash-loops | Claude not logged in as `agent`, check `journalctl -u archon -n 50` |
 | `archon not found after install` | The installer should put it in `/usr/local/bin`; check `~/.archon/install.json` and `archon doctor` |

@@ -16,6 +16,8 @@
 #   ARCHON_PORT=3090            Archon HTTP port (Archon default)
 #   TS_AUTHKEY=                 Tailscale auth key; without it run `tailscale up --ssh` yourself
 #   TS_HOSTNAME=<hostname -s>   machine name in the tailnet -> https://<name>.<tailnet>.ts.net
+#   TS_TAG=tag:runner           Tailscale tag for this machine (must exist in the policy's tagOwners;
+#                               use the same tag on the auth key, or an untagged key)
 #   GIT_NAME= GIT_EMAIL=        commit identity for the agents
 #   UPGRADE=1                   0 = only install missing parts and apply config, upgrade nothing
 #   AUTO_REBOOT=1               unattended-upgrades may reboot when a kernel/libc update needs it
@@ -27,6 +29,8 @@ AGENT_USER="${AGENT_USER:-agent}"
 ARCHON_PORT="${ARCHON_PORT:-3090}"
 TS_AUTHKEY="${TS_AUTHKEY:-}"
 TS_HOSTNAME="${TS_HOSTNAME:-$(hostname -s)}"
+TS_TAG="${TS_TAG:-tag:runner}"
+[[ "$TS_TAG" == tag:* ]] || TS_TAG="tag:$TS_TAG"
 GIT_NAME="${GIT_NAME:-}"
 GIT_EMAIL="${GIT_EMAIL:-}"
 UPGRADE="${UPGRADE:-1}"
@@ -108,10 +112,14 @@ unattended-upgrade --dry-run >/dev/null 2>&1 || warn "unattended-upgrade --dry-r
 log "Tailscale"
 if ! tailscale status >/dev/null 2>&1; then
   if [[ -n "$TS_AUTHKEY" ]]; then
-    tailscale up --authkey="$TS_AUTHKEY" --hostname="$TS_HOSTNAME" --ssh
+    tailscale up --authkey="$TS_AUTHKEY" --hostname="$TS_HOSTNAME" --advertise-tags="$TS_TAG" --ssh
   else
-    warn "Tailscale not logged in. Run: sudo tailscale up --ssh --hostname=$TS_HOSTNAME  (then re-run this script)"
+    warn "Tailscale not logged in. Run: sudo tailscale up --ssh --hostname=$TS_HOSTNAME --advertise-tags=$TS_TAG  (then re-run this script)"
   fi
+fi
+if tailscale status >/dev/null 2>&1 \
+   && ! tailscale status --json | jq -e --arg t "$TS_TAG" '(.Self.Tags // []) | any(.[]; . == $t)' >/dev/null; then
+  warn "this machine is not tagged $TS_TAG — the tailnet policy won't apply to it. Fix: admin console -> Machines -> Edit ACL tags"
 fi
 
 # ---------------------------------------------------------------- 4. agent user
