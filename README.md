@@ -21,6 +21,7 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
 | `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer and its git scripts (needs `archon` and `bun`). |
 | `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
+| `scripts/test-archon-repo-switch.sh` | Tests the bootstrap's helpers that detect and replace plugins left by another Archon repo when `ARCHON_REPO` changes. |
 | `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh` and `scripts/test-render-run.sh`. |
 
 ---
@@ -87,7 +88,7 @@ the firewall and Tailscale Serve. The Archon service is
 
 | Variable | Default | |
 |---|---|---|
-| `ARCHON_REPO` | `coleam00/Archon` | GitHub `owner/repo` whose releases supply Archon, its providers and the Slack plugin. Set it to your fork to run your own build. Must be `owner/repo`; the script refuses anything else. See below |
+| `ARCHON_REPO` | `tkcs-lab/Archon` | GitHub `owner/repo` whose releases supply Archon, its providers and the Slack plugin: the tkcs-lab fork by default, `coleam00/Archon` for upstream, or your own fork. Must be `owner/repo`; the script refuses anything else. See below |
 | `TS_AUTHKEY` | – | Without it, run `sudo tailscale up --ssh` yourself and re-run |
 | `TS_HOSTNAME` | VM hostname | Name in the tailnet / URL |
 | `TS_TAG` | `tag:runner` | Tailscale tag of the machine; must match the policy and the auth key. Re-runs warn if the machine doesn't carry it |
@@ -101,107 +102,33 @@ the firewall and Tailscale Serve. The Archon service is
 | `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
 | `DEVFLOW_PACK` | `tkcs-lab/archon-work/packs/devflow` | Archon workflow pack to install, `owner/repo/path[@tag]`. Point it at your fork, add `@<tag>` to pin it, or set it empty to install none |
 
-**Running a fork.** `ARCHON_REPO=<you>/Archon` makes the script read the latest release,
-the installer (`scripts/install.sh` at the fork's latest release tag) and the Slack plugin from your
-fork instead of upstream. The fork's release has to be a normal release, not a
-pre-release: GitHub's "latest" endpoint skips pre-releases, so the upgrade check would
-find nothing. The fork's release must also contain the release-repo change (its
-`scripts/install.sh` reads `ARCHON_RELEASE_REPO` and its binaries embed their own repo);
-upstream does not have it yet. Keep passing `ARCHON_REPO` on every
-re-run, or the next upgrade check compares against upstream.
+**Which Archon.** By default the script installs the tkcs-lab fork of Archon
+(`tkcs-lab/Archon`): its binaries download their server, web UI, providers and plugins from
+the fork's own releases, and from 0.13.4 it has `extraWorkflowSources`, which the devflow
+pack's plan workflows need and upstream does not have. `ARCHON_REPO=coleam00/Archon` installs
+upstream with its stock installer. Another fork works if its `scripts/install.sh` reads
+`ARCHON_RELEASE_REPO` and its binaries embed their own repo, as the tkcs-lab fork's do, and if
+its latest release is a normal release, not a pre-release: GitHub's "latest" endpoint skips
+pre-releases, so the upgrade check would find nothing. Write `ARCHON_REPO` in the repository's
+exact case.
 
-Variables are not remembered between runs: pass the ones you need each time
-(`TS_AUTHKEY` is only needed until the machine has joined the tailnet; keep passing
-`TS_TAG` if it isn't the default, so the tag check stays right).
-
----
-
-## 3. After: one-time logins on the VM
-
-```bash
-sudo -iu agent
-
-claude                      # choose /login, sign in with your Claude subscription, then /exit
-gh auth login               # GitHub.com → HTTPS → login with browser/device code
-gh auth setup-git
-echo "GH_TOKEN=$(gh auth token)" >> ~/.archon/.env
-
-# Slack (optional): edit ~/.archon/.env and fill in
-#   SLACK_BOT_TOKEN=xoxb-...  SLACK_APP_TOKEN=xapp-...  SLACK_ALLOWED_USER_IDS=U0123...
-nano ~/.archon/.env
-
-exit
-```
-
-Then re-run the bootstrap (same command as above). This time it installs the Slack plugin
-if the tokens are set, starts Archon and checks `/api/health`. The summary prints the URL.
-
-### Check it works
-1. On the iPad (Tailscale on): open `https://<TS_HOSTNAME>.<tailnet>.ts.net`, add a
-   repository, and run something small, e.g. ask `archon-assist` to summarise the repo.
-2. Slack: invite the bot to a channel (`/invite @archon`) or DM it, then
-   `/archon-workflow list`.
-3. Once Tailscale SSH works from your devices (`ssh agent@<TS_HOSTNAME>`), close public SSH:
-   `curl … | sudo LOCK_SSH_TO_TAILSCALE=1 bash` and remove port 22 from the Hetzner firewall.
-
----
-
-## Daily use
-
-- **Prompting / oversight:** the Archon web UI. Runs, their steps and worktrees are in one
-  place; approval gates wait for you there.
-- **Slack notifications:** Archon reports to the **Slack thread a run was started from**
-  (🔄 → ✅/❌, a live status message, buttons for approval gates). Runs started from the web
-  UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
-  Slack (`/archon …` or `/archon-workflow run …`).
-- **devflow:** in a repository with a devflow profile (`.claude/toolkit.yaml`), run
-  `tkcs-lab/devflow:devflow-plan` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
-  issue or the change; see [packs/devflow](packs/devflow/README.md).
-- **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
-  runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
-  It opens `~agent/.archon/workspaces`, where Archon keeps its clones and worktrees
-  (`<owner>/<repo>/worktrees/<branch>`). To open the worktree of a run, tap **↗**
-  (*Open in IDE*) next to the run in Archon's UI: it opens in code-server in a new tab
-  (Archon itself would open `vscode://`, which an iPad can't; `bootstrap.sh` repoints it).
-  Or use **File → Open Folder…**. The **Source Control** panel then lists the changed files
-  and shows side-by-side diffs, refreshing as the agent edits. It runs as `agent` with no
-  password, behind the tailnet policy like Archon — avoid editing files a run is working on.
-- **Raw terminal:** `ssh agent@<TS_HOSTNAME>` over Tailscale, then `tmux` + `claude`.
-
-## Operations
-
-```bash
-journalctl -u archon -f              # logs
-journalctl -u code-server@agent -f   # code-server logs
-sudo systemctl restart archon        # after editing ~agent/.archon/.env
-curl -s localhost:3090/api/health    # health (shows Slack once connected)
-```
-
-### Automatic updates (unattended-upgrades)
-
-Runs daily without you: Ubuntu security **and** `-updates` packages, plus the GitHub CLI and
-Tailscale repos; old kernels and unused dependencies are removed. If an update needs a
-reboot, the VM reboots at `REBOOT_TIME` (`AUTO_REBOOT=0` turns that off, then reboot
-yourself when the script warns *reboot pending*). Archon comes back on its own after a reboot,
-but a workflow running at that moment is interrupted.
-
-```bash
-sudo unattended-upgrade --dry-run --debug   # what would be upgraded now
-less /var/log/unattended-upgrades/unattended-upgrades.log
-```
-
-Claude Code updates itself. Archon and code-server are **not** auto-updated (an update
-restarts them); use the script for that.
-
-### Upgrading with the script
+**Switching.** The script records the repo Archon came from in
+`/var/lib/archon-bootstrap/archon-repo` (on a runner set up before that, it reads it from the
+Claude provider's plugin id). When `ARCHON_REPO` names another repo, a run with `UPGRADE=1`
+stops Archon (running workflows are interrupted), installs it from the new repo, replaces the
+old repo's first-party plugins (`provider-*`, `chat-slack`, `forge-github`) with the new
+repo's, and starts it again. With `UPGRADE=0` it only warns. Keep passing `ARCHON_REPO` on
+every re-run if it is not the default, or the next run switches the runner back to the
+tkcs-lab fork.
 
 Re-running `bootstrap.sh` is the upgrade path. Each run:
 
 - upgrades all apt packages,
 - runs `claude update`,
-- updates Archon **only if a newer release exists**. In that case it stops the service
-  (running workflows are interrupted), replaces the binary, re-adds the Claude provider
-  (required after every Archon update) and starts it again,
+- updates Archon **only if a newer release exists, or `ARCHON_REPO` names another repo than
+  the one it came from**. In that case it stops the service (running workflows are
+  interrupted), replaces the binary, re-adds the Claude provider (required after every Archon
+  update), replaces plugins left by another repo, and starts it again,
 - updates the devflow toolkit plugins (unless they are synced from claude.ai, which manages them),
   bun, and the devflow pack (`archon plugin update`; a running workflow keeps the revision it
   started with). Node.js is installed once and not upgraded, so a new major can't break a
@@ -242,5 +169,6 @@ More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its o
 | Service crash-loops | Claude not logged in as `agent`, check `journalctl -u archon -n 50` |
 | `archon not found after install` | The installer should put it in `/usr/local/bin`; check `~/.archon/install.json` and `archon doctor` |
 | Runs fail after an Archon update | Provider missing: `sudo -iu agent archon provider add claude`, then `sudo systemctl restart archon` |
+| `… belongs to coleam00/Archon/plugins/provider-claude` | A plugin from another Archon repo. Re-run the bootstrap with `UPGRADE=1`, or by hand: `sudo -iu agent archon plugin remove <that id>`, then `sudo -iu agent archon provider add claude` |
 | `baseline is Ubuntu 24.04` | The script only supports Ubuntu; reinstall the VM with the Ubuntu 24.04 image |
-| Slack bot silent | Both tokens set? Plugin installed (`~/.archon/.slack-plugin-added`)? Bot invited to the channel? Reinstall the Slack app after changing scopes |
+| Slack bot silent | Both tokens set? Plugin installed (`sudo -iu agent archon plugin list` shows `…/plugins/chat-slack`)? Bot invited to the channel? Reinstall the Slack app after changing scopes |
