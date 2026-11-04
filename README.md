@@ -221,7 +221,7 @@ Re-running `bootstrap.sh` is the upgrade path. Each run:
 - reinstalls code-server from its latest release (restarted only if the version changed),
 - re-applies config (unattended-upgrades, systemd unit, code-server config, Archon's Open in IDE link, firewall,
   Tailscale Serve) and installs anything new, e.g. the Slack plugin once its tokens are in `.env`,
-- restarts Archon only when its binary, `.env` or unit changed. Otherwise a running Archon
+- restarts Archon only when its binary, `.env`, unit or plugins changed. Otherwise a running Archon
   is left alone.
 
 To change config without upgrading anything: `curl … | sudo UPGRADE=0 bash`.
