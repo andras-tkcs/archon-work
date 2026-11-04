@@ -1,0 +1,21 @@
+# Green path: the planner has no open question, the challenger finds none, the interview ends.
+fixture:
+  expect: completed
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+ask:
+  text: "x"
+draft:
+  status: done
+  question: ""
+  why_no_more: all settled
+challenge:
+  question: ""
+  reason: none
+next:
+  done: true
+  stop: false
+  question: ""
