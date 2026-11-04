@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifactsDir, fail, input, must } from "./util.ts";
 
-const phase = input("phase", false);
+const phase = input("phase", false) || "<unknown phase>";
 
 if (input("done", false) === "true") {
   const base = input("base");
