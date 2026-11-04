@@ -6,10 +6,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifactsDir, fail, input, must } from "./util.ts";
 
-const base = input("base");
-const phase = input("phase");
+const phase = input("phase", false);
 
 if (input("done", false) === "true") {
+  const base = input("base");
   console.log(JSON.stringify({ head: base, phase, skipped: true }));
   process.exit(0);
 }
@@ -19,6 +19,7 @@ if (existsSync(blocked)) fail(`phase ${phase} stopped as blocked; it needs a per
 if (input("green", false) !== "true") fail(`the fast checks are still red after the last implementation step of ${phase} (see ${join(artifactsDir(), "verify-fast.md")})`);
 const dirty = must(["git", "status", "--porcelain"]);
 if (dirty) fail(`uncommitted changes after implementing ${phase}:\n${dirty}`);
+const base = input("base");
 const ahead = Number(must(["git", "rev-list", "--count", `${base}..HEAD`]));
 if (ahead === 0) fail(`phase ${phase} has no commits beyond ${base}: nothing was implemented`);
 
