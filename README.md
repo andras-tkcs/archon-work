@@ -78,6 +78,7 @@ turns on unattended upgrades, creates an `agent` user (no sudo), registers
 
 | Variable | Default | |
 |---|---|---|
+| `ARCHON_REPO` | `coleam00/Archon` | GitHub `owner/repo` whose releases supply Archon, its providers and the Slack plugin. Set it to your fork to run your own build. Must be `owner/repo`; the script refuses anything else. See below |
 | `TS_AUTHKEY` | – | Without it, run `sudo tailscale up --ssh` yourself and re-run |
 | `TS_HOSTNAME` | VM hostname | Name in the tailnet / URL |
 | `TS_TAG` | `tag:runner` | Tailscale tag of the machine; must match the policy and the auth key. Re-runs warn if the machine doesn't carry it |
@@ -88,6 +89,15 @@ turns on unattended upgrades, creates an `agent` user (no sudo), registers
 | `AUTO_REBOOT` | `1` | Unattended upgrades may reboot when a kernel/libc update needs it |
 | `REBOOT_TIME` | `03:00` | When that reboot may happen (VM clock: UTC on Hetzner, i.e. 04:00 in Budapest in winter) |
 | `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
+
+**Running a fork.** `ARCHON_REPO=<you>/Archon` makes the script read the latest release,
+the installer (`scripts/install.sh` on the fork's `main`) and the Slack plugin from your
+fork instead of upstream. The fork's release has to be a normal release, not a
+pre-release: GitHub's "latest" endpoint skips pre-releases, so the upgrade check would
+find nothing. The fork's `main` must also contain the release-repo change (its
+`scripts/install.sh` reads `ARCHON_RELEASE_REPO` and its binaries embed their own repo);
+upstream does not have it yet. Keep passing `ARCHON_REPO` on every
+re-run, or the next upgrade check compares against upstream.
 
 Variables are not remembered between runs: pass the ones you need each time
 (`TS_AUTHKEY` is only needed until the machine has joined the tailnet; keep passing

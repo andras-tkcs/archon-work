@@ -12,6 +12,8 @@
 # ~agent/.archon/.env on the VM. Safe for a public repo. See README.md.
 #
 # Optional env:
+#   ARCHON_REPO=coleam00/Archon GitHub owner/repo whose releases provide Archon, its providers and
+#                               the Slack plugin (set to your fork to run your own build)
 #   AGENT_USER=agent            unix user that runs Claude Code + Archon (no sudo)
 #   ARCHON_PORT=3090            Archon HTTP port (Archon default)
 #   TS_AUTHKEY=                 Tailscale auth key; without it run `tailscale up --ssh` yourself
@@ -25,12 +27,16 @@
 #   LOCK_SSH_TO_TAILSCALE=0     1 = close public port 22 (only once Tailscale SSH works)
 set -euo pipefail
 
+ARCHON_REPO="${ARCHON_REPO:-coleam00/Archon}"
 AGENT_USER="${AGENT_USER:-agent}"
 ARCHON_PORT="${ARCHON_PORT:-3090}"
 TS_AUTHKEY="${TS_AUTHKEY:-}"
 TS_HOSTNAME="${TS_HOSTNAME:-$(hostname -s)}"
 TS_TAG="${TS_TAG:-tag:runner}"
 [[ "$TS_TAG" == tag:* ]] || TS_TAG="tag:$TS_TAG"
+# Goes into URLs and a piped installer: refuse anything but owner/repo.
+[[ "$ARCHON_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+  || { printf 'ERROR: ARCHON_REPO must be owner/repo, got: %s\n' "$ARCHON_REPO" >&2; exit 1; }
 GIT_NAME="${GIT_NAME:-}"
 GIT_EMAIL="${GIT_EMAIL:-}"
 UPGRADE="${UPGRADE:-1}"
@@ -147,7 +153,7 @@ as_agent "claude --version" >/dev/null || die "claude not runnable after install
 # are per user and must be re-added after every Archon update.
 log "Archon"
 archon_latest() {
-  curl -fsSL https://api.github.com/repos/coleam00/Archon/releases/latest 2>/dev/null \
+  curl -fsSL "https://api.github.com/repos/$ARCHON_REPO/releases/latest" 2>/dev/null \
     | jq -r '.tag_name // empty' | sed 's/^v//'
 }
 need_archon=0
@@ -166,7 +172,15 @@ fi
 if [[ "$need_archon" == 1 ]]; then
   systemctl stop archon.service 2>/dev/null || true
   # Root gets the binary; the provider for root may fail (no claude for root) — that's fine.
-  curl -fsSL https://archon.diy/install | bash -s -- --providers claude \
+  # The default repo keeps the stock installer URL. Any other repo is installed with its own
+  # scripts/install.sh from main, which reads ARCHON_RELEASE_REPO (the variable must prefix
+  # `bash`, not `curl`). Its binary then downloads providers and plugins from the same repo.
+  if [[ "$ARCHON_REPO" == coleam00/Archon ]]; then
+    installer_url="https://archon.diy/install"
+  else
+    installer_url="https://raw.githubusercontent.com/$ARCHON_REPO/main/scripts/install.sh"
+  fi
+  curl -fsSL "$installer_url" | ARCHON_RELEASE_REPO="$ARCHON_REPO" bash -s -- --providers claude \
     || warn "Archon installer returned an error — checking the binary anyway"
   command -v archon >/dev/null || die "archon not found after install (expected /usr/local/bin/archon)"
   as_agent "archon provider add claude" || warn "'archon provider add claude' failed for $AGENT_USER"
@@ -207,10 +221,10 @@ has_env() { grep -q "^$1=.\+" "$ENV_FILE"; }
 if has_env SLACK_BOT_TOKEN && has_env SLACK_APP_TOKEN; then
   if [[ ! -f "$AGENT_HOME/.archon/.slack-plugin-added" ]]; then
     log "Archon Slack plugin"
-    if as_agent "archon plugin add coleam00/Archon/plugins/chat-slack"; then
+    if as_agent "archon plugin add $ARCHON_REPO/plugins/chat-slack"; then
       as_agent "touch ~/.archon/.slack-plugin-added"
     else
-      warn "Slack plugin install failed — run as $AGENT_USER: archon plugin add coleam00/Archon/plugins/chat-slack"
+      warn "Slack plugin install failed — run as $AGENT_USER: archon plugin add $ARCHON_REPO/plugins/chat-slack"
     fi
   fi
   has_env SLACK_ALLOWED_USER_IDS \
