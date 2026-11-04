@@ -1,0 +1,21 @@
+# RED: the user's answer says stop; the run is cancelled before any plan is written.
+fixture:
+  expect: cancelled
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+ask:
+  text: "x"
+draft:
+  status: stop
+  question: ""
+  why_no_more: ""
+challenge:
+  question: ""
+  reason: none
+next:
+  done: true
+  stop: true
+  question: ""

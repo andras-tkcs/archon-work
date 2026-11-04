@@ -1,0 +1,24 @@
+# RED: the implementer is blocked and the checks are red; the real gate-phase fails on green.
+exec-code: true
+fixture:
+  expect: failed
+  fail-node: gate
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+load-plan:
+  slug: x
+  branch: feat/x
+  title: X
+  done: false
+implement:
+  status: blocked
+  phase: p1-x
+  summary: stub
+check:
+  green: false
+  failed: []
+  unavailable: []
+  report: /stub/verify-fast.md

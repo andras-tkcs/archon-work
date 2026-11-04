@@ -1,0 +1,14 @@
+# The phase already has its Plan-Phase commit on the base: build is skipped.
+fixture:
+  expect: completed
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+load-plan:
+  slug: x
+  branch: feat/x
+  title: X
+  done: true
+gate: '{"head":"abc","phase":"p1-x","skipped":true}'

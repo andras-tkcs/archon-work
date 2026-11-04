@@ -1,0 +1,47 @@
+# RED: the fast checks stay red after three fixes; the real gate-build fails.
+exec-code: true
+fixture:
+  expect: failed
+  fail-node: gate-build
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+load-plan:
+  slug: x
+  branch: feat/x
+  title: X
+  done: false
+check:
+  green: false
+  failed: []
+  unavailable: []
+  report: /stub/verify-fast.md
+fix-fast: fixed
+review:
+  verdict: approve
+  blocking: 0
+  non_blocking: 1
+  head: abc
+fix-blocking: fixed
+tail__fix-nonblocking: done
+dod:
+  green: true
+  failed: []
+  unavailable: ["(cd mcpb/shim && npm test)"]
+  report: /stub/verify-dod.md
+dod-fix: fixed
+tail__open-pr:
+  number: 1100
+  url: https://github.com/example/project/pull/1100
+pr-state:
+  finished: true
+  state: MERGED
+  act: false
+  reasons: nothing new
+steward: done
+tail__finish:
+  merged: true
+  state: MERGED
+  url: https://github.com/example/project/pull/1100

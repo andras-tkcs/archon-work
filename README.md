@@ -17,10 +17,11 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `bootstrap.sh` | Installer **and** updater, run as root. Baseline: a fresh Ubuntu 24.04 machine. Re-run it any time. |
 | `slack-app-manifest.yml` | Paste into Slack to create the Archon app in one step. |
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
-| `packs/devflow/` | The devflow workflow pack for Archon (plan → implement → review → PR, for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
+| `packs/devflow/` | The devflow workflow pack for Archon (plan → implement → review → PR, with `devflow-plan` publishing a parallel implementation workflow, for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
+| `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer and its git scripts (needs `archon` and `bun`). |
 | `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
-| `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh`. |
+| `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh` and `scripts/test-render-run.sh`. |
 
 ---
 
@@ -154,7 +155,7 @@ if the tokens are set, starts Archon and checks `/api/health`. The summary print
   UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
   Slack (`/archon …` or `/archon-workflow run …`).
 - **devflow:** in a repository with a devflow profile (`.claude/toolkit.yaml`), run
-  `tkcs-lab/devflow:devflow-ship` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
+  `tkcs-lab/devflow:devflow-plan` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
   issue or the change; see [packs/devflow](packs/devflow/README.md).
 - **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
   runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).

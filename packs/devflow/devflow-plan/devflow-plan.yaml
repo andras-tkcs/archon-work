@@ -1,0 +1,170 @@
+name: devflow-plan
+description: |
+  The first half of the devflow toolkit's ship workflow: plans only. It interviews you one
+  question at a time (the planner asks the most decisive open question, and before it stops a
+  fresh reviewer tries to find one more), writes the plan, publishes the plan and the steps you
+  must do by hand as run artifacts, and publishes a devflow-run-<slug> workflow that
+  implements the plan's phases up to three at a time and then reviews, opens the PR and
+  watches it. Nothing is implemented by this run.
+
+  Use when: a change should be planned with you in the loop, so you can start its implementation
+  when you are ready, "plan this issue with devflow".
+  NOT for: confidential security work (devflow-audit keeps its plans off the plans branch), a
+  quick edit (devflow-quick), or implementing a plan that already exists.
+model: large
+worktree:
+  enabled: true
+inputs:
+  work:
+    default: ""
+    description: What to plan (an issue number or URL, a /review document URL, or a description). Empty means the run's message is the work.
+  plans_ref:
+    default: plans
+    description: The branch the plan and the generated workflow are pushed to.
+  plans_dir:
+    default: plans
+    description: The directory on that branch that holds plans/<slug>/ and workflows/.
+  pack:
+    default: ""
+    description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means auto-detect.
+returns: publish
+
+nodes:
+  # ---- Setup: profile, toolkit, environment ----------------------------------------------
+  - id: preflight
+    script: preflight
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        devflow_root: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+      required: [devflow_root, main_branch, branch_regex]
+
+  - id: setup
+    depends_on: [preflight]
+    script: setup-env
+    runtime: bun
+    timeout: 1800000
+
+  # ---- 1. The interview: one question at a time -------------------------------------------
+  - id: interview
+    depends_on: [setup]
+    loop_group:
+      max_iterations: 15
+      nodes:
+        - id: draft
+          command: draft
+          model: large
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              status: { type: string, enum: [ask, done, stop] }
+              question: { type: string }
+              why_no_more: { type: string }
+            required: [status, question, why_no_more]
+
+        - id: challenge
+          depends_on: [draft]
+          when: "$draft.output.status == 'done'"
+          command: challenge
+          model: large
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              question: { type: string }
+              reason: { type: string }
+            required: [question, reason]
+
+        - id: next
+          depends_on: [draft, challenge]
+          trigger_rule: all_done
+          script: next-question
+          runtime: bun
+          with:
+            draft: "$draft.output"
+            challenge: { from: "$challenge.output", if_skipped: "" }
+          output_format:
+            type: object
+            properties:
+              done: { type: boolean }
+              stop: { type: boolean }
+              question: { type: string }
+            required: [done, stop, question]
+
+        - id: ask
+          depends_on: [next]
+          when: "$next.output.done == false"
+          wait:
+            attention: "$next.output.question"
+            form: message
+            labels:
+              workflow: devflow-plan
+              stage: interview
+      until_bash: 'd=$next.output.done; [ "$d" = true ]'
+
+  - id: stop-at-interview
+    depends_on: [interview]
+    when: "$interview.output.stop == true"
+    cancel: "Stopped while planning: the interview ended without a plan (stopped by the answer, or 14 questions without converging). The questions and answers are interview.md in the run artifacts."
+
+  # ---- 2. The final plan, the generated workflow, the publication ------------------------
+  - id: finalize
+    depends_on: [interview]
+    when: "$interview.output.stop == false"
+    command: finalize
+    model: large
+    context: fresh
+    output_format:
+      type: object
+      properties:
+        scope: { type: string, enum: [small, large] }
+        slug: { type: string }
+        branch: { type: string }
+        title: { type: string }
+        prerequisites: { type: boolean }
+        after: { type: boolean }
+      required: [scope, slug, branch, title, prerequisites, after]
+
+  - id: render
+    depends_on: [finalize]
+    script: render-run
+    runtime: bun
+    with:
+      slug: "$finalize.output.slug"
+      branch: "$finalize.output.branch"
+      title: "$finalize.output.title"
+      main_branch: "$preflight.output.main_branch"
+      branch_regex: "$preflight.output.branch_regex"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
+    output_format:
+      type: object
+      properties:
+        workflow: { type: string }
+        file: { type: string }
+        waves: { type: integer }
+      required: [workflow, file, waves]
+
+  - id: publish
+    depends_on: [render]
+    script: publish-plan
+    runtime: bun
+    with:
+      slug: "$finalize.output.slug"
+      title: "$finalize.output.title"
+      workflow: "$render.output.workflow"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+    output_format:
+      type: object
+      properties:
+        commit: { type: string }
+        workflow: { type: string }
+        message: { type: string }
+      required: [commit, workflow, message]

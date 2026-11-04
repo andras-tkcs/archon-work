@@ -1,13 +1,13 @@
 # devflow pack for Archon
 
-Six workflows built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
+Six workflows (and the building blocks devflow-phase and devflow-deliver) built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
 for any repository that has a devflow profile (`.claude/toolkit.yaml`). The pack holds no project
 facts: branch rules, checks, docs to read, changelog and CI come from the profile, and the project's
 environment comes from its own SessionStart hook.
 
 `bootstrap.sh` installs it as an Archon plugin for the agent user, so every project on the runner can
 use it. Installed, its workflows are named `<owner>/devflow:<workflow>`, for example
-`tkcs-lab/devflow:devflow-ship`.
+`tkcs-lab/devflow:devflow-plan`.
 
 The repository moved from the `andras-tkcs` org to `tkcs-lab`. A runner bootstrapped before that
 still has the pack installed as `andras-tkcs/archon-work/packs/devflow`, with workflows named
@@ -16,25 +16,26 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 
 | Workflow | Use it for | Pauses for a person when |
 |---|---|---|
-| `devflow-ship` | An issue or change that needs a plan, through to a merged PR | The planner has a decision only you can make, or `manual_before` steps to confirm |
+| `devflow-plan` | An issue or change that needs a plan: interview, plan, then a published `devflow-run-<slug>` workflow that implements it | Every question of the interview, one at a time; the run publishes the plan and you start `devflow-run-<slug>` after `archon workflow sync` |
 | `devflow-quick` | A small edit with no plan (a typo, a one-file fix); refuses anything bigger | Never; it cancels with the reason if the edit is not small |
 | `devflow-docs` | Review the docs and the website, fix what is wrong | Never; undecidable items are listed in the PR |
 | `devflow-audit` | Security audit, then verify the findings, plan and fix them | The verifier leaves a decision to the maintainer |
 | `devflow-config` | Review a repo's rulesets, Actions, access and security settings and workflow files; apply what you approve | Choosing which settings changes to apply (needs an admin token) |
 | `devflow-deps` | Repair and push Dependabot PRs; fix vulnerability alerts no PR covers | Never; PRs it cannot fix are handed to a person with the evidence |
 
-`devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch) that the
-first three include (`devflow-audit` reaches it through `devflow-ship`); it is not run on its own. No
-workflow merges.
+`devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch). It is
+included by `devflow-quick`, `devflow-docs`, `devflow-audit-fix` (which `devflow-audit` includes) and
+`devflow-deliver`, and is not run on its own. `devflow-phase` and `devflow-deliver` are building
+blocks too: a generated `devflow-run-<slug>` workflow starts them. No workflow merges.
 
 ## Run it
 
 ```bash
 cd /path/to/a/registered/repo
-archon workflow run tkcs-lab/devflow:devflow-ship "Fix https://github.com/<owner>/<repo>/issues/<n>" --detach
+archon workflow run tkcs-lab/devflow:devflow-plan "Fix https://github.com/<owner>/<repo>/issues/<n>" --detach
 ```
 
-From the web UI or chat, ask for `devflow-ship` with the issue or the description.
+From the web UI or chat, ask for `devflow-plan` with the issue or the description.
 `--input scope=...` focuses `devflow-docs` and `devflow-audit`; `--input reference=<owner>/<name>`
 gives `devflow-config` a repository whose setup to compare against.
 
@@ -65,30 +66,53 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
 `node`/`npm`, a compiler) must be on the host: commands the host cannot run are reported as
 `UNAVAILABLE` in the definition of done and in the PR body, never ticked; CI runs them.
 
-## devflow-ship, step by step
+## devflow-plan, step by step
 
-1. **make-plan** (large tier): researches and writes `plan.md` with an implementation manifest,
-   validated by the toolkit's `validate_manifest.py`. When a decision is the user's, or
-   `manual_before` steps need confirming, the run pauses in the attention queue and replans with the
-   answer.
-2. **implement** (medium tier): one fresh session per phase, each followed by the profile's
-   `verify.fast`. Large plans merge each phase `--no-ff` with a `Plan-Phase:` trailer, as `/implement`
-   does. A gate then checks that every manifest phase landed and the fast checks are green.
-3. **review** (large tier, fresh context) with the `review-checklist` and `secure-code-review` skills.
-4. **fix blocking**: fix, then review again, up to three reviews. A gate fails the run if blocking
-   findings remain.
-5. **fix non-blocking**: each finding is fixed or declined with a reason; the PR body quotes the table.
-6. **definition of done** (`verify.dod`), then **one PR**, then a **watch** that polls every 10 minutes
-   and hands conflicts, red checks, review threads and comments to a steward session. The steward
-   follows `pr-steward` and the profile's `project_steward` file. Each item is handed over once per
-   head, so a red check the steward could not fix waits for a person rather than looping. The run ends
-   when a person merges or closes the PR. It never merges.
+1. **Interview** (large tier): the planner asks the most decisive open question, one at a time,
+   through the attention queue; before it stops, a fresh reviewer tries to find one more.
+2. **Plan**: researches and writes `plan.md` with an implementation manifest, validated by the
+   toolkit's `validate_manifest.py`. `manual_before` and `manual_after` steps become
+   `prerequisites.md` and `after.md`.
+3. **Render**: a deterministic renderer turns the validated manifest into
+   `devflow-run-<slug>.yaml`, checked with `archon validate`.
+4. **Publish**: the plan and the workflow are pushed to the `plans` branch (never forced) under
+   `plans/<slug>/` and `plans/workflows/`. `published.md` in the run's artifacts says what went
+   where and how to start the workflow. The run does not run `archon workflow sync`; you do.
+
+Then run `devflow-run-<slug>`. It implements the phases up to three at a time, each as a
+`devflow-phase` child run in its own worktree, merged by SHA; then `devflow-deliver` runs the
+fast-check fixes and the build gate, and the shared tail (review, fixes, definition of done, one PR,
+a watch every 10 minutes that hands conflicts, red checks and review threads to a steward session)
+follows. The run ends when a person merges or closes the PR. It never merges.
+
+Concurrent phase children each fetch tags in worktrees of one repository, so one can fail with
+"cannot lock ref". Resume the parent run: Archon re-drives the failed child.
+
+## Enable plan workflows in a project
+
+This needs Archon 0.13.4 or later for `extraWorkflowSources`.
+
+1. Run `devflow-plan` once in the project, so the `plans` branch exists.
+2. On the default branch, add this to `.archon/config.yaml`, then run `archon workflow sync`:
+
+   ```yaml
+   extraWorkflowSources:
+     - ref: plans
+       path: plans
+   ```
+
+**Warning:** a configured source that was never synced fails every run in that project, so add the
+config only after the branch exists. The `plans` branch is as public as the repository: keep
+confidential work to `devflow-audit`, which never publishes.
+
+Limits: a folder project has no worktree isolation, so the parallel phases need a git repository.
+With two devflow packs installed, `render` needs `--input pack=<owner>/devflow`.
 
 ## Where it differs from the toolkit commands
 
-- The plan is a run artifact, not a `plan/<slug>` branch. The retirement phase still writes the ADRs,
-  docs and changelog line, but there is no plan document to delete.
-- Phases run one after another in the run's worktree rather than as parallel cloud sessions.
+- Plans are published to the `plans` branch, not `plan/<slug>`. The retirement phase still writes the
+  ADRs, docs and changelog line, but there is no plan document to delete.
+- Phases run in parallel worktrees, as child runs of `devflow-run-<slug>`, rather than one after another.
 - Questions for the user go through the attention queue instead of `AskUserQuestion`, and manual steps
   are written into the plan instead of an HTML artifact.
 - Non-blocking findings are fixed or declined, rather than only listed in the PR body.
@@ -99,13 +123,13 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
 - **devflow-quick** writes a short `work.md` instead of a plan, makes the edit in one session with
   `verify.fast`, then runs the tail. Its scoping agent refuses a change that needs a design decision,
   touches authentication, authorization, secrets or other security controls, meets the profile's ADR
-  bar, adds an outside integration or bumps a dependency, and says to use `devflow-ship`.
+  bar, adds an outside integration or bumps a dependency, and says to use `devflow-plan`.
 - **devflow-docs** has a reviewer apply the `docs-review` checklist and measure (website build if
   there is one, documented commands, links, changelog coverage). The fixes become `work.md`; what is a
   product or wording decision goes to the PR's "Needs a person" section instead of into edits.
 - **devflow-audit** runs an auditor, then a fresh verifier that tries to disprove every finding and
-  decides fix, not doing or needs a decision, then includes `devflow-ship` with the surviving findings
-  as the work. The findings never leave the run's artifacts: no issue, and the PR names the class of
+  decides fix, not doing or needs a decision, then includes `devflow-audit-fix`, a confidential
+  one-run plan and implementation, with the surviving findings as the work. The findings never leave the run's artifacts: no issue, and the PR names the class of
   fix, not how to attack it.
 - **devflow-config** snapshots the repository's configuration through the GitHub API (read-only; each
   endpoint records whether this token could read it, and a 404 for a non-admin token counts as

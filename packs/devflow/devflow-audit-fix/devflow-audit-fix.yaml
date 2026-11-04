@@ -1,17 +1,14 @@
-name: devflow-ship
+name: devflow-audit-fix
 description: |
-  The devflow toolkit (andras-tkcs/claude-toolkit) as one Archon run, from an ask to a
-  merged pull request: make-plan, implement, review, fix the blocking findings, fix the
-  non-blocking ones, run the definition of done, open the PR, then watch it until it merges,
-  resolving conflicts, red CI and review threads on the way. Every project fact comes from
-  .claude/toolkit.yaml, the same profile /make-plan, /implement and /dod read.
+  Building block, included only by devflow-audit: plans and implements confidential fixes in
+  one run, without publishing the plan. Not run on its own.
+
+  Nodes: make-plan, implement, review, fix the blocking findings, fix the non-blocking ones,
+  run the definition of done, open the PR, then watch it until it merges, resolving conflicts,
+  red CI and review threads on the way. Every project fact comes from .claude/toolkit.yaml.
 
   Pauses for a person only where /make-plan would ask: a decision only the user can make,
   or manual_before steps to confirm. Merging stays with a person; the run never merges.
-
-  Use when: an issue or a described change should go all the way to a merged PR the way
-  /make-plan + /implement would take it, "ship this issue with devflow".
-  NOT for: a repo-wide review (/review), cutting a release, or a dependency bump.
 model: large
 worktree:
   enabled: true
@@ -64,7 +61,7 @@ nodes:
       attention: "$plan.output.ask"
       form: message
       labels:
-        workflow: devflow-ship
+        workflow: devflow-audit
         stage: plan
 
   - id: replan

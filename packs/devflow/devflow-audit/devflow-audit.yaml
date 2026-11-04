@@ -1,7 +1,7 @@
 name: devflow-audit
 description: |
   A cybersecurity audit taken through to fixes: audit, review the findings, make a plan,
-  implement (then the shared review, definition of done, PR and watch of devflow-ship).
+  implement (then the shared review, definition of done, PR and watch of devflow-audit-fix).
 
   1. An Opus auditor applies the toolkit's secure-code-review checklist to the repository (or the
      scope you name): trust boundaries, secrets in the tree and in history, injection, authorization,
@@ -10,14 +10,14 @@ description: |
      the security policy's scope, drops what does not hold, and decides: fix, not doing (with the reason),
      or a decision only the maintainer can make. Only that last group pauses the run, as one
      question.
-  3. The fixes go through devflow-ship: make-plan, implement, review, fix, definition of done, PR.
+  3. The fixes go through devflow-audit-fix (a confidential one-run plan and implementation): make-plan, implement, review, fix, definition of done, PR.
 
   Confidential by construction: vulnerabilities are not discussed in public, so the findings
   live in the run's artifacts only. No issue is filed, and the PR names the class of fix,
   never an exploit step or an unfixed finding. Never merges.
 
   Use when: "audit the repo", before a release, after a dependency or architecture change.
-  NOT for: a single known vulnerability report (devflow-ship with the report as work), or docs review.
+  NOT for: a single known vulnerability report (devflow-plan with the report as work), or docs review.
 model: large
 worktree:
   enabled: true
@@ -93,9 +93,9 @@ nodes:
     with:
       answer: "$decide.output.text"
 
-  # ---- plan and implement the fixes through devflow-ship --------------------------------------
+  # ---- a confidential one-run plan and implementation through devflow-audit-fix -----------
   - id: ship
-    include: devflow-ship
+    include: devflow-audit-fix
     depends_on: [triage, save-decisions]
     trigger_rule: none_failed_min_one_success
     when: "$triage.output.fix_count > 0 || $triage.output.needs_user == true"

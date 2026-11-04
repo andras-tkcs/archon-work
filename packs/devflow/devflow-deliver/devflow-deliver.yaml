@@ -1,0 +1,111 @@
+name: devflow-deliver
+description: |
+  Building block, started by a devflow-run-<slug> workflow; not run on its own.
+
+  Delivers a published plan after its phases are merged: it fixes red fast checks on the
+  feature branch, checks the build gate, then runs the shared tail (review, fixes, definition
+  of done, PR, watch).
+model: large
+worktree:
+  enabled: true
+inputs:
+  plan_ref:
+    default: ""
+    description: The branch that holds the published plan.
+  plan_path:
+    default: ""
+    description: The plan's path on that branch.
+  plan_commit:
+    default: ""
+    description: The commit of the plan to read, so no fetch is needed.
+  slug:
+    default: ""
+    description: The plan's slug.
+  branch:
+    default: ""
+    description: The feature branch the parent has checked out.
+  title:
+    default: ""
+    description: The title for the pull request.
+  head:
+    default: ""
+    description: The commit the feature branch must be at.
+returns: tail
+outcome_field: merged
+
+nodes:
+  - id: preflight
+    script: preflight
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        devflow_root: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+      required: [devflow_root, main_branch, branch_regex]
+
+  - id: setup
+    depends_on: [preflight]
+    script: setup-env
+    runtime: bun
+    timeout: 1800000
+
+  - id: load-plan
+    depends_on: [setup]
+    script: load-plan
+    runtime: bun
+    with:
+      mode: deliver
+      devflow_root: "$preflight.output.devflow_root"
+    output_format:
+      type: object
+      properties:
+        slug: { type: string }
+        branch: { type: string }
+        title: { type: string }
+        done: { type: boolean }
+      required: [slug, branch, title, done]
+
+  - id: fast-loop
+    depends_on: [load-plan]
+    loop_group:
+      nodes:
+        - id: fix-fast
+          when: "$LOOP_PREV.check.output.green == false"
+          command: fix-fast
+          model: medium
+          context: fresh
+        - id: check
+          depends_on: [fix-fast]
+          trigger_rule: all_done
+          script: verify
+          runtime: bun
+          timeout: 1800000
+          with:
+            mode: fast
+          output_format:
+            type: object
+            properties:
+              green: { type: boolean }
+              failed: { type: array, items: { type: string } }
+              unavailable: { type: array, items: { type: string } }
+              report: { type: string }
+            required: [green, failed, unavailable, report]
+      until_bash: 'g=$check.output.green; [ "$g" = true ]'
+      max_iterations: 3
+
+  - id: gate-build
+    depends_on: [fast-loop]
+    script: gate-build
+    runtime: bun
+    with:
+      branch: "$load-plan.output.branch"
+      slug: "$load-plan.output.slug"
+      main_branch: "$preflight.output.main_branch"
+      green: "$fast-loop.output.green"
+      phases: plan
+
+  - id: tail
+    include: devflow-tail
+    depends_on: [gate-build]

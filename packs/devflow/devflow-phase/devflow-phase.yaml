@@ -1,0 +1,114 @@
+name: devflow-phase
+description: |
+  Building block, started by a devflow-run-<slug> workflow; not run on its own.
+
+  Implements one phase of a published plan in its own worktree: it reads the plan, resets the
+  worktree to the base the parent hands over, implements the phase with fast checks after each
+  step, and reports the commit it ended on. The parent merges that commit with the
+  Plan-Phase trailer.
+model: medium
+worktree:
+  enabled: true
+inputs:
+  plan_ref:
+    default: ""
+    description: The branch that holds the published plan.
+  plan_path:
+    default: ""
+    description: The plan's path on that branch.
+  plan_commit:
+    default: ""
+    description: The commit of the plan to read, so no fetch is needed.
+  phase:
+    default: ""
+    description: The id of the phase to implement.
+  base:
+    default: ""
+    description: The commit the worktree starts from, the parent's head before this wave.
+returns: gate
+
+nodes:
+  - id: preflight
+    script: preflight
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        devflow_root: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+      required: [devflow_root, main_branch, branch_regex]
+
+  - id: setup
+    depends_on: [preflight]
+    script: setup-env
+    runtime: bun
+    timeout: 1800000
+
+  - id: load-plan
+    depends_on: [setup]
+    script: load-plan
+    runtime: bun
+    with:
+      mode: phase
+      devflow_root: "$preflight.output.devflow_root"
+    output_format:
+      type: object
+      properties:
+        slug: { type: string }
+        branch: { type: string }
+        title: { type: string }
+        done: { type: boolean }
+      required: [slug, branch, title, done]
+
+  - id: build
+    depends_on: [load-plan]
+    when: "$load-plan.output.done == false"
+    loop_group:
+      nodes:
+        - id: implement
+          command: implement-phase
+          model: medium
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              status: { type: string, enum: [continue, complete, blocked] }
+              phase: { type: string }
+              summary: { type: string }
+            required: [status, phase, summary]
+        - id: check
+          depends_on: [implement]
+          script: verify
+          runtime: bun
+          timeout: 1800000
+          with:
+            mode: fast
+          output_format:
+            type: object
+            properties:
+              green: { type: boolean }
+              failed: { type: array, items: { type: string } }
+              unavailable: { type: array, items: { type: string } }
+              report: { type: string }
+            required: [green, failed, unavailable, report]
+      until_bash: 's=$implement.output.status; g=$check.output.green; [ "$s" = blocked ] || { [ "$s" = complete ] && [ "$g" = true ]; }'
+      max_iterations: 6
+
+  - id: gate
+    depends_on: [load-plan, build]
+    trigger_rule: none_failed_min_one_success
+    script: gate-phase
+    runtime: bun
+    with:
+      base: "$INPUTS.base"
+      phase: "$INPUTS.phase"
+      done: "$load-plan.output.done"
+      green: { from: "$build.output.green", if_skipped: "true" }
+    output_format:
+      type: object
+      properties:
+        head: { type: string }
+        phase: { type: string }
+        skipped: { type: boolean }
+      required: [head, phase, skipped]
