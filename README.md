@@ -16,6 +16,8 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `bootstrap.sh` | Installer **and** updater, run as root. Baseline: a fresh Ubuntu 24.04 machine. Re-run it any time. |
 | `slack-app-manifest.yml` | Paste into Slack to create the Archon app in one step. |
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
+| `packs/devflow/` | The devflow workflow pack for Archon (plan → implement → review → PR, for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
+| `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
 
 ---
 
@@ -72,7 +74,8 @@ curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/<tag>/bootstrap.sh \
 ```
 
 It installs base tools, GitHub CLI, Tailscale (with Tailscale SSH), Claude Code and Archon,
-turns on unattended upgrades, creates an `agent` user (no sudo), registers
+the devflow toolkit plugins for Claude Code, bun and Node.js, and the devflow workflow pack for
+Archon, turns on unattended upgrades, creates an `agent` user (no sudo), registers
 `archon.service`, sets up the firewall and Tailscale Serve. The Archon service is
 **enabled but not started** until Claude is logged in.
 
@@ -88,6 +91,7 @@ turns on unattended upgrades, creates an `agent` user (no sudo), registers
 | `AUTO_REBOOT` | `1` | Unattended upgrades may reboot when a kernel/libc update needs it |
 | `REBOOT_TIME` | `03:00` | When that reboot may happen (VM clock: UTC on Hetzner, i.e. 04:00 in Budapest in winter) |
 | `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
+| `DEVFLOW_PACK` | `andras-tkcs/archon-work/packs/devflow` | Archon workflow pack to install, `owner/repo/path[@tag]`. Point it at your fork, add `@<tag>` to pin it, or set it empty to install none |
 
 Variables are not remembered between runs: pass the ones you need each time
 (`TS_AUTHKEY` is only needed until the machine has joined the tailnet; keep passing
@@ -133,6 +137,9 @@ if the tokens are set, starts Archon and checks `/api/health`. The summary print
   (🔄 → ✅/❌, a live status message, buttons for approval gates). Runs started from the web
   UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
   Slack (`/archon …` or `/archon-workflow run …`).
+- **devflow:** in a repository with a devflow profile (`.claude/toolkit.yaml`), run
+  `andras-tkcs/devflow:devflow-ship` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
+  issue or the change; see [packs/devflow](packs/devflow/README.md).
 - **Raw terminal:** `ssh agent@<TS_HOSTNAME>` over Tailscale, then `tmux` + `claude`.
 
 ## Operations
@@ -168,6 +175,10 @@ Re-running `bootstrap.sh` is the upgrade path. Each run:
 - updates Archon **only if a newer release exists**. In that case it stops the service
   (running workflows are interrupted), replaces the binary, re-adds the Claude provider
   (required after every Archon update) and starts it again,
+- updates the devflow toolkit plugins (unless they are synced from claude.ai, which manages them),
+  bun, and the devflow pack (`archon plugin update`; a running workflow keeps the revision it
+  started with). Node.js is installed once and not upgraded, so a new major can't break a
+  project's checks,
 - re-applies config (unattended-upgrades, systemd unit, firewall, Tailscale Serve) and installs
   anything new, e.g. the Slack plugin once its tokens are in `.env`,
 - restarts Archon only when its binary, `.env` or unit changed. Otherwise a running Archon

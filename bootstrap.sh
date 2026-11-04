@@ -23,6 +23,8 @@
 #   AUTO_REBOOT=1               unattended-upgrades may reboot when a kernel/libc update needs it
 #   REBOOT_TIME=03:00           when that reboot may happen (VM clock, UTC on Hetzner)
 #   LOCK_SSH_TO_TAILSCALE=0     1 = close public port 22 (only once Tailscale SSH works)
+#   DEVFLOW_PACK=andras-tkcs/archon-work/packs/devflow
+#                               Archon workflow pack to install (owner/repo/path[@tag]); empty = none
 set -euo pipefail
 
 AGENT_USER="${AGENT_USER:-agent}"
@@ -37,6 +39,7 @@ UPGRADE="${UPGRADE:-1}"
 AUTO_REBOOT="${AUTO_REBOOT:-1}"
 REBOOT_TIME="${REBOOT_TIME:-03:00}"
 LOCK_SSH_TO_TAILSCALE="${LOCK_SSH_TO_TAILSCALE:-0}"
+DEVFLOW_PACK="${DEVFLOW_PACK-andras-tkcs/archon-work/packs/devflow}"
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mWARN: %s\033[0m\n' "$*" >&2; }
@@ -59,8 +62,8 @@ APT=(apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-co
 log "Packages"
 apt-get update -y
 "${APT[@]}" install --no-install-recommends \
-  curl ca-certificates gnupg git tmux jq unzip build-essential ufw sudo \
-  unattended-upgrades needrestart
+  curl ca-certificates gnupg git tmux jq unzip xz-utils build-essential ufw sudo \
+  unattended-upgrades needrestart python3-yaml python3-venv
 
 if [[ ! -f /etc/apt/sources.list.d/github-cli.list ]]; then
   install -d -m 0755 /etc/apt/keyrings
@@ -142,6 +145,50 @@ elif [[ "$UPGRADE" == 1 ]]; then
 fi
 as_agent "claude --version" >/dev/null || die "claude not runnable after install"
 
+# ---------------------------------------------------------------- 5b. devflow pack prerequisites
+# The devflow pack's preflight needs the devflow toolkit as a Claude Code plugin of the agent user.
+# Plugins synced from claude.ai are managed there; otherwise they come from the GitHub marketplace.
+log "devflow toolkit (Claude Code plugins)"
+TOOLKIT_PLUGINS=(devflow stack-python stack-go stack-swift stack-ipados)
+plugin_ids="$(as_agent "claude plugin list --json" 2>/dev/null | jq -r '.[].id' || true)"
+if grep -qx 'devflow@synced' <<<"$plugin_ids"; then
+  echo "devflow is synced from claude.ai"
+else
+  as_agent "claude plugin marketplace add andras-tkcs/claude-toolkit" >/dev/null \
+    || warn "could not add the claude-toolkit marketplace"
+  if [[ "$UPGRADE" == 1 ]]; then
+    as_agent "claude plugin marketplace update claude-toolkit" >/dev/null \
+      || warn "could not update the claude-toolkit marketplace"
+  fi
+  for p in "${TOOLKIT_PLUGINS[@]}"; do
+    if ! grep -qx "$p@claude-toolkit" <<<"$plugin_ids"; then
+      as_agent "claude plugin install $p@claude-toolkit --scope user" || warn "could not install the $p plugin"
+    elif [[ "$UPGRADE" == 1 ]]; then
+      as_agent "claude plugin update $p@claude-toolkit" >/dev/null || warn "could not update the $p plugin"
+    fi
+  done
+fi
+
+# Archon script nodes run on bun; Node.js/npm is what JavaScript projects' setup hooks and checks call.
+log "bun and Node.js for $AGENT_USER"
+if ! as_agent "command -v bun" >/dev/null; then
+  as_agent "curl -fsSL https://bun.sh/install | bash >/dev/null && ln -sf ~/.bun/bin/bun ~/.local/bin/bun"
+elif [[ "$UPGRADE" == 1 ]]; then
+  as_agent "bun upgrade" >/dev/null || warn "bun upgrade failed"
+fi
+as_agent "bun --version" >/dev/null || die "bun not runnable after install"
+# Installed once at the current LTS and then left alone: a new major can break a project's checks.
+install_node() {
+  local arch ver
+  case "$(uname -m)" in x86_64) arch=x64 ;; aarch64) arch=arm64 ;; *) return 1 ;; esac
+  ver="$(curl -fsSL https://nodejs.org/dist/index.json | jq -r '[.[] | select(.lts != false)][0].version')" || return 1
+  [[ -n "$ver" ]] || return 1
+  as_agent "mkdir -p ~/.local/node && curl -fsSL https://nodejs.org/dist/$ver/node-$ver-linux-$arch.tar.xz | tar -xJ --strip-components=1 -C ~/.local/node && ln -sf ~/.local/node/bin/node ~/.local/node/bin/npm ~/.local/node/bin/npx ~/.local/bin/"
+}
+if ! as_agent "command -v node" >/dev/null; then
+  install_node || warn "Node.js install failed: projects whose setup hook or checks need npm will fail"
+fi
+
 # ---------------------------------------------------------------- 6. archon
 # The quick installer puts the binary in /usr/local/bin (needs root). Providers
 # are per user and must be re-added after every Archon update.
@@ -172,6 +219,19 @@ if [[ "$need_archon" == 1 ]]; then
   as_agent "archon provider add claude" || warn "'archon provider add claude' failed for $AGENT_USER"
 fi
 ARCHON_BIN="$(command -v archon)"
+
+# Archon discovers installed packs on every request, so installing or updating needs no restart,
+# and a running workflow keeps the revision it started with.
+if [[ -n "$DEVFLOW_PACK" ]]; then
+  log "Archon workflow pack $DEVFLOW_PACK"
+  if as_agent "archon plugin list" 2>/dev/null | awk -v id="${DEVFLOW_PACK%@*}" '$1 == id { found = 1 } END { exit !found }'; then
+    if [[ "$UPGRADE" == 1 ]]; then
+      as_agent "archon plugin update $DEVFLOW_PACK" || warn "could not update $DEVFLOW_PACK"
+    fi
+  else
+    as_agent "archon plugin add $DEVFLOW_PACK" || warn "could not install $DEVFLOW_PACK"
+  fi
+fi
 
 ENV_FILE="$AGENT_HOME/.archon/.env"
 install -d -m 0700 -o "$AGENT_USER" -g "$AGENT_USER" "$AGENT_HOME/.archon"
