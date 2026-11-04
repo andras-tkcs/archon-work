@@ -19,11 +19,10 @@ interface HookGroup {
   hooks?: CommandHook[];
 }
 
-if (run(["git", "rev-parse", "--is-shallow-repository"]).out.trim() === "true") {
-  must(["git", "fetch", "--unshallow", "--tags", "origin"]);
-} else {
-  must(["git", "fetch", "--tags", "origin"]);
-}
+// --force: origin's tags are the truth a fresh clone would see, so a tag re-pointed upstream
+// replaces the stale local one instead of failing the fetch with "would clobber existing tag".
+const unshallow = run(["git", "rev-parse", "--is-shallow-repository"]).out.trim() === "true" ? ["--unshallow"] : [];
+must(["git", "fetch", ...unshallow, "--force", "--tags", "origin"]);
 
 function sessionStartHooks(): CommandHook[] {
   const path = ".claude/settings.json";

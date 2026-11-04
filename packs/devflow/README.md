@@ -47,8 +47,9 @@ gives `devflow-config` a repository whose setup to compare against.
   model is called. Without a hook nothing is installed, and checks whose tools are missing show up
   as `UNAVAILABLE` (definition of done) or red (fast checks).
 
-Before that, `setup` restores full history and tags (`git fetch --unshallow --tags`), which version
-tools such as `setuptools_scm` need.
+Before that, `setup` restores full history and tags (`git fetch --unshallow --force --tags`), which
+version tools such as `setuptools_scm` need. Origin's tags win: a tag re-pointed upstream replaces
+the local one, as in a fresh clone.
 
 ## Host requirements
 
