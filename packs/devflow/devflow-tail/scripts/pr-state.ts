@@ -10,14 +10,13 @@ import { join } from "node:path";
 import { artifactsDir, input, must } from "../../.shared/util.ts";
 
 const n = input("number");
-const mainBranch = input("main_branch");
 const statePath = join(artifactsDir(), "watch-state.json");
 const handled: { keys: string[] } = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : { keys: [] };
 const seen = new Set(handled.keys);
 
 const me = must(["gh", "api", "user", "-q", ".login"]);
 const pr = JSON.parse(
-  must(["gh", "pr", "view", n, "--json", "state,url,mergeable,mergeStateStatus,headRefOid,headRefName,statusCheckRollup,comments,reviews"]),
+  must(["gh", "pr", "view", n, "--json", "state,url,mergeable,mergeStateStatus,headRefOid,headRefName,baseRefName,statusCheckRollup,comments,reviews"]),
 );
 const finished = pr.state === "MERGED" || pr.state === "CLOSED";
 const [, owner, repo] = new URL(pr.url).pathname.split("/");
@@ -57,8 +56,8 @@ const others = [
 
 if (!finished) {
   if (pr.mergeable === "CONFLICTING") {
-    const mainSha = must(["git", "ls-remote", "origin", `refs/heads/${mainBranch}`]).split(/\s/)[0];
-    handOver(`conflict:${head}:${mainSha}`, `merge conflict with ${mainBranch}`);
+    const baseSha = must(["git", "ls-remote", "origin", `refs/heads/${pr.baseRefName}`]).split(/\s/)[0];
+    handOver(`conflict:${head}:${baseSha}`, `merge conflict with ${pr.baseRefName}`);
   }
   for (const c of failedChecks) handOver(`check:${head}:${c.name}`, `check '${c.name}' ${c.result} on ${head.slice(0, 7)}`);
   for (const t of openThreads) handOver(`thread:${t.id}:${t.last.id}`, `unresolved review thread on ${t.path}:${t.line ?? "?"}`);
