@@ -29,6 +29,7 @@ function branchRegex(pattern: string, types: string[] | undefined): string {
   let re = esc(pattern);
   re = re.replace(esc("<type>"), types && types.length ? `(${types.map(esc).join("|")})` : "[a-z]+");
   re = re.replace(esc("<kebab-case>"), "[a-z0-9]+(-[a-z0-9]+)*");
+  re = re.replace(esc("<slug>"), "[a-z0-9]+(-[a-z0-9]+)*");
   return `^${re}$`;
 }
 
