@@ -19,6 +19,7 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
 | `packs/devflow/` | The devflow workflow pack for Archon (plan → implement → review → PR, for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
+| `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh`. |
 
 ---
 
