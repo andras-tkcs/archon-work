@@ -55,6 +55,17 @@ fi
 grep -q "dependency cycle" "$scratch/cycle.err"
 echo "cycle: ok"
 
+# d2. a phase id or slug that is not kebab-case is an error
+if bun "$render" "$fx/bad-id.md" --slug bad --branch feat/bad --title B --main main --pack test/devflow >/dev/null 2>"$scratch/badid.err"; then
+  echo "bad-id.md rendered without error" >&2; exit 1
+fi
+grep -q "invalid phase id" "$scratch/badid.err"
+if bun "$render" "$fx/serial.md" --slug "x'y" --branch feat/bad --title B --main main --pack test/devflow >/dev/null 2>"$scratch/badslug.err"; then
+  echo "bad slug rendered without error" >&2; exit 1
+fi
+grep -q "invalid slug" "$scratch/badslug.err"
+echo "bad-id: ok"
+
 # e. load-plan against a local bare origin
 origin="$scratch/origin.git"
 clone="$scratch/clone"

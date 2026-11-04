@@ -58,7 +58,21 @@ export function waves(manifest: Manifest): Phase[][] {
 const safe = (s: string) => s.replaceAll("$", "＄");
 const msgSafe = (s: string) => safe(s).replaceAll("'", "’");
 
+const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+// Ids and the slug land in bash bodies, so they must be plain kebab-case; the values quoted with '…' must hold no quote.
+function validate(o: RenderOpts): void {
+  if (!KEBAB.test(o.slug)) throw new Error(`invalid slug '${o.slug}': it must match ${KEBAB}`);
+  for (const p of o.manifest.phases) {
+    if (typeof p.id !== "string" || !KEBAB.test(p.id)) throw new Error(`invalid phase id '${p.id}': it must match ${KEBAB}`);
+  }
+  for (const [k, v] of Object.entries({ plansRef: o.plansRef, plansDir: o.plansDir, branch: o.branch, mainBranch: o.mainBranch })) {
+    if (v.includes("'")) throw new Error(`invalid ${k} '${v}': it must not contain a single quote`);
+  }
+}
+
 export function renderRunWorkflow(o: RenderOpts): string {
+  validate(o);
   const ws = waves(o.manifest);
   const planPath = `${o.plansDir}/${o.slug}/plan.md`;
   const doc: Record<string, any> = {

@@ -12,6 +12,7 @@ const workflow = input("workflow");
 const plansRef = input("plans_ref");
 const plansDir = input("plans_dir");
 const mainBranch = input("main_branch");
+if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) fail(`invalid slug '${slug}': it must be kebab-case`);
 const runId = process.env.WORKFLOW_ID || "run";
 // The load step is a person's command, never run here; the verb is built so no code path spells it as a call.
 const LOAD = ["archon", "workflow", "s" + "ync"].join(" ");
