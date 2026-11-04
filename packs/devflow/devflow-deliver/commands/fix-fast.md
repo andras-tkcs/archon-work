@@ -7,7 +7,7 @@ green (Sonnet). Merges of parallel phases are the usual cause.
 
 - The last run's result: $LOOP_PREV.check.output
 - The full log, one section per command with its output: `$ARTIFACTS_DIR/verify-fast.md`.
-- You are on the feature branch `<branch>`. Start project commands with
+- You are on the feature branch (`branch` in `$ARTIFACTS_DIR/context.json`). Start project commands with
   `. "$ARTIFACTS_DIR/project-env.sh";`.
 
 Fix exactly the failing fast checks, and stay inside the plan's `touches`. `UNAVAILABLE` rows are
