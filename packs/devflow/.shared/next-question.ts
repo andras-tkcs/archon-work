@@ -47,7 +47,6 @@ if (asked >= MAX_QUESTIONS) {
 }
 
 const n = asked + 1;
-if (!existsSync(file)) text = "# Interview\n";
 text = text.replace(/\n*$/, "\n") + `\n## Q${n} (asked by: ${who})\n\n${question}\n`;
 writeFileSync(file, text);
 console.log(
