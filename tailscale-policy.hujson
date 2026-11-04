@@ -14,8 +14,9 @@
 		// Your own devices keep reaching each other, as with the default policy.
 		{"src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"]},
 
-		// You -> runner VMs: Archon UI via Tailscale Serve (HTTPS) and Tailscale SSH.
-		{"src": ["autogroup:member"], "dst": ["tag:runner"], "ip": ["tcp:443", "tcp:22"]},
+		// You -> runner VMs via Tailscale Serve: Archon UI (HTTPS 443) and code-server
+		// (HTTPS 8443), plus Tailscale SSH.
+		{"src": ["autogroup:member"], "dst": ["tag:runner"], "ip": ["tcp:443", "tcp:8443", "tcp:22"]},
 
 		// Runners -> runners: uncomment only if several VMs must talk to each other.
 		// {"src": ["tag:runner"], "dst": ["tag:runner"], "ip": ["*"]},
