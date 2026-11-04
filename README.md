@@ -98,7 +98,7 @@ the firewall and Tailscale Serve. The Archon service is
 | `AUTO_REBOOT` | `1` | Unattended upgrades may reboot when a kernel/libc update needs it |
 | `REBOOT_TIME` | `03:00` | When that reboot may happen (VM clock: UTC on Hetzner, i.e. 04:00 in Budapest in winter) |
 | `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
-| `DEVFLOW_PACK` | `andras-tkcs/archon-work/packs/devflow` | Archon workflow pack to install, `owner/repo/path[@tag]`. Point it at your fork, add `@<tag>` to pin it, or set it empty to install none |
+| `DEVFLOW_PACK` | `tkcs-lab/archon-work/packs/devflow` | Archon workflow pack to install, `owner/repo/path[@tag]`. Point it at your fork, add `@<tag>` to pin it, or set it empty to install none |
 
 **Running a fork.** `ARCHON_REPO=<you>/Archon` makes the script read the latest release,
 the installer (`scripts/install.sh` at the fork's latest release tag) and the Slack plugin from your
@@ -154,7 +154,7 @@ if the tokens are set, starts Archon and checks `/api/health`. The summary print
   UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
   Slack (`/archon …` or `/archon-workflow run …`).
 - **devflow:** in a repository with a devflow profile (`.claude/toolkit.yaml`), run
-  `andras-tkcs/devflow:devflow-ship` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
+  `tkcs-lab/devflow:devflow-ship` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
   issue or the change; see [packs/devflow](packs/devflow/README.md).
 - **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
   runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
