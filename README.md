@@ -19,6 +19,7 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
 | `packs/devflow/` | The devflow workflow pack for Archon (plan → implement → review → PR, for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
+| `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
 | `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh`. |
 
 ---
@@ -158,9 +159,11 @@ if the tokens are set, starts Archon and checks `/api/health`. The summary print
 - **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
   runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
   It opens `~agent/.archon/workspaces`, where Archon keeps its clones and worktrees
-  (`<owner>/<repo>/worktrees/<branch>`). Open the worktree of the run you want
-  (**File → Open Folder…**); the **Source Control** panel then lists the changed files and
-  shows side-by-side diffs, refreshing as the agent edits. It runs as `agent` with no
+  (`<owner>/<repo>/worktrees/<branch>`). To open the worktree of a run, tap **↗**
+  (*Open in IDE*) next to the run in Archon's UI: it opens in code-server in a new tab
+  (Archon itself would open `vscode://`, which an iPad can't; `bootstrap.sh` repoints it).
+  Or use **File → Open Folder…**. The **Source Control** panel then lists the changed files
+  and shows side-by-side diffs, refreshing as the agent edits. It runs as `agent` with no
   password, behind the tailnet policy like Archon — avoid editing files a run is working on.
 - **Raw terminal:** `ssh agent@<TS_HOSTNAME>` over Tailscale, then `tmux` + `claude`.
 
@@ -203,7 +206,7 @@ Re-running `bootstrap.sh` is the upgrade path. Each run:
   started with). Node.js is installed once and not upgraded, so a new major can't break a
   project's checks,
 - reinstalls code-server from its latest release (restarted only if the version changed),
-- re-applies config (unattended-upgrades, systemd unit, code-server config, firewall,
+- re-applies config (unattended-upgrades, systemd unit, code-server config, Archon's Open in IDE link, firewall,
   Tailscale Serve) and installs anything new, e.g. the Slack plugin once its tokens are in `.env`,
 - restarts Archon only when its binary, `.env` or unit changed. Otherwise a running Archon
   is left alone.
@@ -234,6 +237,7 @@ More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its o
 | `tailscale up` fails with a tags error | The tag isn't in the policy's `tagOwners`, or the auth key is tagged with a different tag |
 | `tailscale serve failed` | Enable MagicDNS + HTTPS certificates in the Tailscale admin console, re-run |
 | `…:8443` doesn't load, Archon does | The tailnet policy lacks `tcp:8443` (re-paste `tailscale-policy.hujson`), or check `systemctl status code-server@agent` |
+| **↗ Open in IDE** opens a blank page | Re-run the bootstrap (`UPGRADE=0` is enough) and reload the page: it repoints the link for each installed Archon version. If it warns `Open in IDE link not found`, Archon changed its web bundle and the patch needs updating. To get `vscode://` back, delete `~agent/.archon/web-dist/` and restart Archon (it downloads the original again) |
 | Service crash-loops | Claude not logged in as `agent`, check `journalctl -u archon -n 50` |
 | `archon not found after install` | The installer should put it in `/usr/local/bin`; check `~/.archon/install.json` and `archon doctor` |
 | Runs fail after an Archon update | Provider missing: `sudo -iu agent archon provider add claude`, then `sudo systemctl restart archon` |
