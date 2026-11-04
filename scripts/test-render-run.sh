@@ -96,4 +96,44 @@ INPUTS_MODE=deliver lp env >/dev/null
 git switch -q -c feat/other
 if INPUTS_MODE=deliver lp env >/dev/null 2>&1; then echo "deliver on the wrong branch succeeded" >&2; exit 1; fi
 echo "load-plan deliver: ok"
+# f. publish-plan against a fresh bare origin: no plans branch yet, no .archon/config.yaml
+publisher="$repo_root/packs/devflow/devflow-plan/scripts/publish-plan.ts"
+porigin="$scratch/porigin.git"
+pclone="$scratch/pclone"
+git init -q --bare -b main "$porigin"
+git clone -q "$porigin" "$pclone" 2>/dev/null
+cd "$pclone"
+echo base > f.txt
+git add -A
+"${git_c[@]}" commit -qm base
+git push -q origin main
+stubs="$scratch/stubs"
+mkdir -p "$stubs"
+printf '#!/bin/sh\necho test/repo\n' > "$stubs/gh"
+printf '#!/bin/sh\ntouch "%s/archon-called"\n' "$scratch" > "$stubs/archon"
+chmod +x "$stubs/gh" "$stubs/archon"
+pub_art="$scratch/pub-art"
+mkdir -p "$pub_art"
+cp "$fx/serial.md" "$pub_art/plan.md"
+echo "# After implementing S" > "$pub_art/after.md"
+printf 'name: devflow-run-s\nnodes: []\n' > "$pub_art/devflow-run-s.yaml"
+publish() {
+  PATH="$stubs:$PATH" ARTIFACTS_DIR="$pub_art" WORKFLOW_ID=test INPUTS_SLUG=s INPUTS_TITLE=S \
+    INPUTS_WORKFLOW=devflow-run-s INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main \
+    bun "$publisher"
+}
+publish > "$scratch/publish1.json"
+git -C "$porigin" show plans:plans/s/plan.md >/dev/null
+git -C "$porigin" show plans:plans/s/after.md >/dev/null
+git -C "$porigin" show plans:plans/workflows/devflow-run-s.yaml >/dev/null
+test ! -e "$scratch/archon-called"
+grep -q extraWorkflowSources "$pub_art/published.md"
+test -z "$(git branch --list 'plans-*')"
+test -z "$(git -C "$porigin" branch --list 'plans-*')"
+n1="$(git -C "$porigin" rev-list --count plans)"
+echo "# changed" >> "$pub_art/plan.md"
+publish > "$scratch/publish2.json"
+n2="$(git -C "$porigin" rev-list --count plans)"
+test "$((n2 - n1))" -eq 1
+echo "publish-plan: ok"
 echo "test-render-run: all ok"

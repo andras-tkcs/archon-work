@@ -27,7 +27,7 @@ inputs:
   pack:
     default: ""
     description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means auto-detect.
-returns: interview
+returns: publish
 
 nodes:
   # ---- Setup: profile, toolkit, environment ----------------------------------------------
@@ -110,4 +110,61 @@ nodes:
     depends_on: [interview]
     when: "$interview.output.stop == true"
     cancel: "Stopped while planning: the interview ended without a plan (stopped by the answer, or 14 questions without converging). The questions and answers are interview.md in the run artifacts."
-  # p5: finalize, render, publish follow
+
+  # ---- 2. The final plan, the generated workflow, the publication ------------------------
+  - id: finalize
+    depends_on: [interview]
+    when: "$interview.output.stop == false"
+    command: finalize
+    model: large
+    context: fresh
+    output_format:
+      type: object
+      properties:
+        scope: { type: string, enum: [small, large] }
+        slug: { type: string }
+        branch: { type: string }
+        title: { type: string }
+        prerequisites: { type: boolean }
+        after: { type: boolean }
+      required: [scope, slug, branch, title, prerequisites, after]
+
+  - id: render
+    depends_on: [finalize]
+    script: render-run
+    runtime: bun
+    with:
+      slug: "$finalize.output.slug"
+      branch: "$finalize.output.branch"
+      title: "$finalize.output.title"
+      main_branch: "$preflight.output.main_branch"
+      branch_regex: "$preflight.output.branch_regex"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
+    output_format:
+      type: object
+      properties:
+        workflow: { type: string }
+        file: { type: string }
+        waves: { type: integer }
+      required: [workflow, file, waves]
+
+  - id: publish
+    depends_on: [render]
+    script: publish-plan
+    runtime: bun
+    with:
+      slug: "$finalize.output.slug"
+      title: "$finalize.output.title"
+      workflow: "$render.output.workflow"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+    output_format:
+      type: object
+      properties:
+        commit: { type: string }
+        workflow: { type: string }
+        message: { type: string }
+      required: [commit, workflow, message]

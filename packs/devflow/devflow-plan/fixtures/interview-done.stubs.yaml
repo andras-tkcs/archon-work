@@ -19,3 +19,18 @@ next:
   done: true
   stop: false
   question: ""
+finalize:
+  scope: large
+  slug: x
+  branch: feat/x
+  title: X
+  prerequisites: false
+  after: false
+render:
+  workflow: devflow-run-x
+  file: /stub/x.yaml
+  waves: 1
+publish:
+  commit: abc
+  workflow: devflow-run-x
+  message: ok
