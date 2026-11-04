@@ -26,7 +26,7 @@
 #   AUTO_REBOOT=1               unattended-upgrades may reboot when a kernel/libc update needs it
 #   REBOOT_TIME=03:00           when that reboot may happen (VM clock, UTC on Hetzner)
 #   LOCK_SSH_TO_TAILSCALE=0     1 = close public port 22 (only once Tailscale SSH works)
-#   DEVFLOW_PACK=andras-tkcs/archon-work/packs/devflow
+#   DEVFLOW_PACK=tkcs-lab/archon-work/packs/devflow
 #                               Archon workflow pack to install (owner/repo/path[@tag]); empty = none
 set -euo pipefail
 
@@ -48,7 +48,7 @@ UPGRADE="${UPGRADE:-1}"
 AUTO_REBOOT="${AUTO_REBOOT:-1}"
 REBOOT_TIME="${REBOOT_TIME:-03:00}"
 LOCK_SSH_TO_TAILSCALE="${LOCK_SSH_TO_TAILSCALE:-0}"
-DEVFLOW_PACK="${DEVFLOW_PACK-andras-tkcs/archon-work/packs/devflow}"
+DEVFLOW_PACK="${DEVFLOW_PACK-tkcs-lab/archon-work/packs/devflow}"
 STATE_DIR=/var/lib/archon-bootstrap   # change-detection sums, so re-runs restart only what changed
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
