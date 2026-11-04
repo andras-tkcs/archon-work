@@ -378,6 +378,54 @@ else
   warn "code-server not installed — the editor URL won't work"
 fi
 
+# ---------------------------------------------------------------- 7c. Open in IDE -> code-server
+# Point Archon's "Open in IDE" (↗) at code-server instead of vscode://, which an iPad can't open.
+# Archon serves /assets/* as immutable, so the patched bundle gets its own content-hashed name
+# and index.html (served no-cache) is pointed at it; the original bundle is left as downloaded.
+# Must not abort under set -euo pipefail: a bundle that doesn't match only warns.
+# Usage: patch_archon_ide_link <web-dist version dir> <code-server https port> <owner user:group>
+patch_archon_ide_link() {
+  local dir="$1" port="$2" owner="$3"
+  local link_re='`vscode://file/\$\{([A-Za-z_$][A-Za-z0-9_$]*)\}`'
+  local src orig count tmp sum new
+  [[ -f "$dir/index.html" ]] || return 0
+  src="$(grep -m1 -oE '/assets/index-[A-Za-z0-9_-]+\.js' "$dir/index.html" || true)"
+  orig="$(sed -E 's/-cs-[0-9a-f]{8}\.js$/.js/' <<<"$src")"
+  if [[ -z "$src" || ! -f "$dir$orig" ]]; then
+    warn "Archon web UI in $dir: no /assets/index-*.js bundle found; Open in IDE left as vscode://"
+    return 0
+  fi
+  count="$({ grep -oE "$link_re" "$dir$orig" || true; } | wc -l)"
+  if [[ "$count" -ne 1 ]]; then
+    warn "Archon web UI in $dir: Open in IDE link not found in $orig ($count matches); left as vscode://"
+    return 0
+  fi
+  tmp="$(mktemp)"
+  sed -E 's#'"$link_re"'#`${location.protocol}//${location.hostname}:'"$port"'/?folder=${encodeURIComponent(\1)}`#' \
+    "$dir$orig" > "$tmp"
+  sum="$(sha256sum "$tmp" | cut -c1-8)"
+  new="${orig%.js}-cs-$sum.js"
+  install -m 0644 "$tmp" "$dir$new"
+  rm -f "$tmp"
+  find "$dir/assets" -maxdepth 1 -name 'index-*-cs-*.js' ! -name "${new##*/}" -delete
+  [[ "$src" == "$new" ]] || sed -i "s#\"$src\"#\"$new\"#" "$dir/index.html"
+  chown "$owner" "$dir$new" "$dir/index.html"
+}
+if [[ $CODE_SERVER_OK == 1 ]]; then
+  log "Archon's Open in IDE (↗) -> code-server (:$CODE_SERVER_HTTPS_PORT)"
+  # A started Archon has already downloaded its web UI. Otherwise (not logged in yet) fetch it now,
+  # so it is patched before the first start; never while the service may be downloading it.
+  if [[ $ARCHON_STARTED == 0 ]]; then
+    as_agent "$ARCHON_BIN serve --download-only" >/dev/null 2>&1 \
+      || warn "'archon serve --download-only' failed; Open in IDE is patched on the next run"
+  fi
+  # No match leaves the literal pattern, which has no index.html: the function returns quietly.
+  for d in "$AGENT_HOME"/.archon/web-dist/*/; do
+    [[ "$d" == *.tmp/ ]] && continue   # a download still being extracted
+    patch_archon_ide_link "${d%/}" "$CODE_SERVER_HTTPS_PORT" "$AGENT_USER:$AGENT_USER"
+  done
+fi
+
 # ---------------------------------------------------------------- 8. firewall
 # Archon binds 0.0.0.0 and web auth is off for a solo install, so the firewall
 # is what keeps it private. Also add a Hetzner Cloud Firewall with the same rule.

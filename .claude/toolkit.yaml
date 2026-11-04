@@ -18,6 +18,8 @@ verify:
   fast:
     - bash -n bootstrap.sh
     - bash -n scripts/test-devflow-pack.sh
+    - bash -n scripts/test-ide-link-patch.sh
+    - scripts/test-ide-link-patch.sh
   dod:
     - scripts/test-devflow-pack.sh
 
