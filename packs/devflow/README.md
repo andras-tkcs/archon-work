@@ -23,10 +23,10 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 | `devflow-config` | Review a repo's rulesets, Actions, access and security settings and workflow files; apply what you approve | Choosing which settings changes to apply (needs an admin token) |
 | `devflow-deps` | Repair and push Dependabot PRs; fix vulnerability alerts no PR covers | Never; PRs it cannot fix are handed to a person with the evidence |
 
-`devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch) that the
-`devflow-quick`, `devflow-docs` and `devflow-audit-fix` (through `devflow-audit`) and `devflow-deliver`
-include; it is not run on its own. `devflow-phase` and `devflow-deliver` are building blocks too: a
-generated `devflow-run-<slug>` workflow starts them. No workflow merges.
+`devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch). It is
+included by `devflow-quick`, `devflow-docs`, `devflow-audit-fix` (which `devflow-audit` includes) and
+`devflow-deliver`, and is not run on its own. `devflow-phase` and `devflow-deliver` are building
+blocks too: a generated `devflow-run-<slug>` workflow starts them. No workflow merges.
 
 ## Run it
 
@@ -104,6 +104,9 @@ This needs Archon 0.13.4 or later for `extraWorkflowSources`.
 **Warning:** a configured source that was never synced fails every run in that project, so add the
 config only after the branch exists. The `plans` branch is as public as the repository: keep
 confidential work to `devflow-audit`, which never publishes.
+
+Limits: a folder project has no worktree isolation, so the parallel phases need a git repository.
+With two devflow packs installed, `render` needs `--input pack=<owner>/devflow`.
 
 ## Where it differs from the toolkit commands
 
