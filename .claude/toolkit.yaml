@@ -1,0 +1,24 @@
+# devflow profile for this repository: what the devflow workflows (packs/devflow) and the toolkit's
+# /make-plan, /implement and /dod read. Schema: the devflow plugin's schema/profile.schema.json.
+project:
+  name: archon-work
+
+docs:
+  must_read:
+    - README.md
+    - packs/devflow/README.md
+
+git:
+  main_branch: main
+  branch_pattern: <type>/<kebab-case>
+  branch_types: [feat, fix, docs, chore]
+  merge_style: merge-commit
+
+verify:
+  fast:
+    - bash -n bootstrap.sh
+    - bash -n scripts/test-devflow-pack.sh
+  dod:
+    - scripts/test-devflow-pack.sh
+
+stacks: []
