@@ -14,6 +14,7 @@
 # Optional env:
 #   AGENT_USER=agent            unix user that runs Claude Code + Archon (no sudo)
 #   ARCHON_PORT=3090            Archon HTTP port (Archon default)
+#   CODE_SERVER_PORT=8080       code-server (VS Code in the browser) port, bound to 127.0.0.1
 #   TS_AUTHKEY=                 Tailscale auth key; without it run `tailscale up --ssh` yourself
 #   TS_HOSTNAME=<hostname -s>   machine name in the tailnet -> https://<name>.<tailnet>.ts.net
 #   TS_TAG=tag:runner           Tailscale tag for this machine (must exist in the policy's tagOwners;
@@ -29,6 +30,8 @@ set -euo pipefail
 
 AGENT_USER="${AGENT_USER:-agent}"
 ARCHON_PORT="${ARCHON_PORT:-3090}"
+CODE_SERVER_PORT="${CODE_SERVER_PORT:-8080}"
+CODE_SERVER_HTTPS_PORT=8443   # must match the tcp:8443 grant in tailscale-policy.hujson
 TS_AUTHKEY="${TS_AUTHKEY:-}"
 TS_HOSTNAME="${TS_HOSTNAME:-$(hostname -s)}"
 TS_TAG="${TS_TAG:-tag:runner}"
@@ -40,6 +43,7 @@ AUTO_REBOOT="${AUTO_REBOOT:-1}"
 REBOOT_TIME="${REBOOT_TIME:-03:00}"
 LOCK_SSH_TO_TAILSCALE="${LOCK_SSH_TO_TAILSCALE:-0}"
 DEVFLOW_PACK="${DEVFLOW_PACK-andras-tkcs/archon-work/packs/devflow}"
+STATE_DIR=/var/lib/archon-bootstrap   # change-detection sums, so re-runs restart only what changed
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mWARN: %s\033[0m\n' "$*" >&2; }
@@ -305,7 +309,6 @@ systemctl enable archon.service >/dev/null
 ARCHON_STARTED=0
 if [[ -f "$AGENT_HOME/.claude/.credentials.json" ]] || has_env CLAUDE_CODE_OAUTH_TOKEN; then
   ARCHON_STARTED=1
-  STATE_DIR=/var/lib/archon-bootstrap
   install -d -m 0700 "$STATE_DIR"
   env_sum="$(sha256sum "$ENV_FILE" /etc/systemd/system/archon.service | sha256sum | cut -d' ' -f1)"
   if [[ "$need_archon" == 1 ]] || ! systemctl is-active --quiet archon.service \
@@ -319,6 +322,42 @@ if [[ -f "$AGENT_HOME/.claude/.credentials.json" ]] || has_env CLAUDE_CODE_OAUTH
   done
   curl -fsS "http://127.0.0.1:$ARCHON_PORT/api/health" >/dev/null 2>&1 \
     || warn "Archon not healthy yet — check: journalctl -u archon -n 50"
+fi
+
+# ---------------------------------------------------------------- 7b. code-server
+# VS Code in the browser, to watch the agents' worktrees and their git diffs.
+# Bound to loopback without a password: only Tailscale Serve reaches it, so the
+# tailnet policy is its access control, as for Archon.
+log "code-server (VS Code in the browser)"
+code_server_version() { code-server --version 2>/dev/null | head -1; }
+if [[ -z "$(code_server_version)" || "$UPGRADE" == 1 ]]; then
+  curl -fsSL https://code-server.dev/install.sh | sh \
+    || warn "code-server installer returned an error"
+fi
+CS_CONFIG="$AGENT_HOME/.config/code-server/config.yaml"
+install -d -m 0700 -o "$AGENT_USER" -g "$AGENT_USER" "$AGENT_HOME/.config" "$AGENT_HOME/.config/code-server"
+cat > "$CS_CONFIG" <<EOF
+# Managed by bootstrap.sh — re-run the script instead of editing.
+bind-addr: 127.0.0.1:$CODE_SERVER_PORT
+auth: none
+cert: false
+EOF
+chown "$AGENT_USER:$AGENT_USER" "$CS_CONFIG"
+chmod 0600 "$CS_CONFIG"
+CODE_SERVER_OK=0
+if command -v code-server >/dev/null; then
+  CODE_SERVER_OK=1
+  systemctl enable "code-server@$AGENT_USER" >/dev/null
+  # Restart only when the config or version changed, so re-runs keep open editor sessions.
+  install -d -m 0700 "$STATE_DIR"
+  cs_sum="$(sha256sum "$CS_CONFIG" | cut -d' ' -f1) $(code_server_version)"
+  if ! systemctl is-active --quiet "code-server@$AGENT_USER" \
+     || [[ "$cs_sum" != "$(cat "$STATE_DIR/code-server.sum" 2>/dev/null)" ]]; then
+    systemctl restart "code-server@$AGENT_USER"
+  fi
+  echo "$cs_sum" > "$STATE_DIR/code-server.sum"
+else
+  warn "code-server not installed — the editor URL won't work"
 fi
 
 # ---------------------------------------------------------------- 8. firewall
@@ -337,11 +376,19 @@ fi
 ufw --force enable >/dev/null
 
 # ---------------------------------------------------------------- 9. tailscale serve
-log "Tailscale Serve (HTTPS -> Archon)"
+log "Tailscale Serve (HTTPS -> Archon, :$CODE_SERVER_HTTPS_PORT -> code-server)"
 TS_URL=""
+CS_URL=""
 if tailscale status >/dev/null 2>&1; then
   if tailscale serve --bg "$ARCHON_PORT" >/dev/null 2>&1; then
     TS_URL="https://$(tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$//')"
+    if [[ $CODE_SERVER_OK == 1 ]]; then
+      if tailscale serve --bg --https="$CODE_SERVER_HTTPS_PORT" "http://127.0.0.1:$CODE_SERVER_PORT" >/dev/null 2>&1; then
+        CS_URL="$TS_URL:$CODE_SERVER_HTTPS_PORT/?folder=$AGENT_HOME/.archon/workspaces"
+      else
+        warn "tailscale serve for code-server (:$CODE_SERVER_HTTPS_PORT) failed"
+      fi
+    fi
   else
     warn "tailscale serve failed — enable MagicDNS + HTTPS certificates in the Tailscale admin console, then re-run"
   fi
@@ -354,6 +401,7 @@ cat <<EOF
   gh          : $(gh --version | head -1)
   Archon      : $(archon version 2>/dev/null | head -1 || echo '?')  (service: $( [[ $ARCHON_STARTED == 1 ]] && echo running || echo 'enabled, NOT started' ))
   Web UI      : ${TS_URL:-<run 'tailscale up' first>}
+  Editor      : ${CS_URL:-<not available, see warnings above>}
   Auto-update : unattended-upgrades on, reboot $( [[ "$AUTO_REBOOT" == 1 ]] && echo "at $REBOOT_TIME if needed" || echo off )
 EOF
 if [[ -f /var/run/reboot-required ]]; then
