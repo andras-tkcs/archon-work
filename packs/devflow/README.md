@@ -9,7 +9,10 @@ environment comes from its own SessionStart hook.
 use it. Installed, its workflows are named `<owner>/devflow:<workflow>`, for example
 `tkcs-lab/devflow:devflow-ship`.
 
-A runner bootstrapped before the move still has the pack installed as `andras-tkcs/archon-work/packs/devflow`, with workflows named `andras-tkcs/devflow:*`. Re-running `bootstrap.sh` installs the pack again under the new source. To keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to the old source.
+The repository moved from the `andras-tkcs` org to `tkcs-lab`. A runner bootstrapped before that
+still has the pack installed as `andras-tkcs/archon-work/packs/devflow`, with workflows named
+`andras-tkcs/devflow:*`. Re-running `bootstrap.sh` installs the pack again under the new source. To
+keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to the old source.
 
 | Workflow | Use it for | Pauses for a person when |
 |---|---|---|
