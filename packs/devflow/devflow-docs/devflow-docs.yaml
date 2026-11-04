@@ -9,7 +9,7 @@ description: |
   wording decision for a person is listed in the PR, not guessed. Never merges.
 
   Use when: "review and fix the docs", a release is near, a feature changed behaviour the docs describe.
-  NOT for: code review (devflow-ship's tail reviews its own diff), a security audit (devflow-audit).
+  NOT for: code review (every devflow delivery reviews its own diff), a security audit (devflow-audit).
 model: large
 worktree:
   enabled: true

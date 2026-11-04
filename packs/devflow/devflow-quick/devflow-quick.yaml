@@ -2,15 +2,15 @@ name: devflow-quick
 description: |
   A small edit without a plan, from an ask to a merged pull request: one agent judges whether the
   request really is small and writes a short work order, a Sonnet session makes the edit with
-  verify.fast, then the same delivery tail as devflow-ship (Opus review with fix rounds, the
+  verify.fast, then the same delivery tail as every devflow delivery (Opus review with fix rounds, the
   non-blocking findings, the definition of done, one PR, a watch until a person merges).
 
   It refuses what is not small (a design decision, more than a handful of files, an ADR-worthy
-  or trust-boundary change, a new outside integration, a dependency bump) and says to use devflow-ship.
+  or trust-boundary change, a new outside integration, a dependency bump) and says to use devflow-plan.
   Never merges.
 
   Use when: a typo, a wording change, a one-file bug fix, a config tweak, a test for existing code.
-  NOT for: anything that needs a plan (devflow-ship), docs and website review (devflow-docs).
+  NOT for: anything that needs a plan (devflow-plan), docs and website review (devflow-docs).
 model: large
 worktree:
   enabled: true
@@ -56,7 +56,7 @@ nodes:
   - id: refuse
     depends_on: [scope]
     when: "$scope.output.fits == false"
-    cancel: "Not a small edit, so no edit was made: $scope.output.reason. Use devflow-ship for this."
+    cancel: "Not a small edit, so no edit was made: $scope.output.reason. Use devflow-plan for this."
 
   - id: prepare-branch
     depends_on: [scope]
