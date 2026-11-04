@@ -20,7 +20,9 @@ verify:
     - bash -n scripts/test-devflow-pack.sh
     - bash -n scripts/test-ide-link-patch.sh
     - bash -n scripts/test-render-run.sh
+    - bash -n scripts/test-archon-repo-switch.sh
     - scripts/test-ide-link-patch.sh
+    - scripts/test-archon-repo-switch.sh
   dod:
     - scripts/test-devflow-pack.sh
     - scripts/test-render-run.sh

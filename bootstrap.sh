@@ -2,7 +2,7 @@
 # Archon + Claude Code runner — bootstrap for a fresh Ubuntu 24.04 VM (e.g. Hetzner).
 #
 # Safe to run any time: first run installs, later runs converge config and upgrade
-# (apt packages, Claude Code, Archon when a newer release exists).
+# (apt packages, Claude Code, Archon when a newer release exists or ARCHON_REPO changed).
 #
 # Usage (as root):
 #   curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/<tag-or-commit>/bootstrap.sh \
@@ -12,8 +12,8 @@
 # ~agent/.archon/.env on the VM. Safe for a public repo. See README.md.
 #
 # Optional env:
-#   ARCHON_REPO=coleam00/Archon GitHub owner/repo whose releases provide Archon, its providers and
-#                               the Slack plugin (set to your fork to run your own build)
+#   ARCHON_REPO=tkcs-lab/Archon GitHub owner/repo whose releases provide Archon, its providers and
+#                               the Slack plugin (coleam00/Archon = upstream, or your own fork)
 #   AGENT_USER=agent            unix user that runs Claude Code + Archon (no sudo)
 #   ARCHON_PORT=3090            Archon HTTP port (Archon default)
 #   CODE_SERVER_PORT=8080       code-server (VS Code in the browser) port, bound to 127.0.0.1
@@ -30,7 +30,7 @@
 #                               Archon workflow pack to install (owner/repo/path[@tag]); empty = none
 set -euo pipefail
 
-ARCHON_REPO="${ARCHON_REPO:-coleam00/Archon}"
+ARCHON_REPO="${ARCHON_REPO:-tkcs-lab/Archon}"
 AGENT_USER="${AGENT_USER:-agent}"
 ARCHON_PORT="${ARCHON_PORT:-3090}"
 CODE_SERVER_PORT="${CODE_SERVER_PORT:-8080}"
@@ -207,9 +207,41 @@ archon_latest() {
   curl -fsSL "https://api.github.com/repos/$ARCHON_REPO/releases/latest" 2>/dev/null \
     | jq -r '.tag_name // empty' | sed 's/^v//'
 }
+# Archon's first-party plugins (providers, chat, forge) installed from a repo other than $1, read
+# from `archon plugin list` on stdin. Their executables block the same plugins from $1.
+stale_archon_plugins() {
+  awk -v keep="$(printf '%s/plugins/' "$1" | tr '[:upper:]' '[:lower:]')" '
+    $1 ~ /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/plugins\/(provider-(claude|codex|pi)|chat-slack|forge-github)$/ &&
+      index(tolower($1), keep) != 1 { print $1 }'
+}
+# The repo the Claude provider came from, read from `archon plugin list` on stdin. A binary adds
+# its first-party plugins from its own repo, so this names the repo the binary downloads from.
+archon_plugins_repo() {
+  awk '$1 ~ /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/plugins\/provider-claude$/ { sub(/\/plugins\/provider-claude$/, "", $1); print $1; exit }'
+}
+install -d -m 0700 "$STATE_DIR"
+ARCHON_REPO_FILE="$STATE_DIR/archon-repo"   # the repo the installed binary came from
+installed_repo="$(cat "$ARCHON_REPO_FILE" 2>/dev/null || true)"
+# A runner set up before the record existed: read it from the Claude provider's plugin id.
+if [[ -z "$installed_repo" ]] && command -v archon >/dev/null; then
+  installed_repo="$(as_agent "archon plugin list" 2>/dev/null | archon_plugins_repo || true)"
+fi
 need_archon=0
+latest=""
 if ! command -v archon >/dev/null; then
   need_archon=1
+elif [[ "$installed_repo" != "$ARCHON_REPO" ]]; then
+  if [[ "$UPGRADE" != 1 ]]; then
+    warn "Archon was installed from ${installed_repo:-an unknown repo}, ARCHON_REPO is $ARCHON_REPO; re-run with UPGRADE=1 to switch"
+  else
+    latest="$(archon_latest || true)"
+    if [[ -z "$latest" ]]; then
+      warn "no published release found for $ARCHON_REPO; keeping the installed Archon"
+    else
+      log "Switching Archon to $ARCHON_REPO ($latest) — stopping the service (active workflow runs are interrupted)"
+      need_archon=1
+    fi
+  fi
 elif [[ "$UPGRADE" == 1 ]]; then
   latest="$(archon_latest || true)"
   current="$(archon version 2>/dev/null || true)"
@@ -223,21 +255,71 @@ fi
 if [[ "$need_archon" == 1 ]]; then
   systemctl stop archon.service 2>/dev/null || true
   # Root gets the binary; the provider for root may fail (no claude for root) — that's fine.
-  # The default repo keeps the stock installer URL. Any other repo is installed with its own
-  # scripts/install.sh at its latest release tag (a fork need not have a main branch, and the
-  # tag is the script that shipped with the binary). It reads ARCHON_RELEASE_REPO (the variable
-  # must prefix `bash`, not `curl`). The binary then downloads providers and plugins from the
-  # same repo.
+  # Upstream (coleam00/Archon) keeps its stock installer URL. Any other repo, the default
+  # tkcs-lab fork included, is installed with its own scripts/install.sh at its latest release
+  # tag (a fork need not have a main branch, and the tag is the script that shipped with the
+  # binary). It reads ARCHON_RELEASE_REPO (the variable must prefix `bash`, not `curl`). The
+  # binary then downloads providers and plugins from the same repo.
   if [[ "$ARCHON_REPO" == coleam00/Archon ]]; then
     installer_url="https://archon.diy/install"
   else
-    release="$(archon_latest || true)"
-    [[ -n "$release" ]] || die "no published release found for $ARCHON_REPO (is the latest release a pre-release or draft?)"
-    installer_url="https://raw.githubusercontent.com/$ARCHON_REPO/v$release/scripts/install.sh"
+    [[ -n "$latest" ]] || latest="$(archon_latest || true)"
+    [[ -n "$latest" ]] || die "no published release found for $ARCHON_REPO (is the latest release a pre-release or draft?)"
+    installer_url="https://raw.githubusercontent.com/$ARCHON_REPO/v$latest/scripts/install.sh"
+  fi
+  # Root's plugins from another repo would make the installer's provider step fail.
+  if command -v archon >/dev/null; then
+    for id in $(archon plugin list 2>/dev/null | stale_archon_plugins "$ARCHON_REPO"); do
+      archon plugin remove "$id" >/dev/null || warn "could not remove $id for root"
+    done
   fi
   curl -fsSL "$installer_url" | ARCHON_RELEASE_REPO="$ARCHON_REPO" bash -s -- --providers claude \
     || warn "Archon installer returned an error — checking the binary anyway"
   command -v archon >/dev/null || die "archon not found after install (expected /usr/local/bin/archon)"
+  # The installer exits non-zero when only its provider step fails, so check the binary itself.
+  current="$(archon version 2>/dev/null || true)"
+  if [[ -n "$latest" && "$current" != *"$latest"* ]]; then
+    warn "Archon does not report $latest after installing from $ARCHON_REPO; the next run tries again"
+  else
+    printf '%s\n' "$ARCHON_REPO" > "$ARCHON_REPO_FILE"
+    installed_repo="$ARCHON_REPO"
+  fi
+fi
+
+# Once Archon comes from $ARCHON_REPO, its first-party plugins must too: plugins another repo
+# installed own the executables this repo's need, so each is removed and added again from here.
+# The Claude provider is re-added after every install (required) and whenever it is missing.
+plugins_changed=0
+if [[ "$installed_repo" == "$ARCHON_REPO" ]]; then
+  printf '%s\n' "$ARCHON_REPO" > "$ARCHON_REPO_FILE"
+  agent_plugins="$(as_agent "archon plugin list" 2>/dev/null || true)"
+  for id in $(stale_archon_plugins "$ARCHON_REPO" <<<"$agent_plugins"); do
+    if ! as_agent "archon plugin remove $id" >/dev/null; then
+      warn "could not remove $id; run as $AGENT_USER: archon plugin remove $id"
+      continue
+    fi
+    echo "removed $id (installed from another repo)"
+    plugins_changed=1
+    name="${id##*/}"
+    case "$name" in
+      provider-claude | chat-slack) ;;   # added below and in the Slack section
+      provider-*)
+        as_agent "archon provider add ${name#provider-}" \
+          || warn "could not add the ${name#provider-} provider from $ARCHON_REPO" ;;
+      *)
+        as_agent "archon plugin add $ARCHON_REPO/plugins/$name" \
+          || warn "could not add $ARCHON_REPO/plugins/$name" ;;
+    esac
+  done
+  if [[ "$need_archon" == 1 ]] \
+     || ! awk -v id="$ARCHON_REPO/plugins/provider-claude" '$1 == id { found = 1 } END { exit !found }' <<<"$agent_plugins"; then
+    if as_agent "archon provider add claude"; then
+      plugins_changed=1
+    else
+      warn "'archon provider add claude' failed for $AGENT_USER"
+    fi
+  fi
+elif [[ "$need_archon" == 1 ]]; then
   as_agent "archon provider add claude" || warn "'archon provider add claude' failed for $AGENT_USER"
 fi
 ARCHON_BIN="$(command -v archon)"
@@ -287,12 +369,15 @@ fi
 has_env() { grep -q "^$1=.\+" "$ENV_FILE"; }
 
 if has_env SLACK_BOT_TOKEN && has_env SLACK_APP_TOKEN; then
-  if [[ ! -f "$AGENT_HOME/.archon/.slack-plugin-added" ]]; then
+  # From the repo the binary came from; once that is ARCHON_REPO, a plugin left by another repo
+  # was removed above, so this adds the new one.
+  slack_id="${installed_repo:-$ARCHON_REPO}/plugins/chat-slack"
+  if ! as_agent "archon plugin list" 2>/dev/null | awk -v id="$slack_id" '$1 == id { found = 1 } END { exit !found }'; then
     log "Archon Slack plugin"
-    if as_agent "archon plugin add $ARCHON_REPO/plugins/chat-slack"; then
-      as_agent "touch ~/.archon/.slack-plugin-added"
+    if as_agent "archon plugin add $slack_id"; then
+      plugins_changed=1
     else
-      warn "Slack plugin install failed — run as $AGENT_USER: archon plugin add $ARCHON_REPO/plugins/chat-slack"
+      warn "Slack plugin install failed — run as $AGENT_USER: archon plugin add $slack_id"
     fi
   fi
   has_env SLACK_ALLOWED_USER_IDS \
@@ -329,7 +414,7 @@ if [[ -f "$AGENT_HOME/.claude/.credentials.json" ]] || has_env CLAUDE_CODE_OAUTH
   ARCHON_STARTED=1
   install -d -m 0700 "$STATE_DIR"
   env_sum="$(sha256sum "$ENV_FILE" /etc/systemd/system/archon.service | sha256sum | cut -d' ' -f1)"
-  if [[ "$need_archon" == 1 ]] || ! systemctl is-active --quiet archon.service \
+  if [[ "$need_archon" == 1 || "$plugins_changed" == 1 ]] || ! systemctl is-active --quiet archon.service \
      || [[ "$env_sum" != "$(cat "$STATE_DIR/config.sum" 2>/dev/null)" ]]; then
     systemctl restart archon.service
   fi

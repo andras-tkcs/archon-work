@@ -21,6 +21,7 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
 | `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer and its git scripts (needs `archon` and `bun`). |
 | `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
+| `scripts/test-archon-repo-switch.sh` | Tests the bootstrap's helpers that detect and replace plugins left by another Archon repo when `ARCHON_REPO` changes. |
 | `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh` and `scripts/test-render-run.sh`. |
 
 ---
@@ -87,7 +88,7 @@ the firewall and Tailscale Serve. The Archon service is
 
 | Variable | Default | |
 |---|---|---|
-| `ARCHON_REPO` | `coleam00/Archon` | GitHub `owner/repo` whose releases supply Archon, its providers and the Slack plugin. Set it to your fork to run your own build. Must be `owner/repo`; the script refuses anything else. See below |
+| `ARCHON_REPO` | `tkcs-lab/Archon` | GitHub `owner/repo` whose releases supply Archon, its providers and the Slack plugin: the tkcs-lab fork by default, `coleam00/Archon` for upstream, or your own fork. Must be `owner/repo`; the script refuses anything else. See below |
 | `TS_AUTHKEY` | – | Without it, run `sudo tailscale up --ssh` yourself and re-run |
 | `TS_HOSTNAME` | VM hostname | Name in the tailnet / URL |
 | `TS_TAG` | `tag:runner` | Tailscale tag of the machine; must match the policy and the auth key. Re-runs warn if the machine doesn't carry it |
@@ -101,14 +102,24 @@ the firewall and Tailscale Serve. The Archon service is
 | `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
 | `DEVFLOW_PACK` | `tkcs-lab/archon-work/packs/devflow` | Archon workflow pack to install, `owner/repo/path[@tag]`. Point it at your fork, add `@<tag>` to pin it, or set it empty to install none |
 
-**Running a fork.** `ARCHON_REPO=<you>/Archon` makes the script read the latest release,
-the installer (`scripts/install.sh` at the fork's latest release tag) and the Slack plugin from your
-fork instead of upstream. The fork's release has to be a normal release, not a
-pre-release: GitHub's "latest" endpoint skips pre-releases, so the upgrade check would
-find nothing. The fork's release must also contain the release-repo change (its
-`scripts/install.sh` reads `ARCHON_RELEASE_REPO` and its binaries embed their own repo);
-upstream does not have it yet. Keep passing `ARCHON_REPO` on every
-re-run, or the next upgrade check compares against upstream.
+**Which Archon.** By default the script installs the tkcs-lab fork of Archon
+(`tkcs-lab/Archon`): its binaries download their server, web UI, providers and plugins from
+the fork's own releases, and from 0.13.4 it has `extraWorkflowSources`, which the devflow
+pack's plan workflows need and upstream does not have. `ARCHON_REPO=coleam00/Archon` installs
+upstream with its stock installer. Another fork works if its `scripts/install.sh` reads
+`ARCHON_RELEASE_REPO` and its binaries embed their own repo, as the tkcs-lab fork's do, and if
+its latest release is a normal release, not a pre-release: GitHub's "latest" endpoint skips
+pre-releases, so the upgrade check would find nothing. Write `ARCHON_REPO` in the repository's
+exact case.
+
+**Switching.** The script records the repo Archon came from in
+`/var/lib/archon-bootstrap/archon-repo` (on a runner set up before that, it reads it from the
+Claude provider's plugin id). When `ARCHON_REPO` names another repo, a run with `UPGRADE=1`
+stops Archon (running workflows are interrupted), installs it from the new repo, replaces the
+old repo's first-party plugins (`provider-*`, `chat-slack`, `forge-github`) with the new
+repo's, and starts it again. With `UPGRADE=0` it only warns. Keep passing `ARCHON_REPO` on
+every re-run if it is not the default, or the next run switches the runner back to the
+tkcs-lab fork.
 
 Variables are not remembered between runs: pass the ones you need each time
 (`TS_AUTHKEY` is only needed until the machine has joined the tailnet; keep passing
@@ -199,9 +210,10 @@ Re-running `bootstrap.sh` is the upgrade path. Each run:
 
 - upgrades all apt packages,
 - runs `claude update`,
-- updates Archon **only if a newer release exists**. In that case it stops the service
-  (running workflows are interrupted), replaces the binary, re-adds the Claude provider
-  (required after every Archon update) and starts it again,
+- updates Archon **only if a newer release exists, or `ARCHON_REPO` names another repo than
+  the one it came from**. In that case it stops the service (running workflows are
+  interrupted), replaces the binary, re-adds the Claude provider (required after every Archon
+  update), replaces plugins left by another repo, and starts it again,
 - updates the devflow toolkit plugins (unless they are synced from claude.ai, which manages them),
   bun, and the devflow pack (`archon plugin update`; a running workflow keeps the revision it
   started with). Node.js is installed once and not upgraded, so a new major can't break a
@@ -209,7 +221,7 @@ Re-running `bootstrap.sh` is the upgrade path. Each run:
 - reinstalls code-server from its latest release (restarted only if the version changed),
 - re-applies config (unattended-upgrades, systemd unit, code-server config, Archon's Open in IDE link, firewall,
   Tailscale Serve) and installs anything new, e.g. the Slack plugin once its tokens are in `.env`,
-- restarts Archon only when its binary, `.env` or unit changed. Otherwise a running Archon
+- restarts Archon only when its binary, `.env`, unit or plugins changed. Otherwise a running Archon
   is left alone.
 
 To change config without upgrading anything: `curl … | sudo UPGRADE=0 bash`.
@@ -242,5 +254,6 @@ More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its o
 | Service crash-loops | Claude not logged in as `agent`, check `journalctl -u archon -n 50` |
 | `archon not found after install` | The installer should put it in `/usr/local/bin`; check `~/.archon/install.json` and `archon doctor` |
 | Runs fail after an Archon update | Provider missing: `sudo -iu agent archon provider add claude`, then `sudo systemctl restart archon` |
+| `… belongs to coleam00/Archon/plugins/provider-claude` | A plugin from another Archon repo. Re-run the bootstrap with `UPGRADE=1`, or by hand: `sudo -iu agent archon plugin remove <that id>`, then `sudo -iu agent archon provider add claude` |
 | `baseline is Ubuntu 24.04` | The script only supports Ubuntu; reinstall the VM with the Ubuntu 24.04 image |
-| Slack bot silent | Both tokens set? Plugin installed (`~/.archon/.slack-plugin-added`)? Bot invited to the channel? Reinstall the Slack app after changing scopes |
+| Slack bot silent | Both tokens set? Plugin installed (`sudo -iu agent archon plugin list` shows `…/plugins/chat-slack`)? Bot invited to the channel? Reinstall the Slack app after changing scopes |

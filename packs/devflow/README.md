@@ -90,7 +90,7 @@ Concurrent phase children each fetch tags in worktrees of one repository, so one
 
 ## Enable plan workflows in a project
 
-This needs Archon 0.13.4 or later for `extraWorkflowSources`.
+This needs Archon 0.13.4 or later from `tkcs-lab/Archon` (`bootstrap.sh`'s default `ARCHON_REPO`) for `extraWorkflowSources`; upstream `coleam00/Archon` does not have it.
 
 1. Run `devflow-plan` once in the project, so the `plans` branch exists.
 2. On the default branch, add this to `.archon/config.yaml`, then run `archon workflow sync`:
