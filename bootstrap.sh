@@ -173,12 +173,16 @@ if [[ "$need_archon" == 1 ]]; then
   systemctl stop archon.service 2>/dev/null || true
   # Root gets the binary; the provider for root may fail (no claude for root) — that's fine.
   # The default repo keeps the stock installer URL. Any other repo is installed with its own
-  # scripts/install.sh from main, which reads ARCHON_RELEASE_REPO (the variable must prefix
-  # `bash`, not `curl`). Its binary then downloads providers and plugins from the same repo.
+  # scripts/install.sh at its latest release tag (a fork need not have a main branch, and the
+  # tag is the script that shipped with the binary). It reads ARCHON_RELEASE_REPO (the variable
+  # must prefix `bash`, not `curl`). The binary then downloads providers and plugins from the
+  # same repo.
   if [[ "$ARCHON_REPO" == coleam00/Archon ]]; then
     installer_url="https://archon.diy/install"
   else
-    installer_url="https://raw.githubusercontent.com/$ARCHON_REPO/main/scripts/install.sh"
+    release="$(archon_latest || true)"
+    [[ -n "$release" ]] || die "no published release found for $ARCHON_REPO (is the latest release a pre-release or draft?)"
+    installer_url="https://raw.githubusercontent.com/$ARCHON_REPO/v$release/scripts/install.sh"
   fi
   curl -fsSL "$installer_url" | ARCHON_RELEASE_REPO="$ARCHON_REPO" bash -s -- --providers claude \
     || warn "Archon installer returned an error — checking the binary anyway"
