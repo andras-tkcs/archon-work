@@ -121,6 +121,91 @@ repo's, and starts it again. With `UPGRADE=0` it only warns. Keep passing `ARCHO
 every re-run if it is not the default, or the next run switches the runner back to the
 tkcs-lab fork.
 
+Variables are not remembered between runs: pass the ones you need each time
+(`TS_AUTHKEY` is only needed until the machine has joined the tailnet; keep passing
+`TS_TAG` if it isn't the default, so the tag check stays right).
+
+---
+
+## 3. After: one-time logins on the VM
+
+```bash
+sudo -iu agent
+
+claude                      # choose /login, sign in with your Claude subscription, then /exit
+gh auth login               # GitHub.com → HTTPS → login with browser/device code
+gh auth setup-git
+echo "GH_TOKEN=$(gh auth token)" >> ~/.archon/.env
+
+# Slack (optional): edit ~/.archon/.env and fill in
+#   SLACK_BOT_TOKEN=xoxb-...  SLACK_APP_TOKEN=xapp-...  SLACK_ALLOWED_USER_IDS=U0123...
+nano ~/.archon/.env
+
+exit
+```
+
+Then re-run the bootstrap (same command as above). This time it installs the Slack plugin
+if the tokens are set, starts Archon and checks `/api/health`. The summary prints the URL.
+
+### Check it works
+1. On the iPad (Tailscale on): open `https://<TS_HOSTNAME>.<tailnet>.ts.net`, add a
+   repository, and run something small, e.g. ask `archon-assist` to summarise the repo.
+2. Slack: invite the bot to a channel (`/invite @archon`) or DM it, then
+   `/archon-workflow list`.
+3. Once Tailscale SSH works from your devices (`ssh agent@<TS_HOSTNAME>`), close public SSH:
+   `curl … | sudo LOCK_SSH_TO_TAILSCALE=1 bash` and remove port 22 from the Hetzner firewall.
+
+---
+
+## Daily use
+
+- **Prompting / oversight:** the Archon web UI. Runs, their steps and worktrees are in one
+  place; approval gates wait for you there.
+- **Slack notifications:** Archon reports to the **Slack thread a run was started from**
+  (🔄 → ✅/❌, a live status message, buttons for approval gates). Runs started from the web
+  UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
+  Slack (`/archon …` or `/archon-workflow run …`).
+- **devflow:** in a repository with a devflow profile (`.claude/toolkit.yaml`), run
+  `tkcs-lab/devflow:devflow-plan` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
+  issue or the change; see [packs/devflow](packs/devflow/README.md).
+- **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
+  runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
+  It opens `~agent/.archon/workspaces`, where Archon keeps its clones and worktrees
+  (`<owner>/<repo>/worktrees/<branch>`). To open the worktree of a run, tap **↗**
+  (*Open in IDE*) next to the run in Archon's UI: it opens in code-server in a new tab
+  (Archon itself would open `vscode://`, which an iPad can't; `bootstrap.sh` repoints it).
+  Or use **File → Open Folder…**. The **Source Control** panel then lists the changed files
+  and shows side-by-side diffs, refreshing as the agent edits. It runs as `agent` with no
+  password, behind the tailnet policy like Archon — avoid editing files a run is working on.
+- **Raw terminal:** `ssh agent@<TS_HOSTNAME>` over Tailscale, then `tmux` + `claude`.
+
+## Operations
+
+```bash
+journalctl -u archon -f              # logs
+journalctl -u code-server@agent -f   # code-server logs
+sudo systemctl restart archon        # after editing ~agent/.archon/.env
+curl -s localhost:3090/api/health    # health (shows Slack once connected)
+```
+
+### Automatic updates (unattended-upgrades)
+
+Runs daily without you: Ubuntu security **and** `-updates` packages, plus the GitHub CLI and
+Tailscale repos; old kernels and unused dependencies are removed. If an update needs a
+reboot, the VM reboots at `REBOOT_TIME` (`AUTO_REBOOT=0` turns that off, then reboot
+yourself when the script warns *reboot pending*). Archon comes back on its own after a reboot,
+but a workflow running at that moment is interrupted.
+
+```bash
+sudo unattended-upgrade --dry-run --debug   # what would be upgraded now
+less /var/log/unattended-upgrades/unattended-upgrades.log
+```
+
+Claude Code updates itself. Archon and code-server are **not** auto-updated (an update
+restarts them); use the script for that.
+
+### Upgrading with the script
+
 Re-running `bootstrap.sh` is the upgrade path. Each run:
 
 - upgrades all apt packages,
