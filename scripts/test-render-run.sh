@@ -3,6 +3,9 @@
 # load-plan.ts. The rendered workflows are validated by `archon validate` in a scratch git repo.
 set -euo pipefail
 
+# Hermetic: an INPUTS_* variable from the calling workflow (e.g. INPUTS_PLAN_COMMIT) must not leak into the loaders.
+while IFS= read -r v; do unset "$v"; done < <(compgen -e | grep "^INPUTS_" || true)
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 fx="$repo_root/scripts/fixtures/render-run"
 render="$repo_root/packs/devflow/.shared/render-run.ts"
