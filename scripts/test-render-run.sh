@@ -68,6 +68,97 @@ fi
 grep -q "invalid slug" "$scratch/badslug.err"
 echo "bad-id: ok"
 
+# d3. render-run.ts, the devflow-plan node script: plan errors are output, environment errors fail
+rr="$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts"
+(
+  real_archon="$(command -v archon)"
+  mkdir -p "$scratch/rstub"
+  cat > "$scratch/rstub/archon" <<STUB
+#!/bin/sh
+if [ "\$1 \$2 \$3" = "workflow list --json" ]; then printf '%s\n' "\$STUB_LIST"; exit 0; fi
+exec "$real_archon" "\$@"
+STUB
+  chmod +x "$scratch/rstub/archon"
+  rart="$scratch/rart"
+  mkdir -p "$rart"
+  cp "$fx/serial.md" "$rart/plan.md"
+  list_ok='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"}]}'
+  list_bad='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"}]}'
+  rr_run() {
+    PATH="$scratch/rstub:$PATH" STUB_LIST="$1" ARTIFACTS_DIR="$rart" INPUTS_SLUG="$2" INPUTS_BRANCH=feat/serial INPUTS_TITLE=S \
+      INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' INPUTS_PLANS_REF=plans \
+      INPUTS_PLANS_DIR=plans INPUTS_PACK=test/devflow bun "$rr"
+  }
+  cd "$repo"
+  out="$(rr_run "$list_ok" serial)"
+  echo "$out" | grep -q '"ok":true'
+  test -f "$rart/devflow-run-serial.yaml"
+  out="$(rr_run "$list_ok" other)"
+  echo "$out" | grep -q '"ok":false'
+  echo "$out" | grep -q 'differs from the slug'
+  if rr_run "$list_bad" serial >/dev/null 2>"$scratch/rr.err"; then echo "missing mod-devflow-deliver was accepted" >&2; exit 1; fi
+  grep -q 'has no test/devflow:mod-devflow-deliver' "$scratch/rr.err"
+  echo "render-run node: ok"
+)
+
+# d4. test-plan.ts
+tp="$repo_root/packs/devflow/devflow-plan/scripts/test-plan.ts"
+(
+  mkdir -p "$scratch/fakeflow/scripts" "$scratch/tpart"
+  cat > "$scratch/fakeflow/scripts/validate_manifest.py" <<'PY'
+import os, sys
+code = int(os.environ.get("VM_EXIT", "0"))
+if code:
+    print("ERROR: stub")
+sys.exit(code)
+PY
+  cp "$fx/serial.md" "$scratch/tpart/plan.md"
+  bun "$render" "$fx/serial.md" --slug serial --branch feat/serial --title "Serial" \
+    --main main --pack test/devflow > "$scratch/t-serial.yaml"
+  cd "$repo"
+  tp_run() { ARTIFACTS_DIR="$scratch/tpart" INPUTS_DEVFLOW_ROOT="$scratch/fakeflow" INPUTS_RENDER="$1" bun "$tp"; }
+  good='{"ok":true,"error":"","workflow":"devflow-run-serial","file":"'$scratch'/t-serial.yaml","waves":2}'
+  tp_run "$good" | grep -q '"ok":true'
+  VM_EXIT=1 tp_run "$good" | grep -q '"source":"validate_manifest"'
+  VM_EXIT=1 tp_run "$good" | grep -q '"ok":false'
+  tp_run '{"ok":false,"error":"x differs from the slug","workflow":"","file":"","waves":0}' | grep -q '"source":"render"'
+  bun -e '
+const fs = require("node:fs");
+const [src, dst] = process.argv.slice(1);
+const d: any = Bun.YAML.parse(fs.readFileSync(src, "utf8"));
+d.nodes = d.nodes.filter((n: any) => n.id !== "result");
+delete d.returns;
+delete d.outcome_field;
+fs.writeFileSync(dst, Bun.YAML.stringify(d));
+' "$scratch/t-serial.yaml" "$scratch/t-broken.yaml"
+  broken='{"ok":true,"error":"","workflow":"devflow-run-serial","file":"'$scratch'/t-broken.yaml","waves":2}'
+  if tp_run "$broken" >/dev/null 2>"$scratch/tp.err"; then echo "a broken rendered workflow passed the dry run" >&2; exit 1; fi
+  grep -q 'does not complete a dry run' "$scratch/tp.err"
+  echo "test-plan: ok"
+)
+
+# d5. check-plan.ts
+cp_script="$repo_root/packs/devflow/devflow-plan/scripts/check-plan.ts"
+(
+  chk="$scratch/chk"
+  mkdir -p "$chk"
+  fin='{"scope":"large","slug":"s","branch":"feat/s","title":"S","prerequisites":false,"after":false}'
+  ren='{"ok":true,"error":"","workflow":"devflow-run-s","file":"/x","waves":1}'
+  tst='{"ok":true,"findings":[]}'
+  rev='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1","problem":"p","fix":"f"}]}'
+  cp_run() { ARTIFACTS_DIR="$chk" INPUTS_FINALIZE="$fin" INPUTS_RENDER="$ren" INPUTS_TEST="$tst" INPUTS_REVIEW="$1" INPUTS_ROUND="$2" bun "$cp_script"; }
+  cp_run "" "" | grep -q '"done":true'
+  grep -q '"workflow":"devflow-run-s"' "$chk/tested.json"
+  test ! -e "$chk/test-findings.md"
+  out="$(cp_run "$rev" "")"
+  echo "$out" | grep -q '"done":false'
+  echo "$out" | grep -q '"round":1'
+  grep -q '## F1. \[review, mechanical\]' "$chk/test-findings.md"
+  if cp_run "$rev" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with findings did not fail" >&2; exit 1; fi
+  grep -q 'after 2 fix rounds' "$scratch/cp.err"
+  echo "check-plan: ok"
+)
+
 # e. load-plan against a local bare origin
 origin="$scratch/origin.git"
 clone="$scratch/clone"
