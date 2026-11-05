@@ -11,4 +11,5 @@ load-plan:
   branch: feat/x
   title: X
   done: true
+  model: medium
 gate: '{"head":"abc","phase":"p1-x","skipped":true}'

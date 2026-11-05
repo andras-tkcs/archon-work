@@ -11,6 +11,11 @@ load-plan:
   branch: feat/x
   title: X
   done: false
+  model: medium
+implement-medium:
+  status: complete
+  phase: p1-x
+  summary: stub
 implement:
   status: complete
   phase: p1-x
