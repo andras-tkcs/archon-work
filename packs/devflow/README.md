@@ -16,8 +16,8 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 
 | Workflow | Use it for | Pauses for a person when |
 |---|---|---|
-| `devflow-plan` | An issue or change that needs a plan: interview, plan, then a published `devflow-run-<slug>` workflow that implements it | Every question of the interview, one at a time; the run publishes the plan and you start `devflow-run-<slug>` after `archon workflow sync` |
-| `devflow-refine` | Change a plan devflow-plan published, before its implementation starts: the same interview, then the plan and `devflow-run-<slug>` republished in place | Every question the change leaves open, one at a time; it refuses a plan whose branch is on origin or that is merged |
+| `devflow-plan` | An issue or change that needs a plan: interview, plan, then a published `devflow-run-<slug>` workflow that implements it | Up to 5 questions a round in at most 3 rounds; the run publishes the plan (marked incomplete if questions are still open) and you start `devflow-run-<slug>` after `archon workflow sync` |
+| `devflow-refine` | Change a plan devflow-plan published, before its implementation starts: the same interview, then the plan and `devflow-run-<slug>` republished in place | Up to 5 questions a round in at most 3 rounds about what the change leaves open; it refuses a plan whose branch is on origin or that is merged |
 | `devflow-quick` | A small edit with no plan (a typo, a one-file fix); refuses anything bigger | Never; it cancels with the reason if the edit is not small |
 | `devflow-docs` | Review the docs and the website, fix what is wrong | Never; undecidable items are listed in the PR |
 | `devflow-audit` | Security audit, then verify the findings, plan and fix them | The verifier leaves a decision to the maintainer |
@@ -71,8 +71,13 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
 
 ## devflow-plan, step by step
 
-1. **Interview** (medium tier): the planner asks the most decisive open question, one at a time,
-   through the attention queue; before it stops, a fresh reviewer tries to find one more.
+1. **Interview** (medium tier): each round shows up to 5 numbered questions through the attention
+   queue, the planner's and a fresh challenger's ranked together. Answer as `1: a, 2: c, …`.
+   Skipped questions and those that did not fit come back next round. There are at most 3 rounds.
+   Answer "publish" to end the questions and publish the plan as it is, or "stop" to abandon the
+   run with nothing published. Questions still open at the end are taken at their recommended
+   defaults (listed under `## Assumptions` and `## Open questions`), and the plan gets an
+   "Incomplete plan" warning under its title.
 2. **Plan** (medium tier): researches and writes `plan.md` with an implementation manifest, validated by the
    toolkit's `validate_manifest.py`. Each phase gets the smallest model tier that can do it
    (`small` by default, `medium` or `large` with a reason), and the plan gets a final-review
@@ -89,16 +94,23 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
    - A fresh reviewer on the large tier then walks every phase against the code: paths, symbols,
      acceptance and verify commands, open decisions. It also checks each phase's model tier and the
      final-review tier against the model rules.
-   - Findings go back to the planner (medium tier) for up to two fix rounds. If the renderer or the
-     manifest validator still rejects the plan, the run fails and nothing is published
-     (`test-findings.md` in the run's artifacts). If only reviewer findings remain, the plan is
-     published anyway: they are listed under "Unresolved validation findings" in its "Risks and open
-     questions", with a warning under its title.
+   - Findings go back to the planner (medium tier) for up to two fix rounds. If findings remain
+     (from the renderer, the manifest validator or the reviewer), the plan is still published, with
+     them under "Unresolved validation findings" in its "Risks and open questions" and the
+     "Incomplete plan" warning. When the renderer or the validator is what rejects it, its
+     `devflow-run-<slug>` workflow is withheld (and an earlier one on the plans branch is removed)
+     until devflow-refine fixes it. Only a plan without a usable manifest fails with nothing
+     published (`test-findings.md` in the run's artifacts).
    - A decision the reviewer finds open is made by the planner and listed under `## Assumptions`
      in the plan and in `published.md`.
 5. **Publish**: the plan and the workflow are pushed to the `plans` branch (never forced) under
    `plans/<slug>/` and `plans/workflows/`. `published.md` in the run's artifacts says what went
    where and how to start the workflow. The run does not run `archon workflow sync`; you do.
+
+**Incomplete plans.** The warning's text says why the plan is incomplete. If the workflow was
+published, running it accepts the defaults, and devflow-refine can no longer continue the plan.
+Continue with `archon workflow run tkcs-lab/devflow:devflow-refine "refine <slug>" --detach` (the
+bare slug is enough): it asks the open questions again and fixes the remaining findings.
 
 Then run `devflow-run-<slug>`. It implements the phases up to three at a time, each as a
 `mod-devflow-phase` child run in its own worktree on the phase's model tier, merged by SHA; then `mod-devflow-deliver` runs the
@@ -119,18 +131,20 @@ archon workflow run tkcs-lab/devflow:devflow-refine "refine plans/<slug>: <what 
 
 1. **Name the plan**: put its slug, `plans/<slug>` or its plan URL on the `plans` branch in the
    message, or pass `--input plan=<slug>`. Say what to change in the message or with
-   `--input work=<change>`.
+   `--input work=<change>`; for a plan marked incomplete the change may be left out.
 2. **Refuse a started or merged plan**: it stops with a reason (for example `Not refined: the plan
    <slug> is already being implemented (its branch <branch> exists on origin). devflow-refine only
    changes plans whose implementation has not started.`) when the implementation branch is on
    origin, the plan is merged into the main branch, or a pull request from it was merged.
    The check runs again right before publishing.
-3. **Interview**: it starts from the published plan and asks only what the change leaves open, one
-   question at a time, then revises the plan with the same method as `devflow-plan`. It uses the same tiers and validation as
+3. **Interview**: it starts from the published plan and asks only what the change leaves open, in
+   the same rounds and words as `devflow-plan` (and re-asks an incomplete plan's open questions
+   first), then revises the plan with the same method as `devflow-plan`. It uses the same tiers and validation as
    `devflow-plan`, and adds phase and review tiers to an older plan that has none.
 4. **Publish**: the slug, the branch and the workflow name stay the same. The refined plan and
    `devflow-run-<slug>.yaml` are republished in place on the `plans` branch in a
-   `Refine <slug>: <title>` commit (never forced).
+   `Refine <slug>: <title>` commit (never forced). A refine that still has
+   blocking findings publishes the plan without its workflow.
 
 Then run `archon workflow sync` and start `devflow-run-<slug>`. A `devflow-run-<slug>` run that is
 already going keeps the plan it started with.
