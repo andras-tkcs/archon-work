@@ -116,11 +116,80 @@ export function renderRunWorkflow(o: RenderOpts): string {
     });
   }
 
-  const start: Record<string, any> = { id: "start" };
+  // Another worktree (a failed earlier run's) can hold the feature branch. Never remove one unasked: report it,
+  // ask a person, then remove only on approval and never with --force.
+  const findHeld = [
+    `B='${o.branch}'`,
+    `awk -v b="refs/heads/$B" -v me="$(git rev-parse --show-toplevel)" '$1=="worktree"{w=$2} $1=="branch" && $2==b && w!=me{print w}' <(git worktree list --porcelain)`,
+  ];
+  const gate: Record<string, any> = {};
   if (o.prerequisites !== null) {
-    start.depends_on = ["prerequisites"];
-    start.when = "$prerequisites.output.decision == 'approve'";
+    gate.depends_on = ["prerequisites"];
+    gate.when = "$prerequisites.output.decision == 'approve'";
   }
+  nodes.push({
+    id: "worktree-check",
+    ...gate,
+    bash: [
+      "set -euo pipefail",
+      "exec 3>&1 1>&2",
+      ...findHeld.slice(0, 1),
+      `git fetch origin "$B" 2>/dev/null || true`,
+      `HELD=$(${findHeld[1]})`,
+      'Q=""',
+      'if [ -n "$HELD" ]; then',
+      '  AHEAD=$(git rev-list --count "origin/$B..refs/heads/$B" 2>/dev/null || echo unknown)',
+      '  Q="The branch $B is already checked out in another worktree, probably left by an earlier run. Approving removes these worktrees (git worktree remove, never forced; a worktree with uncommitted changes is refused and the run fails). Do not approve if another run is still using one.\\n\\nCommits on the branch not on origin: $AHEAD"',
+      '  while IFS= read -r w; do Q="$Q\\n\\n$w\\nuncommitted paths: $(git -C "$w" status --porcelain | wc -l | tr -d \' \')"; done <<< "$HELD"',
+      "fi",
+      `H="$HELD" Q="$Q" python3 -c 'import json,os; print(json.dumps({"held": os.environ["H"], "question": os.environ["Q"].replace("\\\\n", "\\n")}))' >&3`,
+      "",
+    ].join("\n"),
+    output_format: {
+      type: "object",
+      properties: { held: { type: "string" }, question: { type: "string" } },
+      required: ["held", "question"],
+    },
+  });
+  nodes.push({
+    id: "confirm-worktree-removal",
+    depends_on: ["worktree-check"],
+    when: "$worktree-check.output.held != ''",
+    wait: {
+      attention: "$worktree-check.output.question",
+      form: "approval",
+      labels: { workflow: "devflow-run", stage: "worktree-removal" },
+    },
+  });
+  nodes.push({
+    id: "stop-at-worktrees",
+    depends_on: ["confirm-worktree-removal"],
+    when: "$confirm-worktree-removal.output.decision == 'reject'",
+    cancel: "Stopped before implementation: the worktree holding the feature branch was not removed.",
+  });
+  nodes.push({
+    id: "remove-worktrees",
+    depends_on: ["confirm-worktree-removal"],
+    when: "$confirm-worktree-removal.output.decision == 'approve'",
+    bash: [
+      "set -euo pipefail",
+      ...findHeld.slice(0, 1),
+      `HELD=$(${findHeld[1]})`,
+      'while IFS= read -r w; do [ -n "$w" ] && git worktree remove "$w" && echo "removed $w" >&2; done <<< "$HELD"',
+      "",
+    ].join("\n"),
+  });
+
+  const start: Record<string, any> = { id: "start" };
+  start.depends_on = [
+    ...(o.prerequisites !== null ? ["prerequisites"] : []),
+    "worktree-check",
+    "confirm-worktree-removal",
+    "stop-at-worktrees",
+    "remove-worktrees",
+  ];
+  start.trigger_rule = "none_failed_min_one_success";
+  if (o.prerequisites !== null) start.when = "$prerequisites.output.decision == 'approve'";
   start.bash = [
     "set -euo pipefail",
     "exec 3>&1 1>&2", // stdout must be the JSON only; git's own messages go to stderr
@@ -128,6 +197,8 @@ export function renderRunWorkflow(o: RenderOpts): string {
     'git fetch origin "$M"',
     'git fetch origin "$PR"',
     "PC=$(git rev-parse FETCH_HEAD)",
+    'HELD=$(git worktree list --porcelain | awk -v b="refs/heads/$B" -v me="$(git rev-parse --show-toplevel)" \'$1=="worktree"{w=$2} $1=="branch" && $2==b && w!=me{print w}\')',
+    'if [ -n "$HELD" ]; then echo "devflow: branch $B is already checked out in another worktree: $HELD" >&2; echo "devflow: if no run is using it and it has nothing unpushed, remove it with: git worktree remove $HELD" >&2; exit 1; fi',
     'if git ls-remote --exit-code --heads origin "$B" >/dev/null 2>&1; then',
     '  git fetch origin "$B"',
     '  if git rev-parse --verify --quiet "refs/heads/$B" >/dev/null; then git switch "$B"; git merge --ff-only "origin/$B"; else git switch -c "$B" --track "origin/$B"; fi',
