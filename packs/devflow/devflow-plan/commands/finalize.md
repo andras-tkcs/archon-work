@@ -31,6 +31,32 @@ Read `$ARTIFACTS_DIR/interview.md` and `$ARTIFACTS_DIR/plan-draft.md`.
 - There are no questions now, because the interview is over. If you still find one, record it in
   "Risks and open questions" with the default you took.
 
+## Fix rounds
+
+This node runs again when the plan test finds problems. The round number of the last test is
+`$LOOP_PREV.plan-check.output.round`.
+
+- If it is empty, this is the first pass: write the plan as described below, and ignore any
+  `$ARTIFACTS_DIR/test-findings.md` (it is left over from an earlier attempt).
+- If it is not empty, this is a fix round. Read `$ARTIFACTS_DIR/plan.md` and
+  `$ARTIFACTS_DIR/test-findings.md`, and fix every finding in place:
+  - `mechanical`: change the plan to match the code, the profile or the validator.
+  - `open-decision`: you decide; nobody can be asked any more. Pick the answer the code, the
+    ADRs and the interview support best, record it under `## Assumptions`, and fix every brief
+    it affects.
+  - Keep `slug`, `branch` and `title` unchanged. Rerun `validate_manifest.py`. Skip the section 4
+    `Plan` subagent review in a fix round: the plan test's reviewer replaces it.
+  - Return the same output fields as on the first pass.
+
+## Assumptions
+
+plan.md always has an `## Assumptions` section, right before `## Implementation manifest`. It
+lists every decision made after the interview, one bullet each:
+
+`- **<the decision>**: <the choice>. Why: <reason>. Made after the interview, not asked (round <n>, finding <F-id>).`
+
+When there are none, the section holds the single line `None.`.
+
 ## Overrides: this runs unattended inside one Archon run
 
 1. **No branch, no push, no PR, no commit.** The plan lives in `$ARTIFACTS_DIR` only. Ignore
@@ -72,3 +98,4 @@ Return `scope` (`small` or `large`), `slug`, `branch`, `title` (one line, for th
 `prerequisites` and `after`. Stop when `$ARTIFACTS_DIR/plan.md` exists, passes
 `validate_manifest.py`, and the reviewer's findings are fixed or answered in the plan's "Risks and
 open questions".
+plan.md has an `## Assumptions` section (see Assumptions above).

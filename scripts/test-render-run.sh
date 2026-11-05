@@ -232,11 +232,14 @@ git -C "$porigin" show plans:plans/s/after.md >/dev/null
 git -C "$porigin" show plans:plans/workflows/devflow-run-s.yaml >/dev/null
 test ! -e "$scratch/archon-called"
 grep -q extraWorkflowSources "$pub_art/published.md"
+grep -q 'assumptions: none' "$scratch/publish1.json"
 test -z "$(git branch --list 'plans-*')"
 test -z "$(git -C "$porigin" branch --list 'plans-*')"
 n1="$(git -C "$porigin" rev-list --count plans)"
-echo "# changed" >> "$pub_art/plan.md"
+printf '\n## Assumptions\n\n- **A**: b.\n- **C**: d.\n' >> "$pub_art/plan.md"
 publish > "$scratch/publish2.json"
+grep -q 'assumptions: 2' "$scratch/publish2.json"
+grep -q '\*\*A\*\*: b\.' "$pub_art/published.md"
 n2="$(git -C "$porigin" rev-list --count plans)"
 test "$((n2 - n1))" -eq 1
 echo "publish-plan: ok"

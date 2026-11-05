@@ -2,7 +2,8 @@ name: devflow-plan
 description: |
   The first half of the devflow toolkit's ship workflow: plans only. It interviews you one
   question at a time (the planner asks the most decisive open question, and before it stops a
-  fresh reviewer tries to find one more), writes the plan, publishes the plan and the steps you
+  fresh reviewer tries to find one more), writes the plan, tests it (the manifest validator, a dry run of the generated workflow, and a fresh reviewer
+  who checks every phase against the code; up to two fix rounds), publishes the plan and the steps you
   must do by hand as run artifacts, and publishes a devflow-run-<slug> workflow that
   implements the plan's phases up to three at a time and then reviews, opens the PR and
   watches it. Nothing is implemented by this run.
@@ -112,52 +113,132 @@ nodes:
     cancel: "Stopped while planning: the interview ended without a plan (stopped by the answer, or 14 questions without converging). The questions and answers are interview.md in the run artifacts."
 
   # ---- 2. The final plan, the generated workflow, the publication ------------------------
-  - id: finalize
+  - id: plan-loop
     depends_on: [interview]
     when: "$interview.output.stop == false"
-    command: finalize
-    model: large
-    context: fresh
+    loop_group:
+      max_iterations: 3
+      until_bash: 'd=$plan-check.output.done; [ "$d" = true ]'
+      nodes:
+        - id: finalize
+          command: finalize
+          model: large
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              scope: { type: string, enum: [small, large] }
+              slug: { type: string }
+              branch: { type: string }
+              title: { type: string }
+              prerequisites: { type: boolean }
+              after: { type: boolean }
+            required: [scope, slug, branch, title, prerequisites, after]
+
+        - id: render
+          depends_on: [finalize]
+          script: render-run
+          runtime: bun
+          with:
+            slug: "$finalize.output.slug"
+            branch: "$finalize.output.branch"
+            title: "$finalize.output.title"
+            main_branch: "$preflight.output.main_branch"
+            branch_regex: "$preflight.output.branch_regex"
+            plans_ref: "$INPUTS.plans_ref"
+            plans_dir: "$INPUTS.plans_dir"
+            pack: "$INPUTS.pack"
+          output_format:
+            type: object
+            properties:
+              ok: { type: boolean }
+              error: { type: string }
+              workflow: { type: string }
+              file: { type: string }
+              waves: { type: integer }
+            required: [ok, error, workflow, file, waves]
+
+        - id: plan-test
+          depends_on: [render]
+          script: test-plan
+          runtime: bun
+          timeout: 600000
+          with:
+            render: "$render.output"
+            devflow_root: "$preflight.output.devflow_root"
+          output_format:
+            type: object
+            properties:
+              ok: { type: boolean }
+              findings: { type: array, items: { type: object } }
+            required: [ok, findings]
+
+        - id: plan-review
+          depends_on: [plan-test]
+          when: "$plan-test.output.ok == true"
+          command: review-plan
+          model: large
+          context: fresh
+          denied_tools: [Write, Edit, NotebookEdit]
+          output_format:
+            type: object
+            properties:
+              clean: { type: boolean }
+              summary: { type: string }
+              findings:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    source: { type: string, enum: [review] }
+                    kind: { type: string, enum: [mechanical, open-decision] }
+                    phase: { type: string }
+                    problem: { type: string }
+                    fix: { type: string }
+                  required: [id, source, kind, phase, problem, fix]
+            required: [clean, summary, findings]
+
+        - id: plan-check
+          depends_on: [plan-test, plan-review]
+          trigger_rule: all_done
+          script: check-plan
+          runtime: bun
+          with:
+            test: "$plan-test.output"
+            review: { from: "$plan-review.output", if_skipped: "" }
+            round: "$LOOP_PREV.plan-check.output.round"
+            finalize: "$finalize.output"
+            render: "$render.output"
+          output_format:
+            type: object
+            properties:
+              done: { type: boolean }
+              round: { type: integer }
+              findings: { type: integer }
+            required: [done, round, findings]
+
+  - id: plan-result
+    depends_on: [plan-loop]
+    script: plan-result
+    runtime: bun
     output_format:
       type: object
       properties:
-        scope: { type: string, enum: [small, large] }
         slug: { type: string }
         branch: { type: string }
         title: { type: string }
-        prerequisites: { type: boolean }
-        after: { type: boolean }
-      required: [scope, slug, branch, title, prerequisites, after]
-
-  - id: render
-    depends_on: [finalize]
-    script: render-run
-    runtime: bun
-    with:
-      slug: "$finalize.output.slug"
-      branch: "$finalize.output.branch"
-      title: "$finalize.output.title"
-      main_branch: "$preflight.output.main_branch"
-      branch_regex: "$preflight.output.branch_regex"
-      plans_ref: "$INPUTS.plans_ref"
-      plans_dir: "$INPUTS.plans_dir"
-      pack: "$INPUTS.pack"
-    output_format:
-      type: object
-      properties:
         workflow: { type: string }
-        file: { type: string }
-        waves: { type: integer }
-      required: [workflow, file, waves]
+      required: [slug, branch, title, workflow]
 
   - id: publish
-    depends_on: [render]
+    depends_on: [plan-result]
     script: publish-plan
     runtime: bun
     with:
-      slug: "$finalize.output.slug"
-      title: "$finalize.output.title"
-      workflow: "$render.output.workflow"
+      slug: "$plan-result.output.slug"
+      title: "$plan-result.output.title"
+      workflow: "$plan-result.output.workflow"
       plans_ref: "$INPUTS.plans_ref"
       plans_dir: "$INPUTS.plans_dir"
       main_branch: "$preflight.output.main_branch"

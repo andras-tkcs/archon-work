@@ -67,6 +67,33 @@ if (cfg.code === 0) {
   } catch {}
 }
 
+// Assumptions: bullets of the last non-fenced "## Assumptions" section of plan.md.
+const assumptions: string[] = [];
+{
+  let inFence = false;
+  let inSection = false;
+  let current: string[] = [];
+  for (const line of readFileSync(join(art, "plan.md"), "utf8").split("\n")) {
+    if (line.startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    if (/^## Assumptions\s*$/.test(line)) {
+      inSection = true;
+      current = [];
+      continue;
+    }
+    if (/^## /.test(line)) {
+      if (inSection) assumptions.splice(0, assumptions.length, ...current);
+      inSection = false;
+      continue;
+    }
+    if (inSection && line.startsWith("- ")) current.push(line);
+  }
+  if (inSection) assumptions.splice(0, assumptions.length, ...current);
+}
+
 const repo = run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]).out.trim() || "<owner>/<repo>";
 const lines = [
   `# Published ${workflow}`,
@@ -74,6 +101,9 @@ const lines = [
   `Commit ${commit} on the \`${plansRef}\` branch: https://github.com/${repo}/blob/${plansRef}/${plansDir}/${slug}/plan.md`,
   `Workflow: \`${workflow}\` (${plansDir}/workflows/${workflow}.yaml)`,
   "",
+  ...(assumptions.length > 0
+    ? ["## Assumptions", "", ...assumptions, ""]
+    : ["None: every decision in the plan was made in the interview.", ""]),
 ];
 if (!configured) {
   lines.push(
@@ -90,4 +120,4 @@ if (!configured) {
 lines.push(`Run \`${LOAD}\` in the project's checkout, then \`archon workflow run ${workflow} --detach\`.`, "");
 writeFileSync(join(art, "published.md"), lines.join("\n"));
 
-console.log(JSON.stringify({ commit, workflow, message: `published ${workflow}; run ${LOAD} to load it` }));
+console.log(JSON.stringify({ commit, workflow, message: `published ${workflow}; assumptions: ${assumptions.length === 0 ? "none" : `${assumptions.length} (listed in published.md)`}; run ${LOAD} to load it` }));
