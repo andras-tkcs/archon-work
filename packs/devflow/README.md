@@ -103,7 +103,8 @@ archon workflow run tkcs-lab/devflow:devflow-refine "refine plans/<slug>: <what 
 2. **Refuse a started or merged plan**: it stops with a reason (for example `Not refined: the plan
    <slug> is already being implemented (its branch <branch> exists on origin). devflow-refine only
    changes plans whose implementation has not started.`) when the implementation branch is on
-   origin, or the plan is merged into the main branch. The check runs again right before publishing.
+   origin, the plan is merged into the main branch, or a pull request from it was merged.
+   The check runs again right before publishing.
 3. **Interview**: it starts from the published plan and asks only what the change leaves open, one
    question at a time, then revises the plan with the same method as `devflow-plan`.
 4. **Publish**: the slug, the branch and the workflow name stay the same. The refined plan and
