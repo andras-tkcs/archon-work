@@ -40,7 +40,7 @@ Fix every finding in plan.md. A mechanical finding: change the plan to match the
 open decision: decide it, record it under \`## Assumptions\`, and fix the briefs it affects.
 `;
 for (const f of findings) {
-  md += `\n## ${f.id}. [${f.source}, ${f.kind}] ${f.phase || "plan"}\n\n${f.problem}\n\nFix: ${f.fix}\n`;
+  md += `\n## ${f.id}. [${f.source}, ${f.kind}] ${f.phase || "plan"}\n\n**Problem:** ${f.problem}\n\n**Fix:** ${f.fix}\n`;
 }
 writeFileSync(findingsFile, md);
 
