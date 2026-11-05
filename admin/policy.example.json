@@ -1,0 +1,354 @@
+{
+  "_comment": "Baseline derived 2026-11-04 from OWNER/REPO (rulesets, Actions, security settings) and its org. 'source' per section: reference = observed in the reference; recommended = my addition, not in the reference. Edit freely; suppress[] records accepted exceptions.",
+  "version": 1,
+  "reference": "OWNER/REPO",
+  "branch": {
+    "source": "reference",
+    "min_review_count": 1,
+    "dismiss_stale_reviews_on_push": true,
+    "require_code_owner_review_if_codeowners_exists": true,
+    "required_rules": [
+      "deletion",
+      "non_fast_forward",
+      "pull_request",
+      "required_status_checks"
+    ],
+    "strict_status_checks": true,
+    "bypass_actor": {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "pull_request",
+      "note": "repo admin role may merge own PR, never push directly"
+    }
+  },
+  "tag": {
+    "source": "reference",
+    "pattern": "refs/tags/v*",
+    "required_rules": [
+      "creation",
+      "update",
+      "deletion",
+      "non_fast_forward"
+    ],
+    "bypass_actor": {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    },
+    "applies_when": "repo has any tags"
+  },
+  "repo": {
+    "source": "reference",
+    "delete_branch_on_merge": true,
+    "secret_scanning": true,
+    "secret_scanning_push_protection": true,
+    "dependabot_alerts": true,
+    "dependabot_security_updates": true,
+    "private_vulnerability_reporting": true,
+    "require_files": [
+      "SECURITY.md",
+      ".github/CODEOWNERS",
+      "LICENSE"
+    ],
+    "dependabot_ecosystems_include_github_actions": true
+  },
+  "actions": {
+    "source": "reference",
+    "allowed_actions": "selected",
+    "github_owned_allowed": false,
+    "verified_allowed": false,
+    "default_workflow_permissions": "read",
+    "can_approve_pull_request_reviews": false,
+    "fork_pr_contributor_approval": "all_external_contributors",
+    "allowlist": [
+      "actions/attest-build-provenance/predicate@*",
+      "actions/attest-build-provenance@*",
+      "actions/attest@*",
+      "actions/cache@*",
+      "actions/checkout@*",
+      "actions/configure-pages@*",
+      "actions/deploy-pages@*",
+      "actions/download-artifact@*",
+      "actions/setup-go@*",
+      "actions/setup-node@*",
+      "actions/setup-python@*",
+      "actions/upload-artifact@*",
+      "actions/upload-pages-artifact@*",
+      "anchore/sbom-action@*",
+      "docker/*",
+      "dominikh/staticcheck-action@*",
+      "peter-evans/create-pull-request@*",
+      "pnpm/action-setup",
+      "pnpm/action-setup@*",
+      "pypa/gh-action-pypi-publish@*",
+      "softprops/action-gh-release@*"
+    ],
+    "workflows": {
+      "require_sha_pinned": true,
+      "require_top_level_permissions": true,
+      "flag_pull_request_target": true,
+      "flag_self_hosted_on_public_repo": true
+    },
+    "environments_need_branch_policy": true
+  },
+  "org": {
+    "source": "recommended+reference",
+    "two_factor_required": true,
+    "default_repository_permission": [
+      "none",
+      "read"
+    ],
+    "members_can_create_public_repositories": false,
+    "min_owners": 2,
+    "new_repo_security_defaults": true
+  },
+  "apps": {
+    "source": "recommended",
+    "comment": "Every installed GitHub App must be listed here with a reason. permissions = highest level accepted per scope; anything above is a finding.",
+    "accepted": {}
+  },
+  "tokens": {
+    "source": "recommended",
+    "max_fine_grained_pat_lifetime_days": 90,
+    "stale_after_days": 90
+  },
+  "suppress": [
+    {
+      "check": "R-ACT-09",
+      "target": "OWNER/REPO",
+      "reason": "self-hosted jobs run in runner groups restricted to named workflows (see org runner_groups in reference snapshot)"
+    }
+  ],
+  "checks": {
+    "O-01": {
+      "severity": "high",
+      "title": "org requires 2FA",
+      "enabled": true
+    },
+    "O-02": {
+      "severity": "medium",
+      "title": "org default repository permission",
+      "enabled": true
+    },
+    "O-03": {
+      "severity": "low",
+      "title": "members cannot create public repos",
+      "enabled": true
+    },
+    "O-04": {
+      "severity": "low",
+      "title": "org has >= min owners",
+      "enabled": true
+    },
+    "O-05": {
+      "severity": "high",
+      "title": "org Actions: only selected actions allowed",
+      "enabled": true
+    },
+    "O-06": {
+      "severity": "medium",
+      "title": "org Actions: allowlist flags and wildcards",
+      "enabled": true
+    },
+    "O-07": {
+      "severity": "medium",
+      "title": "org Actions: default token read-only",
+      "enabled": true
+    },
+    "O-08": {
+      "severity": "medium",
+      "title": "org Actions: workflows cannot approve PRs",
+      "enabled": true
+    },
+    "O-09": {
+      "severity": "medium",
+      "title": "org Actions: approval for all external contributors",
+      "enabled": true
+    },
+    "O-10": {
+      "severity": "high",
+      "title": "runner groups open to public repos",
+      "enabled": true
+    },
+    "O-11": {
+      "severity": "high",
+      "title": "GitHub Apps accepted and within accepted permissions",
+      "enabled": true
+    },
+    "O-12": {
+      "severity": "medium",
+      "title": "fine-grained tokens expire and are used",
+      "enabled": true
+    },
+    "O-13": {
+      "severity": "medium",
+      "title": "org webhooks secure",
+      "enabled": true
+    },
+    "O-14": {
+      "severity": "low",
+      "title": "new-repo security defaults",
+      "enabled": true
+    },
+    "R-BR-01": {
+      "severity": "high",
+      "title": "default branch: deletion blocked",
+      "enabled": true
+    },
+    "R-BR-02": {
+      "severity": "high",
+      "title": "default branch: force push blocked",
+      "enabled": true
+    },
+    "R-BR-03": {
+      "severity": "high",
+      "title": "default branch: pull request required",
+      "enabled": true
+    },
+    "R-BR-04": {
+      "severity": "medium",
+      "title": "default branch: review parameters",
+      "enabled": true
+    },
+    "R-BR-05": {
+      "severity": "high",
+      "title": "default branch: status checks required",
+      "enabled": true
+    },
+    "R-BR-06": {
+      "severity": "medium",
+      "title": "default branch: no unconditional bypass",
+      "enabled": true
+    },
+    "R-TAG-01": {
+      "severity": "high",
+      "title": "release tags protected",
+      "enabled": true
+    },
+    "R-SET-01": {
+      "severity": "low",
+      "title": "delete branch on merge",
+      "enabled": true
+    },
+    "R-SEC-01": {
+      "severity": "high",
+      "title": "secret scanning",
+      "enabled": true
+    },
+    "R-SEC-02": {
+      "severity": "high",
+      "title": "secret push protection",
+      "enabled": true
+    },
+    "R-SEC-03": {
+      "severity": "medium",
+      "title": "Dependabot alerts",
+      "enabled": true
+    },
+    "R-SEC-04": {
+      "severity": "medium",
+      "title": "Dependabot security updates",
+      "enabled": true
+    },
+    "R-SEC-05": {
+      "severity": "medium",
+      "title": "private vulnerability reporting",
+      "enabled": true
+    },
+    "R-SEC-06": {
+      "severity": "low",
+      "title": "code scanning",
+      "enabled": true
+    },
+    "R-SEC-07": {
+      "severity": "low",
+      "title": "dependabot.yml covers github-actions",
+      "enabled": true
+    },
+    "R-ACT-01": {
+      "severity": "high",
+      "title": "Actions: selected actions only",
+      "enabled": true
+    },
+    "R-ACT-02": {
+      "severity": "medium",
+      "title": "Actions: allowlist flags and wildcards",
+      "enabled": true
+    },
+    "R-ACT-03": {
+      "severity": "medium",
+      "title": "Actions: default token read-only",
+      "enabled": true
+    },
+    "R-ACT-04": {
+      "severity": "medium",
+      "title": "Actions: workflows cannot approve PRs",
+      "enabled": true
+    },
+    "R-ACT-05": {
+      "severity": "medium",
+      "title": "Actions: approval for all external contributors",
+      "enabled": true
+    },
+    "R-ACT-06": {
+      "severity": "medium",
+      "title": "workflows: third-party actions pinned to SHA",
+      "enabled": true
+    },
+    "R-ACT-07": {
+      "severity": "medium",
+      "title": "workflows: top-level permissions block",
+      "enabled": true
+    },
+    "R-ACT-08": {
+      "severity": "medium",
+      "title": "workflows: pull_request_target / workflow_run review",
+      "enabled": true
+    },
+    "R-ACT-09": {
+      "severity": "medium",
+      "title": "workflows: self-hosted runner on public repo",
+      "enabled": true
+    },
+    "R-ACT-10": {
+      "severity": "medium",
+      "title": "environments restrict deployment branches",
+      "enabled": true
+    },
+    "R-ACT-11": {
+      "severity": "low",
+      "title": "used actions covered by allowlist",
+      "enabled": true
+    },
+    "R-FILE-01": {
+      "severity": "low",
+      "title": "SECURITY.md present",
+      "enabled": true
+    },
+    "R-FILE-02": {
+      "severity": "low",
+      "title": "CODEOWNERS present",
+      "enabled": true
+    },
+    "R-FILE-03": {
+      "severity": "low",
+      "title": "LICENSE present (public repos)",
+      "enabled": true
+    },
+    "R-ACC-01": {
+      "severity": "high",
+      "title": "no write deploy keys",
+      "enabled": true
+    },
+    "R-ACC-02": {
+      "severity": "medium",
+      "title": "repo webhooks secure",
+      "enabled": true
+    },
+    "R-ACC-03": {
+      "severity": "low",
+      "title": "no stale pending invitations / direct admins",
+      "enabled": true
+    }
+  }
+}

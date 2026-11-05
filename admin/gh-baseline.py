@@ -396,54 +396,110 @@ def md_org(org, O):
 
 
 SEV = {"high": 3, "medium": 2, "low": 1, "info": 0}
-CHECKS = {  # id: (default severity, title)
-    "O-01": ("high", "org requires 2FA"),
-    "O-02": ("medium", "org default repository permission"),
-    "O-03": ("low", "members cannot create public repos"),
-    "O-04": ("low", "org has >= min owners"),
-    "O-05": ("high", "org Actions: only selected actions allowed"),
-    "O-06": ("medium", "org Actions: allowlist flags and wildcards"),
-    "O-07": ("medium", "org Actions: default token read-only"),
-    "O-08": ("medium", "org Actions: workflows cannot approve PRs"),
-    "O-09": ("medium", "org Actions: approval for all external contributors"),
-    "O-10": ("high", "runner groups open to public repos"),
-    "O-11": ("high", "GitHub Apps accepted and within accepted permissions"),
-    "O-12": ("medium", "fine-grained tokens expire and are used"),
-    "O-13": ("medium", "org webhooks secure"),
-    "O-14": ("low", "new-repo security defaults"),
-    "R-BR-01": ("high", "default branch: deletion blocked"),
-    "R-BR-02": ("high", "default branch: force push blocked"),
-    "R-BR-03": ("high", "default branch: pull request required"),
-    "R-BR-04": ("medium", "default branch: review parameters"),
-    "R-BR-05": ("high", "default branch: status checks required"),
-    "R-BR-06": ("medium", "default branch: no unconditional bypass"),
-    "R-TAG-01": ("high", "release tags protected"),
-    "R-SET-01": ("low", "delete branch on merge"),
-    "R-SEC-01": ("high", "secret scanning"),
-    "R-SEC-02": ("high", "secret push protection"),
-    "R-SEC-03": ("medium", "Dependabot alerts"),
-    "R-SEC-04": ("medium", "Dependabot security updates"),
-    "R-SEC-05": ("medium", "private vulnerability reporting"),
-    "R-SEC-06": ("low", "code scanning"),
-    "R-SEC-07": ("low", "dependabot.yml covers github-actions"),
-    "R-ACT-01": ("high", "Actions: selected actions only"),
-    "R-ACT-02": ("medium", "Actions: allowlist flags and wildcards"),
-    "R-ACT-03": ("medium", "Actions: default token read-only"),
-    "R-ACT-04": ("medium", "Actions: workflows cannot approve PRs"),
-    "R-ACT-05": ("medium", "Actions: approval for all external contributors"),
-    "R-ACT-06": ("medium", "workflows: third-party actions pinned to SHA"),
-    "R-ACT-07": ("medium", "workflows: top-level permissions block"),
-    "R-ACT-08": ("medium", "workflows: pull_request_target / workflow_run review"),
-    "R-ACT-09": ("medium", "workflows: self-hosted runner on public repo"),
-    "R-ACT-10": ("medium", "environments restrict deployment branches"),
-    "R-ACT-11": ("low", "used actions covered by allowlist"),
-    "R-FILE-01": ("low", "SECURITY.md present"),
-    "R-FILE-02": ("low", "CODEOWNERS present"),
-    "R-FILE-03": ("low", "LICENSE present (public repos)"),
-    "R-ACC-01": ("high", "no write deploy keys"),
-    "R-ACC-02": ("medium", "repo webhooks secure"),
-    "R-ACC-03": ("low", "no stale pending invitations / direct admins"),
-}
+CHECK_IDS = (
+    "O-01",
+    "O-02",
+    "O-03",
+    "O-04",
+    "O-05",
+    "O-06",
+    "O-07",
+    "O-08",
+    "O-09",
+    "O-10",
+    "O-11",
+    "O-12",
+    "O-13",
+    "O-14",
+    "R-BR-01",
+    "R-BR-02",
+    "R-BR-03",
+    "R-BR-04",
+    "R-BR-05",
+    "R-BR-06",
+    "R-TAG-01",
+    "R-SET-01",
+    "R-SEC-01",
+    "R-SEC-02",
+    "R-SEC-03",
+    "R-SEC-04",
+    "R-SEC-05",
+    "R-SEC-06",
+    "R-SEC-07",
+    "R-ACT-01",
+    "R-ACT-02",
+    "R-ACT-03",
+    "R-ACT-04",
+    "R-ACT-05",
+    "R-ACT-06",
+    "R-ACT-07",
+    "R-ACT-08",
+    "R-ACT-09",
+    "R-ACT-10",
+    "R-ACT-11",
+    "R-FILE-01",
+    "R-FILE-02",
+    "R-FILE-03",
+    "R-ACC-01",
+    "R-ACC-02",
+    "R-ACC-03",
+)
+
+
+class PolicyError(Exception):
+    pass
+
+
+READ_KEYS = (
+    "org.default_repository_permission", "org.members_can_create_public_repositories",
+    "org.min_owners", "org.new_repo_security_defaults",
+    "actions.github_owned_allowed", "actions.verified_allowed", "actions.allowlist",
+    "actions.default_workflow_permissions", "actions.fork_pr_contributor_approval",
+    "apps.accepted",
+    "tokens.max_fine_grained_pat_lifetime_days", "tokens.stale_after_days",
+    "branch.min_review_count", "branch.dismiss_stale_reviews_on_push",
+    "branch.require_code_owner_review_if_codeowners_exists", "branch.strict_status_checks",
+    "branch.bypass_actor.actor_id", "branch.bypass_actor.actor_type", "branch.bypass_actor.bypass_mode",
+    "tag.required_rules", "tag.pattern",
+    "tag.bypass_actor.actor_id", "tag.bypass_actor.actor_type", "tag.bypass_actor.bypass_mode",
+    "repo.delete_branch_on_merge", "repo.dependabot_ecosystems_include_github_actions",
+)
+
+
+def load_policy(path):
+    """Read and validate the policy file; raise PolicyError with a one-line message."""
+    try:
+        with open(path) as fh:
+            P = json.load(fh)
+    except (OSError, ValueError) as e:
+        raise PolicyError(f"cannot read {path}: {e}")
+    if not isinstance(P, dict):
+        raise PolicyError(f"cannot read {path}: top level is not an object")
+    if P.get("version") != 1:
+        raise PolicyError("version must be 1")
+    checks = P.get("checks")
+    if not isinstance(checks, dict):
+        raise PolicyError("missing key: checks")
+    for cid in checks:
+        if cid not in CHECK_IDS:
+            raise PolicyError(f"unknown check id: {cid}")
+    for s in P.get("suppress", []):
+        if s.get("check") not in CHECK_IDS:
+            raise PolicyError(f"unknown check id: {s.get('check')}")
+    for cid in CHECK_IDS:
+        if cid not in checks:
+            raise PolicyError(f"checks is missing {cid}")
+    for cid in CHECK_IDS:
+        sev = checks[cid].get("severity") if isinstance(checks[cid], dict) else None
+        if sev not in ("high", "medium", "low", "info"):
+            raise PolicyError(f"bad severity for {cid}: {sev}")
+    for dotted in READ_KEYS:
+        cur = P
+        for part in dotted.split("."):
+            if not isinstance(cur, dict) or part not in cur:
+                raise PolicyError(f"missing key: {dotted}")
+            cur = cur[part]
+    return P
 
 
 # ------------------------------------------------------------------ helpers
@@ -456,8 +512,10 @@ class Finder:
         self.scope, self.B, self.out = scope, B, out
 
     def add(self, cid, status, msg, fix=None, manual=None):
-        sev = self.B.get("severity_overrides", {}).get(cid) or CHECKS[cid][0]
-        f = {"id": cid, "scope": self.scope, "title": CHECKS[cid][1], "severity": sev,
+        c = self.B["checks"][cid]
+        if not c.get("enabled", True):
+            return
+        f = {"id": cid, "scope": self.scope, "title": c["title"], "severity": c["severity"],
              "status": status, "message": msg, "fix": fix or [], "manual": manual}
         for s in self.B.get("suppress", []):
             if s["check"] == cid and fnmatch.fnmatch(self.scope.split(":", 1)[-1], s["target"]) and status == "fail":
@@ -1029,9 +1087,9 @@ def main():
     if not a.target and not a.snapshot:
         ap.error("target required")
     try:
-        B = json.load(open(a.policy))
-    except (OSError, ValueError) as e:
-        print(f"policy error: cannot read {a.policy}: {e}", file=sys.stderr)
+        B = load_policy(a.policy)
+    except PolicyError as e:
+        print(f"policy error: {e}", file=sys.stderr)
         sys.exit(2)
     if a.snapshot:
         a.target = a.target or json.load(open(a.snapshot)).get("target", "")
