@@ -164,6 +164,18 @@ cp_script="$repo_root/packs/devflow/devflow-plan/scripts/check-plan.ts"
   echo "check-plan: ok"
 )
 
+# d6. model keys are required
+for spec in 'bad-model|phase '"'"'p2'"'"': model must be small, medium or large (got "haiku")' \
+            'no-reason|phase '"'"'p2'"'"': model medium needs a model_reason' \
+            'no-review-model|review_model must be medium or large (got nothing)'; do
+  name="${spec%%|*}"; want="${spec#*|}"
+  if bun "$render" "$fx/$name.md" --slug "$name" --branch "feat/$name" --title M --main main --pack test/devflow >/dev/null 2>"$scratch/$name.err"; then
+    echo "$name.md rendered without error" >&2; exit 1
+  fi
+  grep -qF "$want" "$scratch/$name.err" || { echo "$name: expected '$want', got:" >&2; cat "$scratch/$name.err" >&2; exit 1; }
+done
+echo "models: ok"
+
 # e. load-plan against a local bare origin
 origin="$scratch/origin.git"
 clone="$scratch/clone"
@@ -191,6 +203,8 @@ lp() { INPUTS_PLAN_REF=plans INPUTS_PLAN_PATH=plans/s/plan.md INPUTS_DEVFLOW_ROO
 
 out="$(INPUTS_MODE=phase INPUTS_PHASE=p1 INPUTS_BASE="$main_sha" lp env)"
 echo "$out" | grep -q '"done":false'
+echo "$out" | grep -q '"model":"small"'
+echo "$out" | grep -q '"review_model":"medium"'
 test -f "$ARTIFACTS_DIR/plan.md" && test -f "$ARTIFACTS_DIR/context.json"
 echo "load-plan phase (not done): ok"
 
@@ -202,6 +216,7 @@ echo "load-plan phase (done): ok"
 
 git switch -q -c feat/serial
 INPUTS_MODE=deliver lp env >/dev/null
+INPUTS_MODE=deliver lp env | grep -q '"model":""'
 git switch -q -c feat/other
 if INPUTS_MODE=deliver lp env >/dev/null 2>&1; then echo "deliver on the wrong branch succeeded" >&2; exit 1; fi
 echo "load-plan deliver: ok"
@@ -309,4 +324,12 @@ echo "$out" | grep -q '"reason":"merged"'
 out="$(lp2 env GH_MERGED=0 INPUTS_CHECK_ONLY=true INPUTS_PLAN=three-wide USER_MESSAGE="add a phase")"
 test "$out" = '{"ok":true}'
 echo "load-published: ok"
+# h. pick-one
+pick="$repo_root/packs/devflow/.shared/pick-one.ts"
+test "$(INPUTS_MEDIUM='{"a":1}' bun "$pick")" = '{"a":1}'
+if bun "$pick" >/dev/null 2>"$scratch/pick.err"; then echo "pick-one with no input succeeded" >&2; exit 1; fi
+grep -qF 'got 0 (none)' "$scratch/pick.err"
+if INPUTS_SMALL=x INPUTS_LARGE=y bun "$pick" >/dev/null 2>"$scratch/pick.err"; then echo "pick-one with two inputs succeeded" >&2; exit 1; fi
+grep -qF 'got 2 (small, large)' "$scratch/pick.err"
+echo "pick-one: ok"
 echo "test-render-run: all ok"

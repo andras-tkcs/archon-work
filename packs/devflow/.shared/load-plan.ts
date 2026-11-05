@@ -2,7 +2,7 @@
 // $ARTIFACTS_DIR/plan.md and context.json, checks the worktree, and says whether the phase is done.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { extractManifest } from "./render-run.ts";
+import { extractManifest, validateModels } from "./render-run.ts";
 import { artifactsDir, fail, input, must, profile, run } from "./util.ts";
 
 const mode = input("mode");
@@ -28,16 +28,23 @@ try {
 } catch (e) {
   fail((e as Error).message);
 }
+try {
+  validateModels(manifest);
+} catch (e) {
+  fail((e as Error).message);
+}
 const slug = manifest.plan_slug ?? "";
 const branch = manifest.feature_branch ?? "";
 if (!slug || !branch) fail("the manifest has no plan_slug or feature_branch");
 const title = input("title", false) || (planText.match(/^# (.+)$/m)?.[1] ?? slug);
 
 let done = false;
+let model = "";
 if (mode === "phase") {
   const phase = input("phase");
   const base = input("base");
   if (!manifest.phases.some((p) => p.id === phase)) fail(`'${phase}' is not a phase of ${slug}: ${manifest.phases.map((p) => p.id).join(", ")}`);
+  model = manifest.phases.find((p) => p.id === phase)!.model!;
   must(["git", "cat-file", "-e", `${base}^{commit}`]);
   must(["git", "reset", "--hard", base]);
   done = must(["git", "log", base, "--format=%H", "--fixed-strings", `--grep=Plan-Phase: ${slug}/${phase}`]) !== "";
@@ -61,4 +68,4 @@ writeFileSync(
     devflow_root: input("devflow_root", false),
   }),
 );
-console.log(JSON.stringify({ slug, branch, title, done }));
+console.log(JSON.stringify({ slug, branch, title, done, model, review_model: manifest.review_model }));
