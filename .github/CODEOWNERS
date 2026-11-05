@@ -1,0 +1,6 @@
+# Code that runs as the sealed admin user, and this file itself, need the admin account's review.
+/admin/              @andras-tkcs
+/bootstrap.sh        @andras-tkcs
+/.github/CODEOWNERS  @andras-tkcs
+# CI workflows run with the repo's Actions secrets; agent may write them (D15), the admin reviews.
+/.github/workflows/  @andras-tkcs
