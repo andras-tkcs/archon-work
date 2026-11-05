@@ -143,7 +143,7 @@ fs.writeFileSync(dst, Bun.YAML.stringify(d));
 )
 
 # d5. check-plan.ts
-cp_script="$repo_root/packs/devflow/devflow-plan/scripts/check-plan.ts"
+cp_script="$repo_root/packs/devflow/.shared/check-plan.ts"
 (
   chk="$scratch/chk"
   mkdir -p "$chk"
@@ -159,8 +159,17 @@ cp_script="$repo_root/packs/devflow/devflow-plan/scripts/check-plan.ts"
   echo "$out" | grep -q '"done":false'
   echo "$out" | grep -q '"round":1'
   grep -q '## F1. \[review, mechanical\]' "$chk/test-findings.md"
-  if cp_run "$rev" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with findings did not fail" >&2; exit 1; fi
+  rm -f "$chk"/*
+  out="$(cp_run "$rev" 2)"
+  echo "$out" | grep -q '"done":true'
+  grep -q '"unresolved":1' "$chk/tested.json"
+  grep -q '### Unresolved validation findings' "$chk/unresolved.md"
+  grep -qF -- '- F1 [review, mechanical] p1: p' "$chk/unresolved.md"
+  vm='{"ok":false,"findings":[{"id":"T1","source":"validate_manifest","kind":"mechanical","phase":"","problem":"bad","fix":"f"}]}'
+  if tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with a manifest finding did not fail" >&2; exit 1; fi
   grep -q 'after 2 fix rounds' "$scratch/cp.err"
+  cp_run "" "" >/dev/null
+  test ! -e "$chk/unresolved.md"
   echo "check-plan: ok"
 )
 
@@ -268,6 +277,21 @@ INPUTS_COMMIT_VERB=Refine publish > "$scratch/publish3.json"
 test "$(git -C "$porigin" log -1 --format=%s plans)" = "Refine s: S"
 if INPUTS_COMMIT_VERB=Bad publish >/dev/null 2>"$scratch/verb.err"; then echo "bad commit_verb succeeded" >&2; exit 1; fi
 grep -q "invalid commit_verb" "$scratch/verb.err"
+cp "$fx/serial.md" "$pub_art/plan.md"
+printf '### Unresolved validation findings\n\nThe large-tier review still reported these after its last round.\n\n- F1 [review, mechanical] p1: x\n' > "$pub_art/unresolved.md"
+publish > "$scratch/publish4.json"
+grep -q '"unresolved":1' "$scratch/publish4.json"
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+test "$(echo "$pub_plan" | sed -n 3p)" = '> [!WARNING]'
+test "$(echo "$pub_plan" | grep -c '^### Unresolved validation findings$')" -eq 1
+risks_l="$(echo "$pub_plan" | grep -n '^## Risks and open questions$' | cut -d: -f1)"
+unres_l="$(echo "$pub_plan" | grep -n '^### Unresolved validation findings$' | cut -d: -f1)"
+man_l="$(echo "$pub_plan" | grep -n '^## Implementation manifest$' | cut -d: -f1)"
+test "$risks_l" -lt "$unres_l" && test "$unres_l" -lt "$man_l"
+publish >/dev/null
+test "$(git -C "$porigin" show plans:plans/s/plan.md | grep -c '^### Unresolved validation findings$')" -eq 1
+rm -f "$pub_art/unresolved.md"
+echo "publish-plan unresolved: ok"
 echo "publish-plan: ok"
 if ARTIFACTS_DIR="$scratch" bun "$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts" 2>"$scratch/rp.err"; then echo "render-run without inputs succeeded" >&2; exit 1; fi
 grep -q "input 'slug' is empty" "$scratch/rp.err"

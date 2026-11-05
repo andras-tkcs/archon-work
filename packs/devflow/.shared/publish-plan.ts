@@ -20,6 +20,39 @@ const runId = process.env.WORKFLOW_ID || "run";
 const LOAD = "archon workflow sync";
 const ident = ["-c", "user.name=devflow", "-c", "user.email=devflow@example.invalid"];
 
+// Findings the large-tier review left after its last round (check-plan.ts writes unresolved.md): mark them in plan.md.
+let unresolved = 0;
+{
+  const uf = join(art, "unresolved.md");
+  const pf = join(art, "plan.md");
+  if (existsSync(uf)) {
+    const content = readFileSync(uf, "utf8").trim();
+    unresolved = content.split("\n").filter((l) => l.startsWith("- F")).length;
+    const lines = readFileSync(pf, "utf8").split("\n");
+    if (!lines.includes("### Unresolved validation findings")) {
+      // Line numbers of the non-fenced "## " headings.
+      const heads: { i: number; text: string }[] = [];
+      let inFence = false;
+      lines.forEach((line, i) => {
+        if (line.startsWith("```")) inFence = !inFence;
+        else if (!inFence && /^## /.test(line)) heads.push({ i, text: line.trimEnd() });
+      });
+      const block = ["", ...content.split("\n"), ""];
+      const risks = heads.filter((h) => h.text === "## Risks and open questions").pop();
+      if (risks) {
+        const next = heads.find((h) => h.i > risks.i);
+        lines.splice(next ? next.i : lines.length, 0, ...block);
+      } else {
+        const at = heads.filter((h) => h.text === "## Assumptions").pop() ?? heads.filter((h) => h.text === "## Implementation manifest").pop();
+        lines.splice(at ? at.i : lines.length, 0, "## Risks and open questions", ...block);
+      }
+      const t = lines.findIndex((l) => l.startsWith("# "));
+      lines.splice(t + 1, 0, "", "> [!WARNING]", `> This plan was published with ${unresolved} unresolved validation findings. Read "Unresolved validation`, `> findings" under "Risks and open questions" before you run it.`);
+      writeFileSync(pf, lines.join("\n"));
+    }
+  }
+}
+
 const tmp = join(mkdtempSync(join(tmpdir(), "devflow-plans-")), "wt");
 let orphan = "";
 let commit = "";
@@ -122,4 +155,4 @@ if (!configured) {
 lines.push(`Run \`${LOAD}\` in the project's checkout, then \`archon workflow run ${workflow} --detach\`.`, "");
 writeFileSync(join(art, "published.md"), lines.join("\n"));
 
-console.log(JSON.stringify({ commit, workflow, message: `published ${workflow}; assumptions: ${assumptions.length === 0 ? "none" : `${assumptions.length} (listed in published.md)`}; run ${LOAD} to load it` }));
+console.log(JSON.stringify({ commit, workflow, unresolved, message: `published ${workflow}; assumptions: ${assumptions.length === 0 ? "none" : `${assumptions.length} (listed in published.md)`}; run ${LOAD} to load it` }));

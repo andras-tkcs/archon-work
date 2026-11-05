@@ -1,4 +1,5 @@
-# RED: the reviewer keeps finding a problem; after two fix rounds the run fails and nothing is published.
+# RED: the manifest validator keeps rejecting the plan; the loop ends without a passing test, so the run fails and nothing is published.
+# The dry run runs plan-loop once, so check-plan's round-3 split is tested in scripts/test-render-run.sh (d5, f), not here.
 exec-code: true
 fixture:
   expect: failed
@@ -35,13 +36,9 @@ render:
   file: /stub/x.yaml
   waves: 2
 plan-test:
-  ok: true
-  findings: []
-plan-review:
-  clean: false
-  summary: s
+  ok: false
   findings:
-    - {id: R1, source: review, kind: mechanical, phase: p1-x, problem: stub, fix: stub}
+    - {id: T1, source: validate_manifest, kind: mechanical, phase: "", problem: stub, fix: stub}
 publish:
   commit: abc
   workflow: devflow-run-x
