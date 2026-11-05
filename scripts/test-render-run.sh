@@ -9,6 +9,8 @@ render="$repo_root/packs/devflow/.shared/render-run.ts"
 loader="$repo_root/packs/devflow/.shared/load-plan.ts"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
+# Hermetic: a caller (a workflow run) may export INPUTS_* that the scripts under test read.
+for v in $(compgen -e | grep '^INPUTS_' || true); do unset "$v"; done
 git_c=(git -c user.name=test -c user.email=test@example.invalid)
 
 # a. render
