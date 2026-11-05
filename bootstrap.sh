@@ -15,6 +15,7 @@
 #   ARCHON_REPO=tkcs-lab/Archon GitHub owner/repo whose releases provide Archon, its providers and
 #                               the Slack plugin (coleam00/Archon = upstream, or your own fork)
 #   AGENT_USER=agent            unix user that runs Claude Code + Archon (no sudo)
+#   ADMIN_USER=ghadmin          sealed user holding the admin GitHub login; no password/SSH/sudo
 #   ARCHON_PORT=3090            Archon HTTP port (Archon default)
 #   CODE_SERVER_PORT=8080       code-server (VS Code in the browser) port, bound to 127.0.0.1
 #   TS_AUTHKEY=                 Tailscale auth key; without it run `tailscale up --ssh` yourself
@@ -28,10 +29,16 @@
 #   LOCK_SSH_TO_TAILSCALE=0     1 = close public port 22 (only once Tailscale SSH works)
 #   DEVFLOW_PACK=tkcs-lab/archon-work/packs/devflow
 #                               Archon workflow pack to install (owner/repo/path[@tag]); empty = none
+#   BOOTSTRAP_REPO=tkcs-lab/archon-work
+#                               GitHub owner/repo this bootstrap comes from; the sealed admin user's
+#                               tools are downloaded from its admin/ folder
+#   BOOTSTRAP_REF=main          the tag or commit in your curl URL; the downloads must match the
+#                               hashes in this file (otherwise the admin tools are skipped with a warning)
 set -euo pipefail
 
 ARCHON_REPO="${ARCHON_REPO:-tkcs-lab/Archon}"
 AGENT_USER="${AGENT_USER:-agent}"
+ADMIN_USER="${ADMIN_USER:-ghadmin}"
 ARCHON_PORT="${ARCHON_PORT:-3090}"
 CODE_SERVER_PORT="${CODE_SERVER_PORT:-8080}"
 CODE_SERVER_HTTPS_PORT=8443   # must match the tcp:8443 grant in tailscale-policy.hujson
@@ -49,11 +56,39 @@ AUTO_REBOOT="${AUTO_REBOOT:-1}"
 REBOOT_TIME="${REBOOT_TIME:-03:00}"
 LOCK_SSH_TO_TAILSCALE="${LOCK_SSH_TO_TAILSCALE:-0}"
 DEVFLOW_PACK="${DEVFLOW_PACK-tkcs-lab/archon-work/packs/devflow}"
+BOOTSTRAP_REPO="${BOOTSTRAP_REPO:-tkcs-lab/archon-work}"
+BOOTSTRAP_REF="${BOOTSTRAP_REF:-main}"
+# Both go into download URLs: refuse anything odd.
+[[ "$BOOTSTRAP_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+  || { printf 'ERROR: BOOTSTRAP_REPO must be owner/repo, got: %s\n' "$BOOTSTRAP_REPO" >&2; exit 1; }
+[[ "$BOOTSTRAP_REF" =~ ^[A-Za-z0-9._/-]+$ ]] \
+  || { printf 'ERROR: BOOTSTRAP_REF must be a tag, branch or commit, got: %s\n' "$BOOTSTRAP_REF" >&2; exit 1; }
+# sha256 of admin/gh-baseline.py and admin/policy.example.json at this commit; scripts/test-admin-tools.sh checks them
+ADMIN_SCRIPT_SHA256=5756b495343061bf40a4dad65870ecaa1df96f16531d0e2276c0a733dd67f16e
+ADMIN_POLICY_SHA256=f9978a6e4eabf98a3cb8d2a7d67c2ea143b27247bdc95d8a8def32bb917ce491
 STATE_DIR=/var/lib/archon-bootstrap   # change-detection sums, so re-runs restart only what changed
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mWARN: %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+# fetch_admin_file <path-in-repo> <sha256> <dest>: download from the bootstrap's own repo and install
+# only on a hash match. Never exits: on failure it warns, cleans up and returns 1 (the admin tools
+# are optional, the rest of the bootstrap carries on).
+fetch_admin_file() {
+  local tmp got
+  tmp=$(mktemp)
+  if ! curl -fsSL "https://raw.githubusercontent.com/$BOOTSTRAP_REPO/$BOOTSTRAP_REF/$1" -o "$tmp"; then
+    warn "admin tools not installed: could not download $1 from $BOOTSTRAP_REPO@$BOOTSTRAP_REF; pass BOOTSTRAP_REF=<the tag or commit in your curl URL>"
+    rm -f "$tmp"; return 1
+  fi
+  got=$(sha256sum "$tmp" | cut -d' ' -f1)
+  if [[ "$got" != "$2" ]]; then
+    warn "admin tools not installed: $1 from $BOOTSTRAP_REPO@$BOOTSTRAP_REF does not match this bootstrap (sha256 $got, expected $2); pass BOOTSTRAP_REF=<the tag or commit in your curl URL>"
+    rm -f "$tmp"; return 1
+  fi
+  if ! mv "$tmp" "$3"; then rm -f "$tmp"; return 1; fi
+}
 
 # ---------------------------------------------------------------- preflight
 [[ $EUID -eq 0 ]] || die "run as root (pipe into 'sudo bash')"
@@ -145,6 +180,24 @@ as_agent() { su - "$AGENT_USER" -c "export PATH=\"$AGENT_PATH\"; $1"; }
 if [[ -n "$GIT_NAME" ]];  then as_agent "git config --global user.name  $(printf %q "$GIT_NAME")"; fi
 if [[ -n "$GIT_EMAIL" ]]; then as_agent "git config --global user.email $(printf %q "$GIT_EMAIL")"; fi
 as_agent "git config --global init.defaultBranch main"
+
+# ---------------------------------------------------------------- 4b. sealed admin user
+[[ "$ADMIN_USER" != "$AGENT_USER" ]] || die "ADMIN_USER must differ from AGENT_USER"
+log "Sealed admin user '$ADMIN_USER' (admin GitHub identity; not reachable from $AGENT_USER)"
+id "$ADMIN_USER" >/dev/null 2>&1 || useradd -m -s /bin/bash "$ADMIN_USER"
+passwd -l "$ADMIN_USER" >/dev/null
+ADMIN_HOME="$(getent passwd "$ADMIN_USER" | cut -d: -f6)"
+chmod 0700 "$ADMIN_HOME"
+gpasswd -d "$AGENT_USER" "$ADMIN_USER" >/dev/null 2>&1 || true
+install -d -o root -g "$ADMIN_USER" -m 0750 "$ADMIN_HOME/bin"
+t1=$(mktemp); t2=$(mktemp); admin_ok=1
+fetch_admin_file admin/gh-baseline.py "$ADMIN_SCRIPT_SHA256" "$t1" || admin_ok=0
+fetch_admin_file admin/policy.example.json "$ADMIN_POLICY_SHA256" "$t2" || admin_ok=0
+if [[ $admin_ok == 1 ]]; then
+  install -o root -g "$ADMIN_USER" -m 0750 "$t1" "$ADMIN_HOME/bin/gh-baseline"
+  install -o root -g "$ADMIN_USER" -m 0640 "$t2" "$ADMIN_HOME/policy.example.json"
+fi
+rm -f "$t1" "$t2"
 
 # ---------------------------------------------------------------- 5. claude code
 log "Claude Code"
@@ -350,7 +403,7 @@ ARCHON_TELEMETRY_DISABLED=1
 #     Alternative (token): run 'claude setup-token' and set:
 # CLAUDE_CODE_OAUTH_TOKEN=
 
-# --- GitHub: token for cloning, API and gh (e.g. GH_TOKEN=\$(gh auth token))
+# --- GitHub: token for cloning, API and gh, scopes incl. workflow (e.g. GH_TOKEN=\$(gh auth token))
 # GH_TOKEN=
 
 # --- GitHub webhook triggers (PAT mode needs both):
@@ -564,9 +617,25 @@ if [[ $ARCHON_STARTED == 0 ]]; then
 Next (one-time):
   sudo -iu $AGENT_USER
   claude                                   # then /login
-  gh auth login && gh auth setup-git
+  gh auth login --scopes workflow && gh auth setup-git
   echo "GH_TOKEN=\$(gh auth token)" >> ~/.archon/.env
   exit
   # then re-run this script
+EOF
+fi
+if [[ ! -e "$ADMIN_HOME/bin/gh-baseline" ]]; then
+  echo
+  echo "Admin tools not installed (see the WARN above): re-run with BOOTSTRAP_REF=<the tag or commit in your curl URL>"
+elif [[ ! -e "$ADMIN_HOME/.config/gh/hosts.yml" ]]; then
+  cat <<EOF
+
+Admin GitHub identity (one-time, as root):
+  sudo -iu $ADMIN_USER
+  # admin account (NOT the agent's): Settings > Developer settings > Tokens (classic),
+  # scopes repo, admin:org, read:org, admin:repo_hook, expiry e.g. 90 days
+  gh auth login --with-token               # paste the PAT, then Ctrl-D
+  # rotate before it expires: new PAT, same command; then revoke the old one
+  cp policy.example.json policy.json       # then edit it for your org
+  gh-baseline audit YOUR_ORG --all --policy ~/policy.json
 EOF
 fi
