@@ -21,7 +21,7 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 | `devflow-quick` | A small edit with no plan (a typo, a one-file fix); refuses anything bigger | Never; it cancels with the reason if the edit is not small |
 | `devflow-docs` | Review the docs and the website, fix what is wrong | Never; undecidable items are listed in the PR |
 | `devflow-audit` | Security audit, then verify the findings, plan and fix them | The verifier leaves a decision to the maintainer |
-| `devflow-config` | Review a repo's rulesets, Actions, access and security settings and workflow files; apply what you approve | Choosing which settings changes to apply (needs an admin token) |
+| `devflow-config` | Review a repo's rulesets, Actions, access and security settings and workflow files; fix file gaps through a PR and list settings gaps for the admin | Never; settings changes are listed for the admin |
 | `devflow-deps` | Repair and push Dependabot PRs; fix vulnerability alerts no PR covers | Never; PRs it cannot fix are handed to a person with the evidence |
 
 **Renamed building blocks:** `devflow-phase`, `devflow-deliver`, `devflow-tail` and `devflow-audit-fix` are now `mod-devflow-phase`, `mod-devflow-deliver`, `mod-devflow-tail` and `mod-devflow-audit-fix`; the `mod-` prefix marks a workflow you never start yourself. The old names are gone, with no aliases. A `devflow-run-<slug>` published before the rename fails at its first phase, so run `devflow-plan` again for that plan, or edit its workflow file to the new names.
@@ -169,14 +169,14 @@ With two devflow packs installed, `render` needs `--input pack=<owner>/devflow`.
   decides fix, not doing or needs a decision, then includes `mod-devflow-audit-fix`, a confidential
   one-run plan and implementation, with the surviving findings as the work. The findings never leave the run's artifacts: no issue, and the PR names the class of
   fix, not how to attack it.
-- **devflow-config** snapshots the repository's configuration through the GitHub API (read-only; each
-  endpoint records whether this token could read it, and a 404 for a non-admin token counts as
-  unknown, not off), then a reviewer compares it with the repo's documented intent, its workflow files
-  and, if `reference` is given, that repository. Settings changes go through an allow-list that
-  refuses visibility, name, archiving, secrets, webhooks, deploy keys and removing an admin, then you
-  choose which to apply; each call records the before and after in `config-changes.md`. Without admin
-  the run ends with the review as a report. File changes (workflow files, `dependabot.yml`,
-  `CODEOWNERS`) go through a PR and the shared tail.
+- **devflow-config** snapshots the repository's configuration through the GitHub API (read-only, with
+  the agent's token; each endpoint records whether this token could read it, and a 404 for a non-admin
+  token counts as unknown, not off), then a reviewer compares it with the repo's documented intent, its
+  workflow files, its `.archon/config.yaml` and, if `reference` is given, that repository. The review
+  is read-only. File fixes (workflow files, which need the `workflow` scope on the agent's token,
+  `dependabot.yml`, `CODEOWNERS`, `SECURITY.md`, `.archon/config.yaml`) go through a PR and the shared
+  tail. Settings gaps are listed in `config-review.md` for the admin user's `gh-baseline` (root README
+  §3 "Admin GitHub identity").
 - **devflow-deps** reads the open Dependabot PRs and alerts, reviews each PR as a supply-chain change
   (version jump, new transitive packages, install scripts, release notes), then repairs the chosen PRs
   one at a time on their own branches: checks run, locks regenerated with the repo's tool, fixes

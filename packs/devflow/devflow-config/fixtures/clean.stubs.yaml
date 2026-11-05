@@ -5,8 +5,8 @@ snapshot:
   repo: example/project
   default_branch: main
   visibility: public
-  can_admin: true
-  role: admin
+  can_admin: false
+  role: write
   reference: ''
   reference_ok: false
   unreadable:
@@ -19,8 +19,4 @@ review-config:
   branch: ''
   title: ''
   proposals: []
-ops:
-  count: 0
-  options: []
-  ask: Settings changes proposed
-  rejected: []
+  admin_settings: []
