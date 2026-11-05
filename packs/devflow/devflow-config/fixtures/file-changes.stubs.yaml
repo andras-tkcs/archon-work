@@ -27,12 +27,10 @@ review-config:
     risk: low
     reversible: true
     kind: file
-    ops: []
-ops:
-  count: 0
-  options: []
-  ask: Settings changes proposed
-  rejected: []
+  admin_settings:
+  - check_id: R-BR-01
+    title: 'default branch: deletion blocked'
+    command: gh-baseline apply OWNER/REPO --policy ~/policy.json --only R-BR-01
 preflight:
   devflow_root: /stub/devflow
   main_branch: main
