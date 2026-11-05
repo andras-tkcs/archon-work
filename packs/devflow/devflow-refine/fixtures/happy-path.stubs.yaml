@@ -19,14 +19,15 @@ ask:
   text: "x"
 draft:
   status: done
-  question: ""
+  questions: []
   why_no_more: all settled
 challenge:
-  question: ""
+  questions: []
   reason: none
 next:
   done: true
   stop: false
+  incomplete: false
   question: ""
 finalize:
   scope: large
