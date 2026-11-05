@@ -1,0 +1,56 @@
+# RED: the manifest validator keeps rejecting the plan; the loop ends without a passing test, so the run fails and nothing is published.
+# The dry run runs plan-loop once, so check-plan's round-3 split is tested in scripts/test-render-run.sh (d5, f), not here.
+exec-code: true
+fixture:
+  expect: failed
+  fail-node: plan-result
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+load:
+  slug: x
+  branch: feat/x
+  title: X
+  plan_commit: abc
+  started: false
+  reason: ""
+  refusal: ""
+  work: split p2
+ask:
+  text: "x"
+draft:
+  status: done
+  question: ""
+  why_no_more: all settled
+challenge:
+  question: ""
+  reason: none
+next:
+  done: true
+  stop: false
+  question: ""
+finalize:
+  scope: large
+  slug: x
+  branch: feat/x
+  title: X
+  prerequisites: true
+  after: false
+render:
+  ok: true
+  error: ""
+  workflow: devflow-run-x
+  file: /stub/x.yaml
+  waves: 2
+plan-test:
+  ok: false
+  findings:
+    - {id: T1, source: validate_manifest, kind: mechanical, phase: "", problem: stub, fix: stub}
+publish:
+  commit: abc
+  workflow: devflow-run-x
+  message: ok
+still-unstarted:
+  ok: true
