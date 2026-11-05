@@ -39,7 +39,9 @@ const names: string[] = [];
 try {
   const j = JSON.parse(list.out);
   for (const w of j.workflows ?? []) names.push(String(w.name ?? ""));
-} catch {}
+} catch {
+  fail(`\`archon workflow list --json\` did not print JSON:\n${tail(list.out, 20)}`);
+}
 
 // Pack identity: the input, else the one installed pack that has devflow-plan.
 let pack = input("pack", false);
