@@ -1,0 +1,192 @@
+name: devflow-run-devflow-batched-interview
+description: "Implementation of the devflow plan devflow-batched-interview (\"devflow-plan and devflow-refine: batched interview rounds, and an incomplete plan instead of a failed run\") from run 8af5d8a9-2c47-4c47-841c-d5f553518a32.\nThe plan is plans/devflow-batched-interview/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
+worktree:
+  enabled: true
+returns: result
+outcome_field: merged
+nodes:
+  - id: worktree-check
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nB='feat/devflow-batched-interview'\ngit fetch origin \"$B\" 2>/dev/null || true\nHELD=$(awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}' <(git worktree list --porcelain))\nQ=\"\"\nif [ -n \"$HELD\" ]; then\n  AHEAD=$(git rev-list --count \"origin/$B..refs/heads/$B\" 2>/dev/null || echo unknown)\n  Q=\"The branch $B is already checked out in another worktree, probably left by an earlier run. Approving removes these worktrees (git worktree remove, never forced; a worktree with uncommitted changes is refused and the run fails). Do not approve if another run is still using one.\\n\\nCommits on the branch not on origin: $AHEAD\"\n  while IFS= read -r w; do Q=\"$Q\\n\\n$w\\nuncommitted paths: $(git -C \"$w\" status --porcelain | wc -l | tr -d ' ')\"; done <<< \"$HELD\"\nfi\nH=\"$HELD\" Q=\"$Q\" python3 -c 'import json,os; print(json.dumps({\"held\": os.environ[\"H\"], \"question\": os.environ[\"Q\"].replace(\"\\\\n\", \"\\n\")}))' >&3\n"
+    output_format:
+      type: object
+      properties:
+        held:
+          type: string
+        question:
+          type: string
+      required:
+        - held
+        - question
+  - id: confirm-worktree-removal
+    depends_on:
+      - worktree-check
+    when: "$worktree-check.output.held != ''"
+    wait:
+      attention: $worktree-check.output.question
+      form: approval
+      labels:
+        workflow: devflow-run
+        stage: worktree-removal
+  - id: stop-at-worktrees
+    depends_on:
+      - confirm-worktree-removal
+    when: "$confirm-worktree-removal.output.decision == 'reject'"
+    cancel: "Stopped before implementation: the worktree holding the feature branch was not removed."
+  - id: remove-worktrees
+    depends_on:
+      - confirm-worktree-removal
+    when: "$confirm-worktree-removal.output.decision == 'approve'"
+    bash: "set -euo pipefail\nB='feat/devflow-batched-interview'\nHELD=$(awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}' <(git worktree list --porcelain))\nwhile IFS= read -r w; do [ -n \"$w\" ] && git worktree remove \"$w\" && echo \"removed $w\" >&2; done <<< \"$HELD\"\n"
+  - id: start
+    depends_on:
+      - worktree-check
+      - confirm-worktree-removal
+      - stop-at-worktrees
+      - remove-worktrees
+    trigger_rule: none_failed_min_one_success
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nB='feat/devflow-batched-interview'; M='main'; PR='plans'\ngit fetch origin \"$M\"\ngit fetch origin \"$PR\"\nPC=$(git rev-parse FETCH_HEAD)\nHELD=$(git worktree list --porcelain | awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}')\nif [ -n \"$HELD\" ]; then echo \"devflow: branch $B is already checked out in another worktree: $HELD\" >&2; echo \"devflow: if no run is using it and it has nothing unpushed, remove it with: git worktree remove $HELD\" >&2; exit 1; fi\nif git ls-remote --exit-code --heads origin \"$B\" >/dev/null 2>&1; then\n  git fetch origin \"$B\"\n  if git rev-parse --verify --quiet \"refs/heads/$B\" >/dev/null; then git switch \"$B\"; git merge --ff-only \"origin/$B\"; else git switch -c \"$B\" --track \"origin/$B\"; fi\nelif git rev-parse --verify --quiet \"refs/heads/$B\" >/dev/null; then git switch \"$B\"\nelse git switch -c \"$B\" \"origin/$M\"; fi\nprintf '{\"head\":\"%s\",\"plan_commit\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" \"$PC\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+        plan_commit:
+          type: string
+      required:
+        - head
+        - plan_commit
+  - id: phase-p1-next-question
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - start
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-batched-interview/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p1-next-question
+      base: $start.output.head
+  - id: merge-1
+    depends_on:
+      - phase-p1-next-question
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p1-next-question.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p1-next-question already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-batched-interview p1-next-question: Batched rounds in next-question.ts' -m 'Plan-Phase: devflow-batched-interview/p1-next-question' || { git merge --abort; echo \"devflow: merging p1-next-question conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p2-plan-interview
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-1
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-batched-interview/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p2-plan-interview
+      base: $merge-1.output.head
+  - id: phase-p3-refine-interview
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-1
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-batched-interview/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p3-refine-interview
+      base: $merge-1.output.head
+  - id: phase-p4-publish-incomplete
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-1
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-batched-interview/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p4-publish-incomplete
+      base: $merge-1.output.head
+  - id: merge-2
+    depends_on:
+      - phase-p2-plan-interview
+      - phase-p3-refine-interview
+      - phase-p4-publish-incomplete
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p2-plan-interview.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p2-plan-interview already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-batched-interview p2-plan-interview: devflow-plan interview loop and commands' -m 'Plan-Phase: devflow-batched-interview/p2-plan-interview' || { git merge --abort; echo \"devflow: merging p2-plan-interview conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p3-refine-interview.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p3-refine-interview already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-batched-interview p3-refine-interview: devflow-refine interview loop and commands' -m 'Plan-Phase: devflow-batched-interview/p3-refine-interview' || { git merge --abort; echo \"devflow: merging p3-refine-interview conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh3=$phase-p4-publish-incomplete.output.head\nif git merge-base --is-ancestor \"$h3\" HEAD; then echo \"p4-publish-incomplete already merged\" >&2\nelse git merge --no-ff \"$h3\" -m 'Merge devflow-batched-interview p4-publish-incomplete: check-plan and publish-plan publish incomplete plans' -m 'Plan-Phase: devflow-batched-interview/p4-publish-incomplete' || { git merge --abort; echo \"devflow: merging p4-publish-incomplete conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p5-refine-continuation
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-2
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-batched-interview/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p5-refine-continuation
+      base: $merge-2.output.head
+  - id: merge-3
+    depends_on:
+      - phase-p5-refine-continuation
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p5-refine-continuation.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p5-refine-continuation already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-batched-interview p5-refine-continuation: load-published accepts an incomplete plan’s bare slug' -m 'Plan-Phase: devflow-batched-interview/p5-refine-continuation' || { git merge --abort; echo \"devflow: merging p5-refine-continuation conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p6-docs
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-3
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-batched-interview/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p6-docs
+      base: $merge-3.output.head
+  - id: merge-4
+    depends_on:
+      - phase-p6-docs
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p6-docs.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p6-docs already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-batched-interview p6-docs: README for batched interviews and incomplete plans' -m 'Plan-Phase: devflow-batched-interview/p6-docs' || { git merge --abort; echo \"devflow: merging p6-docs conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: deliver
+    workflow: tkcs-lab/devflow:mod-devflow-deliver
+    depends_on:
+      - merge-4
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-batched-interview/plan.md
+      plan_commit: $start.output.plan_commit
+      slug: devflow-batched-interview
+      branch: feat/devflow-batched-interview
+      title: "devflow-plan and devflow-refine: batched interview rounds, and an incomplete plan instead of a failed run"
+      head: $merge-4.output.head
+  - id: result
+    depends_on:
+      - deliver
+    bash: "m=$deliver.output.merged; printf '{\"merged\":%s}\\n' \"$m\"\n"
+    output_format:
+      type: object
+      properties:
+        merged:
+          type: boolean
+      required:
+        - merged
