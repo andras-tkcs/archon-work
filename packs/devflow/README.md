@@ -1,6 +1,6 @@
 # devflow pack for Archon
 
-Six workflows (and the building blocks devflow-phase and devflow-deliver) built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
+Seven workflows (and the building blocks devflow-phase and devflow-deliver) built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
 for any repository that has a devflow profile (`.claude/toolkit.yaml`). The pack holds no project
 facts: branch rules, checks, docs to read, changelog and CI come from the profile, and the project's
 environment comes from its own SessionStart hook.
@@ -17,6 +17,7 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 | Workflow | Use it for | Pauses for a person when |
 |---|---|---|
 | `devflow-plan` | An issue or change that needs a plan: interview, plan, then a published `devflow-run-<slug>` workflow that implements it | Every question of the interview, one at a time; the run publishes the plan and you start `devflow-run-<slug>` after `archon workflow sync` |
+| `devflow-refine` | Change a plan devflow-plan published, before its implementation starts: the same interview, then the plan and `devflow-run-<slug>` republished in place | Every question the change leaves open, one at a time; it refuses a plan whose branch is on origin or that is merged |
 | `devflow-quick` | A small edit with no plan (a typo, a one-file fix); refuses anything bigger | Never; it cancels with the reason if the edit is not small |
 | `devflow-docs` | Review the docs and the website, fix what is wrong | Never; undecidable items are listed in the PR |
 | `devflow-audit` | Security audit, then verify the findings, plan and fix them | The verifier leaves a decision to the maintainer |
@@ -87,6 +88,31 @@ follows. The run ends when a person merges or closes the PR. It never merges.
 
 Concurrent phase children each fetch tags in worktrees of one repository, so one can fail with
 "cannot lock ref". Resume the parent run: Archon re-drives the failed child.
+
+## devflow-refine, step by step
+
+Use it to change a plan `devflow-plan` published, before anyone implements it:
+
+```bash
+archon workflow run tkcs-lab/devflow:devflow-refine "refine plans/<slug>: <what to change>" --detach
+```
+
+1. **Name the plan**: put its slug, `plans/<slug>` or its plan URL on the `plans` branch in the
+   message, or pass `--input plan=<slug>`. Say what to change in the message or with
+   `--input work=<change>`.
+2. **Refuse a started or merged plan**: it stops with a reason (for example `Not refined: the plan
+   <slug> is already being implemented (its branch <branch> exists on origin). devflow-refine only
+   changes plans whose implementation has not started.`) when the implementation branch is on
+   origin, the plan is merged into the main branch, or a pull request from it was merged.
+   The check runs again right before publishing.
+3. **Interview**: it starts from the published plan and asks only what the change leaves open, one
+   question at a time, then revises the plan with the same method as `devflow-plan`.
+4. **Publish**: the slug, the branch and the workflow name stay the same. The refined plan and
+   `devflow-run-<slug>.yaml` are republished in place on the `plans` branch in a
+   `Refine <slug>: <title>` commit (never forced).
+
+Then run `archon workflow sync` and start `devflow-run-<slug>`. A `devflow-run-<slug>` run that is
+already going keeps the plan it started with.
 
 ## Enable plan workflows in a project
 
