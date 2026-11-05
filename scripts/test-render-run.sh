@@ -81,6 +81,7 @@ rr="$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts"
   cat > "$scratch/rstub/archon" <<STUB
 #!/bin/sh
 if [ "\$1 \$2 \$3" = "workflow list --json" ]; then printf '%s\n' "\$STUB_LIST"; exit 0; fi
+if [ "\$1 \$2" = "workflow get" ]; then printf '%s\\n' "\$STUB_GET"; exit 0; fi
 exec "$real_archon" "\$@"
 STUB
   chmod +x "$scratch/rstub/archon"
@@ -90,9 +91,9 @@ STUB
   list_ok='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"}]}'
   list_bad='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"}]}'
   rr_run() {
-    PATH="$scratch/rstub:$PATH" STUB_LIST="$1" ARTIFACTS_DIR="$rart" INPUTS_SLUG="$2" INPUTS_BRANCH=feat/serial INPUTS_TITLE=S \
+    PATH="$scratch/rstub:$PATH" STUB_LIST="$1" WORKFLOW_ID=wf-test STUB_GET="${STUB_GET-}" ARTIFACTS_DIR="$rart" INPUTS_SLUG="$2" INPUTS_BRANCH=feat/serial INPUTS_TITLE=S \
       INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' INPUTS_PLANS_REF=plans \
-      INPUTS_PLANS_DIR=plans INPUTS_PACK=test/devflow INPUTS_SOFT_ERRORS=true bun "$rr"
+      INPUTS_PLANS_DIR=plans INPUTS_PACK="${3-test/devflow}" INPUTS_SOFT_ERRORS=true bun "$rr"
   }
   cd "$repo"
   out="$(rr_run "$list_ok" serial)"
@@ -103,6 +104,24 @@ STUB
   echo "$out" | grep -q 'differs from the slug'
   if rr_run "$list_bad" serial >/dev/null 2>"$scratch/rr.err"; then echo "missing mod-devflow-deliver was accepted" >&2; exit 1; fi
   grep -q 'has no test/devflow:mod-devflow-deliver' "$scratch/rr.err"
+  # pack default: the pack this run was started from
+  list_two='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"},{"name":"other/devflow:devflow-plan"},{"name":"other/devflow:mod-devflow-phase"},{"name":"other/devflow:mod-devflow-deliver"}]}'
+  rm -f "$rart/devflow-run-serial.yaml"
+  out="$(STUB_GET='{"workflow_name":"test/devflow:devflow-plan"}' rr_run "$list_ok" serial "")"
+  echo "$out" | grep -q '"ok":true'
+  grep -q 'test/devflow:mod-devflow-phase' "$rart/devflow-run-serial.yaml"
+  rm -f "$rart/devflow-run-serial.yaml"
+  out="$(STUB_GET='{"workflow_name":"test/devflow:devflow-refine"}' rr_run "$list_two" serial "")"
+  echo "$out" | grep -q '"ok":true'
+  grep -q 'test/devflow:' "$rart/devflow-run-serial.yaml"
+  if grep -q 'other/devflow:' "$rart/devflow-run-serial.yaml"; then echo "wrong pack rendered" >&2; exit 1; fi
+  if STUB_GET='{"workflow_name":"devflow-plan"}' rr_run "$list_ok" serial "" >/dev/null 2>"$scratch/rr.err"; then echo "local workflow accepted" >&2; exit 1; fi
+  grep -q 'is not from an installed pack' "$scratch/rr.err"
+  rm -f "$rart/devflow-run-serial.yaml"
+  out="$(STUB_GET='{"workflow_name":"other/devflow:devflow-plan"}' rr_run "$list_two" serial test/devflow)"
+  echo "$out" | grep -q '"ok":true'
+  grep -q 'test/devflow:' "$rart/devflow-run-serial.yaml"
+  if grep -q 'other/devflow:' "$rart/devflow-run-serial.yaml"; then echo "input did not win" >&2; exit 1; fi
   echo "render-run node: ok"
 )
 
