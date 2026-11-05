@@ -128,6 +128,8 @@ export function renderRunWorkflow(o: RenderOpts): string {
     'git fetch origin "$M"',
     'git fetch origin "$PR"',
     "PC=$(git rev-parse FETCH_HEAD)",
+    'HELD=$(git worktree list --porcelain | awk -v b="refs/heads/$B" -v me="$(git rev-parse --show-toplevel)" \'$1=="worktree"{w=$2} $1=="branch" && $2==b && w!=me{print w}\')',
+    'if [ -n "$HELD" ]; then echo "devflow: branch $B is already checked out in another worktree: $HELD" >&2; echo "devflow: if no run is using it and it has nothing unpushed, remove it with: git worktree remove $HELD" >&2; exit 1; fi',
     'if git ls-remote --exit-code --heads origin "$B" >/dev/null 2>&1; then',
     '  git fetch origin "$B"',
     '  if git rev-parse --verify --quiet "refs/heads/$B" >/dev/null; then git switch "$B"; git merge --ff-only "origin/$B"; else git switch -c "$B" --track "origin/$B"; fi',
