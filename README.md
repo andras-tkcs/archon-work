@@ -19,7 +19,7 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
 | `packs/devflow/` | The devflow workflow pack for Archon (plan → implement → review → PR, with `devflow-plan` publishing a parallel implementation workflow, for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
-| `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer and its git scripts (needs `archon` and `bun`). |
+| `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer, its plan test scripts and its git scripts (needs `archon` and `bun`). |
 | `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
 | `scripts/test-archon-repo-switch.sh` | Tests the bootstrap's helpers that detect and replace plugins left by another Archon repo when `ARCHON_REPO` changes. |
 | `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh` and `scripts/test-render-run.sh`. |
