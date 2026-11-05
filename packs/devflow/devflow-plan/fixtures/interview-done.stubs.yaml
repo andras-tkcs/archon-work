@@ -27,9 +27,27 @@ finalize:
   prerequisites: false
   after: false
 render:
+  ok: true
+  error: ""
   workflow: devflow-run-x
   file: /stub/x.yaml
   waves: 1
+plan-test:
+  ok: true
+  findings: []
+plan-review:
+  clean: true
+  summary: ok
+  findings: []
+plan-check:
+  done: true
+  round: 1
+  findings: 0
+plan-result:
+  slug: x
+  branch: feat/x
+  title: X
+  workflow: devflow-run-x
 publish:
   commit: abc
   workflow: devflow-run-x

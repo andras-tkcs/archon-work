@@ -1,0 +1,48 @@
+# RED: the reviewer keeps finding a problem; after two fix rounds the run fails and nothing is published.
+exec-code: true
+fixture:
+  expect: failed
+  fail-node: plan-result
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+ask:
+  text: "x"
+draft:
+  status: done
+  question: ""
+  why_no_more: all settled
+challenge:
+  question: ""
+  reason: none
+next:
+  done: true
+  stop: false
+  question: ""
+finalize:
+  scope: large
+  slug: x
+  branch: feat/x
+  title: X
+  prerequisites: true
+  after: false
+render:
+  ok: true
+  error: ""
+  workflow: devflow-run-x
+  file: /stub/x.yaml
+  waves: 2
+plan-test:
+  ok: true
+  findings: []
+plan-review:
+  clean: false
+  summary: s
+  findings:
+    - {id: R1, source: review, kind: mechanical, phase: p1-x, problem: stub, fix: stub}
+publish:
+  commit: abc
+  workflow: devflow-run-x
+  message: ok
