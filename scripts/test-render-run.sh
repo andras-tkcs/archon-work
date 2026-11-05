@@ -129,8 +129,8 @@ cp "$fx/serial.md" "$pub_art/plan.md"
 echo "# After implementing S" > "$pub_art/after.md"
 printf 'name: devflow-run-s\nnodes: []\n' > "$pub_art/devflow-run-s.yaml"
 publish() {
-  PATH="$stubs:$PATH" ARTIFACTS_DIR="$pub_art" WORKFLOW_ID=test INPUTS_SLUG=s INPUTS_TITLE=S \
-    INPUTS_WORKFLOW=devflow-run-s INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main \
+  PATH="$stubs:$PATH" ARTIFACTS_DIR="$pub_art" WORKFLOW_ID=test INPUTS_SLUG="${PSLUG:-s}" INPUTS_TITLE=S \
+    INPUTS_WORKFLOW="${PWF:-devflow-run-s}" INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main \
     bun "$publisher"
 }
 publish > "$scratch/publish1.json"
@@ -146,5 +146,14 @@ echo "# changed" >> "$pub_art/plan.md"
 publish > "$scratch/publish2.json"
 n2="$(git -C "$porigin" rev-list --count plans)"
 test "$((n2 - n1))" -eq 1
+test "$(git -C "$porigin" log -1 --format=%s plans)" = "Plan s: S"
+echo "# refined" >> "$pub_art/plan.md"
+INPUTS_COMMIT_VERB=Refine publish > "$scratch/publish3.json"
+test "$(git -C "$porigin" log -1 --format=%s plans)" = "Refine s: S"
+if INPUTS_COMMIT_VERB=Bad publish >/dev/null 2>"$scratch/verb.err"; then echo "bad commit_verb succeeded" >&2; exit 1; fi
+grep -q "invalid commit_verb" "$scratch/verb.err"
 echo "publish-plan: ok"
+if ARTIFACTS_DIR="$scratch" bun "$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts" 2>"$scratch/rp.err"; then echo "render-run without inputs succeeded" >&2; exit 1; fi
+grep -q "input 'slug' is empty" "$scratch/rp.err"
+echo "render-run entry: ok"
 echo "test-render-run: all ok"
