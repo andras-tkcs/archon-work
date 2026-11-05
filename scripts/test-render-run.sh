@@ -3,6 +3,9 @@
 # load-plan.ts. The rendered workflows are validated by `archon validate` in a scratch git repo.
 set -euo pipefail
 
+# Hermetic: an INPUTS_* variable from the calling workflow (e.g. INPUTS_PLAN_COMMIT) must not leak into the loaders.
+while IFS= read -r v; do unset "$v"; done < <(compgen -e | grep "^INPUTS_" || true)
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 fx="$repo_root/scripts/fixtures/render-run"
 render="$repo_root/packs/devflow/.shared/render-run.ts"
@@ -89,7 +92,7 @@ STUB
   rr_run() {
     PATH="$scratch/rstub:$PATH" STUB_LIST="$1" ARTIFACTS_DIR="$rart" INPUTS_SLUG="$2" INPUTS_BRANCH=feat/serial INPUTS_TITLE=S \
       INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' INPUTS_PLANS_REF=plans \
-      INPUTS_PLANS_DIR=plans INPUTS_PACK=test/devflow bun "$rr"
+      INPUTS_PLANS_DIR=plans INPUTS_PACK=test/devflow INPUTS_SOFT_ERRORS=true bun "$rr"
   }
   cd "$repo"
   out="$(rr_run "$list_ok" serial)"
@@ -224,8 +227,8 @@ cp "$fx/serial.md" "$pub_art/plan.md"
 echo "# After implementing S" > "$pub_art/after.md"
 printf 'name: devflow-run-s\nnodes: []\n' > "$pub_art/devflow-run-s.yaml"
 publish() {
-  PATH="$stubs:$PATH" ARTIFACTS_DIR="$pub_art" WORKFLOW_ID=test INPUTS_SLUG=s INPUTS_TITLE=S \
-    INPUTS_WORKFLOW=devflow-run-s INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main \
+  PATH="$stubs:$PATH" ARTIFACTS_DIR="$pub_art" WORKFLOW_ID=test INPUTS_SLUG="${PSLUG:-s}" INPUTS_TITLE=S \
+    INPUTS_WORKFLOW="${PWF:-devflow-run-s}" INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main \
     bun "$publisher"
 }
 publish > "$scratch/publish1.json"
@@ -244,5 +247,66 @@ grep -q 'assumptions: 2' "$scratch/publish2.json"
 grep -q '\*\*A\*\*: b\.' "$pub_art/published.md"
 n2="$(git -C "$porigin" rev-list --count plans)"
 test "$((n2 - n1))" -eq 1
+test "$(git -C "$porigin" log -1 --format=%s plans)" = "Plan s: S"
+echo "# refined" >> "$pub_art/plan.md"
+INPUTS_COMMIT_VERB=Refine publish > "$scratch/publish3.json"
+test "$(git -C "$porigin" log -1 --format=%s plans)" = "Refine s: S"
+if INPUTS_COMMIT_VERB=Bad publish >/dev/null 2>"$scratch/verb.err"; then echo "bad commit_verb succeeded" >&2; exit 1; fi
+grep -q "invalid commit_verb" "$scratch/verb.err"
 echo "publish-plan: ok"
+if ARTIFACTS_DIR="$scratch" bun "$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts" 2>"$scratch/rp.err"; then echo "render-run without inputs succeeded" >&2; exit 1; fi
+grep -q "input 'slug' is empty" "$scratch/rp.err"
+echo "render-run entry: ok"
+# g. load-published against the bare origin of section f
+loader2="$repo_root/packs/devflow/devflow-refine/scripts/load-published.ts"
+cp "$fx/serial.md" "$pub_art/plan.md"
+printf 'name: devflow-run-serial\nnodes: []\n' > "$pub_art/devflow-run-serial.yaml"
+PSLUG=serial PWF=devflow-run-serial publish >/dev/null
+cp "$fx/three-wide.md" "$pub_art/plan.md"
+printf 'name: devflow-run-three-wide\nnodes: []\n' > "$pub_art/devflow-run-three-wide.yaml"
+PSLUG=three-wide PWF=devflow-run-three-wide publish >/dev/null
+mkdir -p "$scratch/stubs2"
+printf '%s\n' '#!/bin/sh' 'case "$*" in *"pr list"*) echo "${GH_MERGED:-0}";; *) echo test/repo;; esac' > "$scratch/stubs2/gh"
+chmod +x "$scratch/stubs2/gh"
+mkdir -p "$scratch/lp2-art"
+lp2() { PATH="$scratch/stubs2:$PATH" ARTIFACTS_DIR="$scratch/lp2-art" INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main "$@" bun "$loader2"; }
+rm -rf "$scratch/lp2-art"/*
+msg1="refine serial: split p2 into two"
+out="$(lp2 env USER_MESSAGE="$msg1")"
+echo "$out" | grep -q '"slug":"serial"'
+echo "$out" | grep -q '"branch":"feat/serial"'
+echo "$out" | grep -q '"started":false'
+test -e "$scratch/lp2-art/original/plan.md"
+test -e "$scratch/lp2-art/original/after.md"
+out="$(lp2 env USER_MESSAGE="please refine https://github.com/test/repo/blob/plans/plans/three-wide/plan.md: add a phase")"
+echo "$out" | grep -q '"slug":"three-wide"'
+out="$(lp2 env USER_MESSAGE="refine plans/serial: add a phase")"
+echo "$out" | grep -q '"slug":"serial"'
+if lp2 env USER_MESSAGE="merge serial and three-wide plans" >/dev/null 2>"$scratch/lp2.err"; then echo "several plans succeeded" >&2; exit 1; fi
+grep -q "names more than one plan (serial, three-wide)" "$scratch/lp2.err"
+if lp2 env USER_MESSAGE="refine the plan please" >/dev/null 2>"$scratch/lp2.err"; then echo "no plan succeeded" >&2; exit 1; fi
+grep -q "no plan named" "$scratch/lp2.err"
+if lp2 env USER_MESSAGE="refine serial" >/dev/null 2>"$scratch/lp2.err"; then echo "no change succeeded" >&2; exit 1; fi
+grep -q "say what to change in the plan serial" "$scratch/lp2.err"
+out="$(lp2 env INPUTS_PLAN=three-wide USER_MESSAGE="refine serial: add a phase")"
+echo "$out" | grep -q '"slug":"three-wide"'
+if lp2 env INPUTS_PLAN=nope USER_MESSAGE="x" >/dev/null 2>"$scratch/lp2.err"; then echo "unknown plan succeeded" >&2; exit 1; fi
+grep -q "no plan 'nope' on plans" "$scratch/lp2.err"
+git push -q origin HEAD:refs/heads/feat/serial
+out="$(lp2 env USER_MESSAGE="$msg1")"
+echo "$out" | grep -q '"started":true'
+echo "$out" | grep -q '"reason":"branch"'
+echo "$out" | grep -q "is already being implemented"
+if lp2 env INPUTS_CHECK_ONLY=true USER_MESSAGE="$msg1" >/dev/null 2>"$scratch/lp2.err"; then echo "check-only on a started plan succeeded" >&2; exit 1; fi
+grep -q "Not refined: the plan serial is already being implemented" "$scratch/lp2.err"
+git push -q origin :refs/heads/feat/serial
+"${git_c[@]}" commit -q --allow-empty -m "Phase one" -m "Plan-Phase: serial/p1"
+git push -q origin HEAD:main
+out="$(lp2 env USER_MESSAGE="$msg1")"
+echo "$out" | grep -q '"reason":"merged"'
+out="$(lp2 env GH_MERGED=1 INPUTS_PLAN=three-wide USER_MESSAGE="add a phase")"
+echo "$out" | grep -q '"reason":"merged"'
+out="$(lp2 env GH_MERGED=0 INPUTS_CHECK_ONLY=true INPUTS_PLAN=three-wide USER_MESSAGE="add a phase")"
+test "$out" = '{"ok":true}'
+echo "load-published: ok"
 echo "test-render-run: all ok"

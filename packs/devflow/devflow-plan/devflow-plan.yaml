@@ -149,6 +149,7 @@ nodes:
             plans_ref: "$INPUTS.plans_ref"
             plans_dir: "$INPUTS.plans_dir"
             pack: "$INPUTS.pack"
+            soft_errors: "true"
           output_format:
             type: object
             properties:

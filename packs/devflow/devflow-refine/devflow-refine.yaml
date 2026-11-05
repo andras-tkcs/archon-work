@@ -1,0 +1,217 @@
+name: devflow-refine
+description: |
+  Refines a plan that devflow-plan already published, before its implementation starts. It loads
+  the plan from the plans branch, interviews you one question at a time about what your request
+  leaves open (a clear request needs no questions), revises the plan with the same method, and
+  republishes the plan and its devflow-run-<slug> workflow in place.
+
+  Use when: "refine plans/<slug>: <what to change>", or a plan URL or slug and the change.
+  NOT for: a plan whose implementation has started (its branch is on origin) or is merged, a new
+  plan (devflow-plan), or a quick edit (devflow-quick).
+model: large
+worktree:
+  enabled: true
+inputs:
+  plan:
+    default: ""
+    description: The plan's slug, or its plan.md URL on the plans branch. Empty means the plan is named in the run's message.
+  work:
+    default: ""
+    description: What to change in the plan. Empty means the run's message.
+  plans_ref:
+    default: plans
+    description: The branch the plan and the generated workflow are pushed to.
+  plans_dir:
+    default: plans
+    description: The directory on that branch that holds plans/<slug>/ and workflows/.
+  pack:
+    default: ""
+    description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means auto-detect.
+returns: publish
+
+nodes:
+  # ---- Setup: profile, toolkit, environment ----------------------------------------------
+  - id: preflight
+    script: preflight
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        devflow_root: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+      required: [devflow_root, main_branch, branch_regex]
+
+  - id: setup
+    depends_on: [preflight]
+    script: setup-env
+    runtime: bun
+    timeout: 1800000
+
+  - id: load
+    depends_on: [setup]
+    script: load-published
+    runtime: bun
+    with:
+      plan: "$INPUTS.plan"
+      work: "$INPUTS.work"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+    output_format:
+      type: object
+      properties:
+        slug: { type: string }
+        branch: { type: string }
+        title: { type: string }
+        plan_commit: { type: string }
+        started: { type: boolean }
+        reason: { type: string }
+        refusal: { type: string }
+        work: { type: string }
+      required: [slug, branch, title, plan_commit, started, reason, refusal, work]
+
+  - id: refuse-started
+    depends_on: [load]
+    when: "$load.output.started == true"
+    cancel: "$load.output.refusal"
+
+  # ---- 1. The interview: one question at a time -------------------------------------------
+  - id: interview
+    depends_on: [load]
+    when: "$load.output.started == false"
+    loop_group:
+      max_iterations: 15
+      nodes:
+        - id: draft
+          command: draft
+          model: large
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              status: { type: string, enum: [ask, done, stop] }
+              question: { type: string }
+              why_no_more: { type: string }
+            required: [status, question, why_no_more]
+
+        - id: challenge
+          depends_on: [draft]
+          when: "$draft.output.status == 'done'"
+          command: challenge
+          model: large
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              question: { type: string }
+              reason: { type: string }
+            required: [question, reason]
+
+        - id: next
+          depends_on: [draft, challenge]
+          trigger_rule: all_done
+          script: next-question
+          runtime: bun
+          with:
+            draft: "$draft.output"
+            challenge: { from: "$challenge.output", if_skipped: "" }
+          output_format:
+            type: object
+            properties:
+              done: { type: boolean }
+              stop: { type: boolean }
+              question: { type: string }
+            required: [done, stop, question]
+
+        - id: ask
+          depends_on: [next]
+          when: "$next.output.done == false"
+          wait:
+            attention: "$next.output.question"
+            form: message
+            labels:
+              workflow: devflow-refine
+              stage: interview
+      until_bash: 'd=$next.output.done; [ "$d" = true ]'
+
+  - id: stop-at-interview
+    depends_on: [interview]
+    when: "$interview.output.stop == true"
+    cancel: "Stopped while refining: the interview ended without a refined plan (stopped by the answer, or 14 questions without converging). The published plan is unchanged. The questions and answers are interview.md in the run artifacts."
+
+  # ---- 2. The final plan, the generated workflow, the publication ------------------------
+  - id: finalize
+    depends_on: [interview]
+    when: "$interview.output.stop == false"
+    command: finalize
+    model: large
+    context: fresh
+    output_format:
+      type: object
+      properties:
+        scope: { type: string, enum: [small, large] }
+        slug: { type: string }
+        branch: { type: string }
+        title: { type: string }
+        prerequisites: { type: boolean }
+        after: { type: boolean }
+      required: [scope, slug, branch, title, prerequisites, after]
+
+  - id: render
+    depends_on: [finalize]
+    script: render-run
+    runtime: bun
+    with:
+      slug: "$load.output.slug"
+      branch: "$load.output.branch"
+      title: "$finalize.output.title"
+      main_branch: "$preflight.output.main_branch"
+      branch_regex: "$preflight.output.branch_regex"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
+    output_format:
+      type: object
+      properties:
+        workflow: { type: string }
+        file: { type: string }
+        waves: { type: integer }
+      required: [workflow, file, waves]
+
+  - id: still-unstarted
+    depends_on: [render]
+    script: load-published
+    runtime: bun
+    with:
+      plan: "$load.output.slug"
+      work: "$load.output.work"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+      check_only: "true"
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+      required: [ok]
+
+  - id: publish
+    depends_on: [still-unstarted]
+    script: publish-plan
+    runtime: bun
+    with:
+      slug: "$load.output.slug"
+      title: "$finalize.output.title"
+      commit_verb: Refine
+      workflow: "$render.output.workflow"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+    output_format:
+      type: object
+      properties:
+        commit: { type: string }
+        workflow: { type: string }
+        message: { type: string }
+      required: [commit, workflow, message]
