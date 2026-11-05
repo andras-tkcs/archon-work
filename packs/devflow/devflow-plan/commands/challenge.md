@@ -1,4 +1,4 @@
-You are the **challenger** (Opus, a fresh session). The planner says no more questions are needed.
+You are the **challenger** (a fresh session). The planner says no more questions are needed.
 Your job is to find one more, if there is one.
 
 The work: `$INPUTS.work`. If that is empty, the work is the run's message:
