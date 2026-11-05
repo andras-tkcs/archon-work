@@ -208,6 +208,60 @@ for spec in 'bad-model|phase '"'"'p2'"'"': model must be small, medium or large 
 done
 echo "models: ok"
 
+# d7. next-question.ts
+nq="$repo_root/packs/devflow/.shared/next-question.ts"
+(
+  nq_run() { ARTIFACTS_DIR="$1" INPUTS_DRAFT="$2" INPUTS_CHALLENGE="$3" bun "$nq"; }
+  A="$scratch/nqA"; B="$scratch/nqB"; C="$scratch/nqC"; D="$scratch/nqD"
+  mkdir -p "$A" "$B" "$C" "$D"
+  ask='{"status":"ask","questions":["p"],"why_no_more":""}'
+  # a. round 1: 7 candidates, 5 asked, 2 carried
+  ch='{"questions":[{"question":"p1","by":"planner"},{"question":"p2","by":"planner"},{"question":"c1","by":"challenger"},{"question":"c2","by":"challenger"},{"question":"c3","by":"challenger"},{"question":"c4","by":"challenger"},{"question":"c5","by":"challenger"}],"reason":"r"}'
+  out="$(nq_run "$A" '{"status":"ask","questions":["p1","p2"],"why_no_more":""}' "$ch")"
+  echo "$out" | grep -q '"done":false'
+  echo "$out" | grep -q '"incomplete":false'
+  echo "$out" | grep -q 'Round 1 of 3'
+  echo "$out" | grep -qF '**5.** (Q5)'
+  if echo "$out" | grep -qF '**6.**'; then echo "next-question asked a 6th question" >&2; exit 1; fi
+  grep -q '^## Round 1' "$A/interview.md"
+  grep -q '^### Q5 (asked by: challenger)' "$A/interview.md"
+  test "$(grep -c '^### (asked by:' "$A/carried.md")" = 2
+  # b. round 2
+  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c6","by":"challenger"}],"reason":"r"}')"
+  echo "$out" | grep -q 'Round 2 of 3'
+  echo "$out" | grep -q '1 question\.'
+  grep -q '^### Q6 (asked by:' "$A/interview.md"
+  test ! -e "$A/carried.md"
+  # c. round 3
+  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c7","by":"challenger"}],"reason":"r"}')"
+  echo "$out" | grep -q 'Round 3 of 3'
+  echo "$out" | grep -q 'This is the last round'
+  # d. out of rounds
+  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c8","by":"challenger"},{"question":"c9","by":"planner"}],"reason":"r"}')"
+  echo "$out" | grep -q '"done":true'
+  echo "$out" | grep -q '"incomplete":true'
+  echo "$out" | grep -q '"stop":false'
+  grep -q '^### Q8 (asked by:' "$A/open-questions.md"
+  grep -q '^### Q9 (asked by:' "$A/open-questions.md"
+  grep -q '^## Interview ended incomplete' "$A/interview.md"
+  grep -q 'The interview ended after 3 rounds' "$A/interview.md"
+  # e. stop touches nothing
+  out="$(nq_run "$B" '{"status":"stop","questions":[],"why_no_more":""}' "")"
+  echo "$out" | grep -q '"stop":true'
+  test -z "$(ls -A "$B")"
+  # f. publish
+  out="$(nq_run "$C" '{"status":"publish","questions":["x"],"why_no_more":""}' "")"
+  echo "$out" | grep -q '"incomplete":true'
+  grep -qF 'You said "publish"' "$C/interview.md"
+  grep -q '^### Q1 (asked by: planner)' "$C/open-questions.md"
+  # g. done
+  out="$(nq_run "$D" '{"status":"done","questions":[],"why_no_more":"w"}' '{"questions":[],"reason":"none"}')"
+  echo "$out" | grep -q '"done":true'
+  echo "$out" | grep -q '"incomplete":false'
+  test ! -e "$D/open-questions.md"
+  echo "next-question: ok"
+)
+
 # e. load-plan against a local bare origin
 origin="$scratch/origin.git"
 clone="$scratch/clone"
