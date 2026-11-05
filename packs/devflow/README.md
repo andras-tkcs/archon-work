@@ -78,7 +78,8 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
    `prerequisites.md` and `after.md`.
 3. **Render**: a deterministic renderer turns the validated manifest into
    `devflow-run-<slug>.yaml`, checked with `archon validate`. It checks that the installed pack has
-   `mod-devflow-phase` and `mod-devflow-deliver`.
+   `mod-devflow-phase` and `mod-devflow-deliver` (the pack the run was started from,
+   unless `--input pack=` names another).
 4. **Test**:
    - The manifest validator runs again, and the generated workflow is dry-run with stubbed
      children.
@@ -144,7 +145,7 @@ config only after the branch exists. The `plans` branch is as public as the repo
 confidential work to `devflow-audit`, which never publishes.
 
 Limits: a folder project has no worktree isolation, so the parallel phases need a git repository.
-With two devflow packs installed, `render` needs `--input pack=<owner>/devflow`.
+The generated workflow uses the pack the plan run was started from; pass `--input pack=<owner>/devflow` to target another installed pack.
 
 ## Where it differs from the toolkit commands
 

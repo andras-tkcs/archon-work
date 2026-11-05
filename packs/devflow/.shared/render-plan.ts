@@ -35,7 +35,7 @@ if (manifest.plan_slug !== slug) planError(`the manifest's plan_slug '${manifest
 if (manifest.feature_branch !== branch) planError(`the manifest's feature_branch '${manifest.feature_branch}' differs from the branch '${branch}'`);
 if (!new RegExp(branchRegex).test(branch)) planError(`the branch '${branch}' does not match ${branchRegex}`);
 
-// The installed catalog, read once: for the pack auto-detect and for the building-block check.
+// The installed catalog, read once: for the building-block check.
 const list = run(["archon", "workflow", "list", "--json"]);
 if (list.code !== 0) fail(`\`archon workflow list --json\` failed:\n${tail(list.out + list.err, 20)}`);
 const names: string[] = [];
@@ -46,14 +46,27 @@ try {
   fail(`\`archon workflow list --json\` did not print JSON:\n${tail(list.out, 20)}`);
 }
 
-// Pack identity: the input, else the one installed pack that has devflow-plan.
+// Pack identity: the input, else the pack this run was started from.
 let pack = input("pack", false);
 if (!pack) {
-  const found = [...new Set(names.map((n) => n.match(/^([^/]+\/[^:]+):devflow-plan$/)?.[1]).filter(Boolean))] as string[];
-  if (found.length !== 1) {
-    fail(`cannot tell which installed devflow pack to use (${found.join(", ") || "none found"}); start the workflow with --input pack=<owner>/devflow`);
+  const runId = process.env.WORKFLOW_ID ?? "";
+  if (!runId) {
+    fail("cannot tell which installed devflow pack this run comes from (WORKFLOW_ID is not set); start the workflow with --input pack=<owner>/devflow");
   }
-  pack = found[0];
+  const got = run(["archon", "workflow", "get", runId, "--json"]);
+  if (got.code !== 0) fail(`\`archon workflow get ${runId} --json\` failed:\n${tail(got.out + got.err, 20)}`);
+  let wfName = "";
+  try {
+    const j = JSON.parse(got.out);
+    wfName = String(j.workflow_name ?? j.run?.workflow_name ?? "");
+  } catch {
+    fail(`\`archon workflow get ${runId} --json\` did not print JSON:\n${tail(got.out, 20)}`);
+  }
+  const m = wfName.match(/^([^/:]+\/[^:]+):[^:]+$/);
+  if (!m) {
+    fail(`the run's workflow '${wfName}' is not from an installed pack; start the workflow with --input pack=<owner>/devflow`);
+  }
+  pack = m[1];
 }
 const missing = ["mod-devflow-phase", "mod-devflow-deliver"].map((n) => `${pack}:${n}`).filter((n) => !names.includes(n));
 if (missing.length) {

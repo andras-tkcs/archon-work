@@ -26,7 +26,7 @@ inputs:
     description: The directory on that branch that holds plans/<slug>/ and workflows/.
   pack:
     default: ""
-    description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means auto-detect.
+    description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means the pack this workflow was started from.
 returns: publish
 
 nodes:
