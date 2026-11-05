@@ -449,6 +449,19 @@ if lp2 env USER_MESSAGE="refine the plan please" >/dev/null 2>"$scratch/lp2.err"
 grep -q "no plan named" "$scratch/lp2.err"
 if lp2 env USER_MESSAGE="refine serial" >/dev/null 2>"$scratch/lp2.err"; then echo "no change succeeded" >&2; exit 1; fi
 grep -q "say what to change in the plan serial" "$scratch/lp2.err"
+printf '### Q1 (asked by: planner)\n\nA or b? **Recommendation: a).**\n' > "$pub_art/open-questions.md"
+cp "$fx/serial.md" "$pub_art/plan.md"
+PSLUG=serial PWF=devflow-run-serial publish >/dev/null
+out="$(lp2 env USER_MESSAGE="refine serial")"
+echo "$out" | grep -q '"slug":"serial"'
+echo "$out" | grep -q 'Continue the incomplete plan serial'
+out="$(lp2 env USER_MESSAGE="refine serial: add a phase")"
+echo "$out" | grep -q '"work":"refine serial: add a phase"'
+rm "$pub_art/open-questions.md"
+cp "$fx/serial.md" "$pub_art/plan.md"
+PSLUG=serial PWF=devflow-run-serial publish >/dev/null
+if lp2 env USER_MESSAGE="refine serial" >/dev/null 2>"$scratch/lp2.err"; then echo "bare slug on a complete plan succeeded" >&2; exit 1; fi
+echo "load-published incomplete: ok"
 out="$(lp2 env INPUTS_PLAN=three-wide USER_MESSAGE="refine serial: add a phase")"
 echo "$out" | grep -q '"slug":"three-wide"'
 if lp2 env INPUTS_PLAN=nope USER_MESSAGE="x" >/dev/null 2>"$scratch/lp2.err"; then echo "unknown plan succeeded" >&2; exit 1; fi

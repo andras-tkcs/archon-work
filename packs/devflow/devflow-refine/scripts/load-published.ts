@@ -77,14 +77,25 @@ const titleLine = planText.split("\n").find((l) => l.startsWith("# "));
 const title = titleLine ? titleLine.slice(2).trim() : slug;
 
 // 6. The change.
+// The note outside code fences only (a plan may quote the note in a fenced example).
+let incomplete = false;
+{
+  let inFence = false;
+  for (const l of planText.split("\n")) {
+    if (l.startsWith("```")) inFence = !inFence;
+    else if (!inFence && l.startsWith("> Incomplete plan:")) incomplete = true;
+  }
+}
 const work = workIn !== "" ? workIn : message;
 let rest = work;
 rest = rest.replace(reUrl(), (all, s) => (s === slug ? "" : all));
 rest = rest.replace(rePath(), (all, pre, s) => (s === slug ? pre : all));
 rest = rest.replace(new RegExp("(?<![A-Za-z0-9_-])" + escapeRe(slug) + "(?![A-Za-z0-9_-])", "g"), "");
 rest = rest.replace(/\brefine\b/gi, "");
+let workOut = work;
 if (!/[A-Za-z]/.test(rest)) {
-  fail(`Not refined: say what to change in the plan ${slug}, in the message or with --input work=<change>.`);
+  if (!incomplete) fail(`Not refined: say what to change in the plan ${slug}, in the message or with --input work=<change>.`);
+  workOut = `Continue the incomplete plan ${slug}: ask its open questions again and fix its remaining validation findings.`;
 }
 
 // 7. The started check.
@@ -126,4 +137,4 @@ for (const f of ["prerequisites.md", "after.md"]) {
   const r = run(["git", "show", `${planCommit}:${plansDir}/${slug}/${f}`]);
   if (r.code === 0) writeFileSync(join(dir, f), r.out);
 }
-console.log(JSON.stringify({ slug, branch, title, plan_commit: planCommit, started, reason, refusal, work }));
+console.log(JSON.stringify({ slug, branch, title, plan_commit: planCommit, started, reason, refusal, work: workOut }));
