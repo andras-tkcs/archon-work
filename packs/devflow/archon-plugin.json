@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "workflow-pack",
   "name": "devflow",
-  "description": "The devflow toolkit (andras-tkcs/claude-toolkit) as Archon runs: plan, implement, review, definition of done, one PR watched until a person merges it; plus quick edits, docs review, security audit, repository configuration and Dependabot repair, plan-only runs that publish a parallel implementation workflow, and refinement of a published plan before it is implemented",
+  "description": "The devflow toolkit (andras-tkcs/claude-toolkit) as Archon runs: plan, implement, review, definition of done, one PR watched until a person merges it; plus quick edits, docs review, security audit, a read-only repository configuration review (file fixes through a PR, settings gaps listed for the admin's gh-baseline) and Dependabot repair, plan-only runs that publish a parallel implementation workflow, and refinement of a published plan before it is implemented",
   "compatibility": { "archon": ">=0.13.0" },
   "entrypoints": {
     "devflow-plan": "devflow-plan/devflow-plan.yaml",

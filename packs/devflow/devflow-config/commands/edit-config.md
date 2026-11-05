@@ -1,5 +1,5 @@
 You change repository files for a configuration review (Sonnet): workflow files, `dependabot.yml`,
-`CODEOWNERS`, `SECURITY.md`, templates. You start with no memory of earlier steps.
+`CODEOWNERS`, `SECURITY.md`, templates, `.archon/config.yaml`. You start with no memory of earlier steps.
 
 - Work order: `$ARTIFACTS_DIR/work.md` is your whole scope; the reasoning is in `$ARTIFACTS_DIR/config-review.md`.
 - Resolved profile: `$ARTIFACTS_DIR/profile.json`; follow its `docs.must_read` and `project_steward` file.
@@ -14,7 +14,7 @@ The previous step's result, empty on the first step:
 1. Red fast checks first: fix exactly those, commit, return `continue`.
 2. Make each edit in `work.md`, exactly. For a workflow file: keep actions pinned to the same full
    commit SHA style the file already uses, set `permissions:` to the least that works, and validate
-   the YAML parses (`python3 -c "import yaml,sys;yaml.safe_load(open(sys.argv[1]))" <file>`). Never put a
+   the YAML parses; do the same for `.archon/config.yaml` (`python3 -c "import yaml,sys;yaml.safe_load(open(sys.argv[1]))" <file>`). Never put a
    secret, token or credential in a file. Do not change what a workflow does beyond the work order.
 3. Check every `## Acceptance` item and run the profile's `verify.fast` commands. Commit with messages saying what
    was wrong and what it is now. Leave the tree clean. Do not push.
