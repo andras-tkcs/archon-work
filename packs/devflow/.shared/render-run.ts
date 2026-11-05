@@ -135,6 +135,11 @@ export function renderRunWorkflow(o: RenderOpts): string {
     `printf '{"head":"%s","plan_commit":"%s"}\\n' "$(git rev-parse HEAD)" "$PC"`,
     "",
   ].join("\n");
+  start.output_format = {
+    type: "object",
+    properties: { head: { type: "string" }, plan_commit: { type: "string" } },
+    required: ["head", "plan_commit"],
+  };
   nodes.push(start);
 
   ws.forEach((wave, i) => {
@@ -167,7 +172,12 @@ export function renderRunWorkflow(o: RenderOpts): string {
       );
     });
     lines.push(`printf '{"head":"%s"}\\n' "$(git rev-parse HEAD)"`, "");
-    nodes.push({ id: `merge-${k}`, depends_on: wave.map((p) => `phase-${p.id}`), bash: lines.join("\n") });
+    nodes.push({
+      id: `merge-${k}`,
+      depends_on: wave.map((p) => `phase-${p.id}`),
+      bash: lines.join("\n"),
+      output_format: { type: "object", properties: { head: { type: "string" } }, required: ["head"] },
+    });
   });
 
   const deps = [`merge-${ws.length}`];
