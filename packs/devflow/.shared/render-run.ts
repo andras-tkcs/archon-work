@@ -6,12 +6,16 @@ export interface Phase {
   id: string;
   title?: string;
   depends_on?: string[];
+  model?: string;
+  model_reason?: string;
 }
 
 export interface Manifest {
   plan_slug?: string;
   feature_branch?: string;
   max_parallel?: number;
+  review_model?: string;
+  review_model_reason?: string;
   manual_before?: Array<{ id?: string; title?: string }>;
   manual_after?: Array<{ id?: string; title?: string }>;
   phases: Phase[];
@@ -54,6 +58,22 @@ export function waves(manifest: Manifest): Phase[][] {
   return out;
 }
 
+export const TIERS = ["small", "medium", "large"] as const;
+
+// Every phase names the tier its worker runs on, and the plan names the final review's tier (devflow-plan's model rules).
+export function validateModels(m: Manifest): void {
+  for (const p of m.phases) {
+    if (!(TIERS as readonly string[]).includes(p.model ?? "")) {
+      throw new Error(`phase '${p.id}': model must be small, medium or large (got ${JSON.stringify(p.model) ?? "nothing"})`);
+    }
+    if (p.model !== "small" && !String(p.model_reason ?? "").trim()) throw new Error(`phase '${p.id}': model ${p.model} needs a model_reason`);
+  }
+  if (m.review_model !== "medium" && m.review_model !== "large") {
+    throw new Error(`review_model must be medium or large (got ${JSON.stringify(m.review_model) ?? "nothing"})`);
+  }
+  if (!String(m.review_model_reason ?? "").trim()) throw new Error("review_model needs a review_model_reason");
+}
+
 // Archon substitutes `$…` in bash bodies and attention text, so plan-derived text loses its `$`.
 const safe = (s: string) => s.replaceAll("$", "＄");
 const msgSafe = (s: string) => safe(s).replaceAll("'", "’");
@@ -69,6 +89,7 @@ function validate(o: RenderOpts): void {
   for (const [k, v] of Object.entries({ plansRef: o.plansRef, plansDir: o.plansDir, branch: o.branch, mainBranch: o.mainBranch })) {
     if (v.includes("'")) throw new Error(`invalid ${k} '${v}': it must not contain a single quote`);
   }
+  validateModels(o.manifest);
 }
 
 export function renderRunWorkflow(o: RenderOpts): string {
