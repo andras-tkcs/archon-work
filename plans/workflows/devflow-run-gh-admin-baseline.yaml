@@ -1,0 +1,193 @@
+name: devflow-run-gh-admin-baseline
+description: "Implementation of the devflow plan gh-admin-baseline (\"Strip the admin path from devflow-config; bootstrap a sealed ghadmin user with the gh-baseline tool\") from run fae5987f-65e7-48ed-a961-7676bfbb0091.\nThe plan is plans/gh-admin-baseline/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then github-admin-2:devflow-deliver reviews, opens the PR and watches it."
+worktree:
+  enabled: true
+returns: result
+outcome_field: merged
+nodes:
+  - id: after-steps
+    bash: "printf '%s' 'IyBBZnRlciBpbXBsZW1lbnRpbmc6IHN0cmlwIHRoZSBhZG1pbiBwYXRoIGZyb20gZGV2Zmxvdy1jb25maWc7IGJvb3RzdHJhcCBhIHNlYWxlZCBhZG1pbiB1c2VyIHdpdGggZ2gtYmFzZWxpbmUKCkRvIHN0ZXBzIDEtNiBhZnRlciB0aGUgbGFzdCBwaGFzZSBpcyBtZXJnZWQgaW50byBgZmVhdC9naC1hZG1pbi1iYXNlbGluZWAgYW5kIGJlZm9yZSB0aGUgUFIgbWVyZ2VzLgpEbyBzdGVwIDcgYWZ0ZXIgdGhlIFBSIG1lcmdlcy4gTmV2ZXIgcGFzdGUgYSB0b2tlbiBpbnRvIGNoYXQsIHRoZSBQUiBvciBhIGZpbGUgb3RoZXIgdGhhbiB0aGUgb25lCm5hbWVkIGluIHRoZSBzdGVwLgoKIyMgMS4gUmVxdWlyZSBjb2RlLW93bmVyIHJldmlldyBvbiBgbWFpbmAgKG1hMCwgfjMgbWluKQoKV2h5OiBgLmdpdGh1Yi9DT0RFT1dORVJTYCBvbmx5IGJsb2NrcyBtZXJnZXMgb25jZSB0aGUgYG1haW5gIHJ1bGVzZXQgZW5mb3JjZXMgaXQuIGBhZ2VudGAgbXVzdApuZXZlciBjaGFuZ2UgcnVsZXNldHMsIHNvIHRoZSBhZG1pbiBhY2NvdW50IGRvZXMgdGhpcy4KCjEuIFNpZ24gaW4gdG8gR2l0SHViIGFzIHRoZSAqKmFkbWluIGFjY291bnQqKiAoYGFuZHJhcy10a2NzYCksIG5vdCB0aGUgYWdlbnQgYWNjb3VudC4KMi4gT3BlbiB0aGUgYG1haW5gIHJ1bGVzZXQ6IGh0dHBzOi8vZ2l0aHViLmNvbS90a2NzLWxhYi9hcmNob24td29yay9zZXR0aW5ncy9ydWxlcy8yNjQ1ODIxMgozLiBVbmRlciAqKlJlcXVpcmUgYSBwdWxsIHJlcXVlc3QgYmVmb3JlIG1lcmdpbmcqKiwgdGljayAqKlJlcXVpcmUgcmV2aWV3IGZyb20gQ29kZSBPd25lcnMqKi4KNC4gQ2xpY2sgKipTYXZlIGNoYW5nZXMqKi4KNS4gSW4gYSB0ZXJtaW5hbCwgcnVuCiAgIGBnaCBhcGkgcmVwb3MvdGtjcy1sYWIvYXJjaG9uLXdvcmsvY29kZW93bmVycy9lcnJvcnMgLS1qcSAnLmVycm9ycyB8IGxlbmd0aCdgLgogICBJdCBwcmludHMgYDBgLiBUaGUgUFIgcGFnZSBub3cgc2hvd3MgIlJldmlldyByZXF1aXJlZCIgZnJvbSBgQGFuZHJhcy10a2NzYCBmb3IgYGJvb3RzdHJhcC5zaGAKICAgYW5kIGBhZG1pbi9gLgoKKipSZXBvcnQ6KiogYG1hMCBjb2RlLW93bmVyIHJldmlldzogUEFTUyAocnVsZXNldCB1cGRhdGVkLCBjb2Rlb3duZXJzIGVycm9ycyA9IDApYCBvciBgRkFJTDogPHdoYXQgeW91IHNhdz5gCgojIyAyLiBCb290c3RyYXAgYSB0ZXN0IFZNIGZyb20gdGhlIGZlYXR1cmUgYnJhbmNoIChtYTEsIH4xNSBtaW4pCgpXaHk6IHRoZSBkb3dubG9hZCwgdGhlIGhhc2ggY2hlY2ssIHRoZSB1c2VyIGNyZWF0aW9uIGFuZCB0aGUgZmlsZSBtb2RlcyBvbmx5IHJ1biBhcyByb290IG9uIGEgcmVhbApWTS4gQ0kgY2Fubm90IHJ1biB0aGVtLgoKMS4gU1NIIGluIGFzIHJvb3QgdG8gYSBkaXNwb3NhYmxlIHRlc3QgVk0gKFVidW50dSAyNC4wNCwgYWxyZWFkeSBqb2luZWQgdG8gdGhlIHRhaWxuZXQpLCBmcm9tIHRoZQogICBIZXR6bmVyIGNvbnNvbGUgKGh0dHBzOi8vY29uc29sZS5oZXR6bmVyLmNsb3VkL3Byb2plY3RzKSBvciBgc3NoIHJvb3RAPHRlc3Qtdm0+YC4KMi4gUnVuOgogICBgYGAKICAgY3VybCAtZnNTTCBodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vdGtjcy1sYWIvYXJjaG9uLXdvcmsvZmVhdC9naC1hZG1pbi1iYXNlbGluZS9ib290c3RyYXAuc2ggXAogICAgIHwgc3VkbyBCT09UU1RSQVBfUkVGPWZlYXQvZ2gtYWRtaW4tYmFzZWxpbmUgREVWRkxPV19QQUNLPXRrY3MtbGFiL2FyY2hvbi13b3JrL3BhY2tzL2RldmZsb3dAZmVhdC9naC1hZG1pbi1iYXNlbGluZSBVUEdSQURFPTAgYmFzaAogICBgYGAKMy4gQ2hlY2sgdGhhdCB0aGUgb3V0cHV0IGhhcyB0aGUgbGluZSBgU2VhbGVkIGFkbWluIHVzZXIgJ2doYWRtaW4nIChhZG1pbiBHaXRIdWIgaWRlbnRpdHk7IG5vdAogICByZWFjaGFibGUgZnJvbSBhZ2VudClgLgo0LiBDaGVjayB0aGF0IHRoZXJlIGlzICoqbm8qKiBgV0FSTjogYWRtaW4gdG9vbHMgbm90IGluc3RhbGxlZGAgbGluZS4KNS4gQ2hlY2sgdGhhdCB0aGUgc3VtbWFyeSBlbmRzIHdpdGggdGhlICJBZG1pbiBHaXRIdWIgaWRlbnRpdHkgKG9uZS10aW1lLCBhcyByb290KSIgYmxvY2suCjYuIElmIGBhcmNob24gcGx1Z2luIGFkZGAgcmVmdXNlcyB0aGUgYEBmZWF0L2doLWFkbWluLWJhc2VsaW5lYCByZWYsIGluc3RhbGwgdGhlIHBhY2sgZnJvbSB0aGUKICAgYnJhbmNoIGJ5IGhhbmQgYXMgYGFnZW50YCBiZWZvcmUgc3RlcCA2LiBUaGUgcmVzdCBvZiB0aGlzIHN0ZXAgaXMgdW5hZmZlY3RlZC4KCioqUmVwb3J0OioqIGBtYTEgYm9vdHN0cmFwIGZyb20gYnJhbmNoOiBQQVNTICg0YiByYW4sIG5vIGFkbWluLXRvb2xzIFdBUk4sIGFkbWluIGJsb2NrIHByaW50ZWQpYCBvciBgRkFJTDogPHRoZSBXQVJOL0VSUk9SIGxpbmU+YAoKIyMgMy4gQ2hlY2sgdGhhdCBhZ2VudCBjYW5ub3QgcmVhY2ggZ2hhZG1pbiAobWEyLCB+MyBtaW4pCgpXaHk6IHByb3ZlcyB0aGUgYWRtaW4gaWRlbnRpdHkgaXMgbm90IHJlYWNoYWJsZSBmcm9tIHRoZSB1c2VyIENsYXVkZSBydW5zIGFzLgoKMS4gT24gdGhlIHRlc3QgVk0sIGFzIHJvb3Q6IGBzdWRvIC1pdSBhZ2VudGAuCjIuIFJ1biBgbHMgfmdoYWRtaW5gLiBJdCBmYWlscyB3aXRoIGBQZXJtaXNzaW9uIGRlbmllZGAuCjMuIFJ1biBgY2F0IH5naGFkbWluL2Jpbi9naC1iYXNlbGluZWAuIEl0IGZhaWxzIHdpdGggYFBlcm1pc3Npb24gZGVuaWVkYC4KNC4gUnVuIGBleGl0YCB0byBnbyBiYWNrIHRvIHJvb3QuCjUuIFJ1biBgc3VkbyAtaXUgZ2hhZG1pbmAsIHRoZW4gYHdoaWNoIGdoLWJhc2VsaW5lYC4gSXQgcHJpbnRzIGAvaG9tZS9naGFkbWluL2Jpbi9naC1iYXNlbGluZWAuCjYuIFJ1biBgbHMgLWxkIH4gJiYgbHMgLWwgfi9iaW5gLiBUaGUgaG9tZSBpcyBgZHJ3eC0tLS0tLWAsIGFuZCBgZ2gtYmFzZWxpbmVgIGlzCiAgIGAtcnd4ci14LS0tIHJvb3QgZ2hhZG1pbmAuCgoqKlJlcG9ydDoqKiBgbWEyIGlzb2xhdGlvbjogUEFTUyAoYWdlbnQgZGVuaWVkIG9uIGhvbWUgYW5kIHNjcmlwdDsgZ2hhZG1pbiBydW5zIGdoLWJhc2VsaW5lKWAgb3IgYEZBSUw6IDxjb21tYW5kIGFuZCBvdXRwdXQ+YAoKIyMgNC4gTG9nIGdoYWRtaW4gaW4gd2l0aCBhbiBhZG1pbiBQQVQgYW5kIHJ1biBhIHJlYWwgYXVkaXQgKG1hMywgfjEwIG1pbikKCldoeTogdGhpcyBleGVyY2lzZXMgdGhlIG1lcmdlZCBzY3JpcHQgYWdhaW5zdCB0aGUgcmVhbCBvcmcgd2l0aCB0aGUgYWRtaW4gdG9rZW4uCgoxLiBJbiBhIGJyb3dzZXIgc2lnbmVkIGluIGFzIHRoZSAqKmFkbWluIGFjY291bnQqKiwgb3BlbgogICBodHRwczovL2dpdGh1Yi5jb20vc2V0dGluZ3MvdG9rZW5zL25ldyAoU2V0dGluZ3MgPiBEZXZlbG9wZXIgc2V0dGluZ3MgPiBQZXJzb25hbCBhY2Nlc3MgdG9rZW5zID4KICAgVG9rZW5zIChjbGFzc2ljKSkuCjIuIE5vdGU6IGBnaGFkbWluIG9uIDx0ZXN0LXZtPmAuIEV4cGlyYXRpb246IDkwIGRheXMsIG9yIHlvdXIgY2hvaWNlLgozLiBUaWNrIHRoZSBzY29wZXMgYHJlcG9gLCBgYWRtaW46b3JnYCwgYHJlYWQ6b3JnYCBhbmQgYGFkbWluOnJlcG9faG9va2AuCjQuIENsaWNrICoqR2VuZXJhdGUgdG9rZW4qKiBhbmQgY29weSBpdC4gSXQgZ29lcyBvbmx5IGludG8gdGhlIG5leHQgY29tbWFuZDsgZG8gbm90IHNhdmUgaXQKICAgYW55d2hlcmUgZWxzZS4KNS4gT24gdGhlIFZNIGFzIHJvb3QsIHJ1biBgc3VkbyAtaXUgZ2hhZG1pbmAsIHRoZW4gYGdoIGF1dGggbG9naW4gLS13aXRoLXRva2VuYC4gUGFzdGUgdGhlIHRva2VuLAogICBwcmVzcyBFbnRlciwgdGhlbiBDdHJsLUQuCjYuIGBnaCBhdXRoIHN0YXR1c2Agc2hvd3MgdGhlIGFkbWluIGFjY291bnQgbG9nZ2VkIGluLgo3LiBSdW4gYGNwIHBvbGljeS5leGFtcGxlLmpzb24gcG9saWN5Lmpzb25gLCB0aGVuIGBuYW5vIHBvbGljeS5qc29uYC4gU2V0IGByZWZlcmVuY2VgIHRvIGEgcmVwbyBvZgogICB5b3VycyB0aGF0IHlvdSB0cnVzdCwgYW5kIGFkanVzdCB0aGUgdmFsdWVzIGZvciB5b3VyIG9yZy4KOC4gUnVuIGBnaC1iYXNlbGluZSBhdWRpdCB0a2NzLWxhYiAtLWFsbCAtLXBvbGljeSB+L3BvbGljeS5qc29uOyBlY2hvICJleGl0ICQ/ImAuIEl0IHByaW50cwogICBmaW5kaW5ncyBwZXIgb3JnIGFuZCByZXBvLCB0aGVuIGBleGl0IDBgIG9yIGBleGl0IDFgLCB3aXRoIG5vIFB5dGhvbiB0cmFjZWJhY2suCjkuIFJ1biBgY3Agfi9wb2xpY3kuanNvbiB+L3BvbGljeS5iYWQuanNvbmAsIGRlbGV0ZSB0aGUgYCJjaGVja3MiYCBlbnRyeSBmb3Igb25lIGlkLCB0aGVuCiAgIGBnaC1iYXNlbGluZSBhdWRpdCB0a2NzLWxhYiAtLXBvbGljeSB+L3BvbGljeS5iYWQuanNvbmAuIEl0IHByaW50cwogICBgcG9saWN5IGVycm9yOiBjaGVja3MgaXMgbWlzc2luZyA8SUQ+YCBhbmQgZXhpdHMgMi4gRGVsZXRlIGBwb2xpY3kuYmFkLmpzb25gIGFmdGVyd2FyZHMuCjEwLiBTZXQgYSByZW1pbmRlciB0byByb3RhdGUgdGhlIFBBVCBiZWZvcmUgaXQgZXhwaXJlczogY3JlYXRlIGEgbmV3IG9uZSwgcnVuIHRoZSBzYW1lCiAgICBgZ2ggYXV0aCBsb2dpbiAtLXdpdGgtdG9rZW5gLCB0aGVuIHJldm9rZSB0aGUgb2xkIG9uZSBhdCBodHRwczovL2dpdGh1Yi5jb20vc2V0dGluZ3MvdG9rZW5zLgoKKipSZXBvcnQ6KiogYG1hMyBhZG1pbiBhdWRpdDogUEFTUyAoZXhpdCA8MHwxPiwgPG4+IGZpbmRpbmdzLCBiYWQgcG9saWN5IC0+IGV4aXQgMilgIG9yIGBGQUlMOiA8b3V0cHV0PmAKCiMjIDUuIEFkZCB0aGUgYHdvcmtmbG93YCBzY29wZSB0byBhZ2VudCdzIHRva2VuIG9uIHRoZSBleGlzdGluZyBWTSAobWEzYiwgfjUgbWluKQoKV2h5OiBgZGV2Zmxvdy1jb25maWdgIHB1c2hlcyBgLmdpdGh1Yi93b3JrZmxvd3MvYCBmaXhlcyBpbiBpdHMgUFIsIGFuZCBHaXRIdWIgcmVmdXNlcyB0aG9zZSBwdXNoZXMKd2l0aG91dCB0aGUgYHdvcmtmbG93YCBzY29wZSAoRDE1KS4KCjEuIE9uIHRoZSBleGlzdGluZyBWTSwgYXMgcm9vdDogYHN1ZG8gLWl1IGFnZW50YC4KMi4gUnVuIGBnaCBhdXRoIHJlZnJlc2ggLXMgd29ya2Zsb3dgIGFuZCBjb25maXJtIGluIHRoZSBicm93c2VyIHdpdGggdGhlICoqYWdlbnQqKiBhY2NvdW50LgozLiBSdW4gYG5hbm8gfi8uYXJjaG9uLy5lbnZgLiBSZXBsYWNlIHRoZSBgR0hfVE9LRU49YCBsaW5lJ3MgdmFsdWUgd2l0aCB0aGUgb3V0cHV0IG9mCiAgIGBnaCBhdXRoIHRva2VuYDsgaXQgc3RheXMgb25seSBpbiB0aGF0IGZpbGUuCjQuIFJ1biBgZXhpdGAsIHRoZW4gYXMgcm9vdCBgc3lzdGVtY3RsIHJlc3RhcnQgYXJjaG9uYC4KNS4gQXMgYWdlbnQsIHJ1biBgZ2ggYXV0aCBzdGF0dXNgLiBUaGUgdG9rZW4gc2NvcGVzIGluY2x1ZGUgYHdvcmtmbG93YC4KCioqUmVwb3J0OioqIGBtYTNiIGFnZW50IHdvcmtmbG93IHNjb3BlOiBQQVNTIChnaCBhdXRoIHN0YXR1cyBsaXN0cyB3b3JrZmxvdywgQXJjaG9uIHJlc3RhcnRlZClgIG9yIGBGQUlMOiA8b3V0cHV0PmAKCiMjIDYuIFJ1biB0aGUgc2xpbW1lZCBkZXZmbG93LWNvbmZpZyBvbiBhIHJlYWwgcHJvamVjdCAobWE0LCB+MjAgbWluKQoKV2h5OiB0aGUgc3BsaXQgYmV0d2VlbiBkZXZmbG93LWNvbmZpZyAoZmlsZXMsIGFzIGFnZW50KSBhbmQgZ2gtYmFzZWxpbmUgKHNldHRpbmdzLCBhcyBnaGFkbWluKSBjYW4Kb25seSBiZSBzaG93biBhZ2FpbnN0IGEgcmVhbCByZXBvLgoKMS4gT24gdGhlIHRlc3QgVk0sIGFzIGBhZ2VudGAsIHdpdGggQ2xhdWRlIGFuZCBgZ2hgIGxvZ2dlZCBpbiwgcnVuIGBhcmNob24gd29ya2Zsb3cgc3luY2AgaW4gdGhlCiAgIHByb2plY3QncyBjaGVja291dC4KMi4gT3BlbiB0aGUgQXJjaG9uIHdlYiBVSSAoYGh0dHBzOi8vPHRlc3Qtdm0+Ljx0YWlsbmV0Pi50cy5uZXRgKSBhbmQgcnVuCiAgIGB0a2NzLWxhYi9kZXZmbG93OmRldmZsb3ctY29uZmlnYCBvbiBvbmUgcHJvamVjdCAodGhpcyByZXBvIGlzIGZpbmUpLgozLiBJbiB0aGUgcnVuJ3MgYXJ0aWZhY3RzLCBgY29uZmlnLXJldmlldy5tZGAgaGFzIGEgc2VjdGlvbiBgIyMgU2V0dGluZ3MgZm9yIHRoZSBhZG1pbgogICAoZ2gtYmFzZWxpbmUpYCB3aXRoIGxpbmVzIG9mIHRoZSBmb3JtCiAgIGBnaC1iYXNlbGluZSBhcHBseSBPV05FUi9SRVBPIC0tcG9saWN5IH4vcG9saWN5Lmpzb24gLS1vbmx5IDxJRD5gIChvciAibWFudWFsIGluIHRoZSBHaXRIdWIgVUkiKS4KNC4gRmlsZSBnYXBzIChpbmNsdWRpbmcgYC5hcmNob24vY29uZmlnLnlhbWxgIGBleHRyYVdvcmtmbG93U291cmNlc2AsIHdoZW4gaXQgaGFzIG9uZSkgYXJyaXZlIGFzCiAgIGEgUFIgZnJvbSB0aGUgYWdlbnQgYWNjb3VudC4gVGhlIHJ1biBuZXZlciBhc2tzIHRvIGFwcGx5IHNldHRpbmdzLgoKKipSZXBvcnQ6KiogYG1hNCBkZXZmbG93LWNvbmZpZzogUEFTUyAoc2V0dGluZ3MgbGlzdGVkIGZvciBnaC1iYXNlbGluZSwgZmlsZSBmaXhlcyBpbiBQUiAjPG4+KWAgb3IgYEZBSUw6IDx3aGF0IGhhcHBlbmVkPmAKCiMjIDcuIEFmdGVyIHRoZSBtZXJnZTogdGFnIHYwLjQuMCBhbmQgcm9sbCBpdCBvdXQgdG8gdGhlIGV4aXN0aW5nIFZNIChtYTUsIH4xNSBtaW4pCgpXaHk6IHRoZSBSRUFETUUgYm9vdHN0cmFwcyBvbmx5IGZyb20gYSB0YWcuIFdpdGhvdXQgdGhlIHJvbGxvdXQsIHRoZSBleGlzdGluZyBWTSBoYXMgbG9zdApkZXZmbG93LWNvbmZpZydzIHNldHRpbmdzIHBhdGggYW5kIGhhcyBubyBnaC1iYXNlbGluZSBpbiBpdHMgcGxhY2UgKEQxNykuCgoxLiBGaW5kIHRoZSBtZXJnZSBjb21taXQgb24gaHR0cHM6Ly9naXRodWIuY29tL3RrY3MtbGFiL2FyY2hvbi13b3JrL2NvbW1pdHMvbWFpbi4KMi4gSW4gYSBjaGVja291dCwgcnVuOgogICBgZ2l0IGZldGNoIG9yaWdpbiAmJiBnaXQgdGFnIC1hIHYwLjQuMCAtbSAidjAuNC4wIiA8bWVyZ2UgY29tbWl0PiAmJiBnaXQgcHVzaCBvcmlnaW4gdjAuNC4wYC4KMy4gQ2hlY2sgaHR0cHM6Ly9naXRodWIuY29tL3RrY3MtbGFiL2FyY2hvbi13b3JrL3RhZ3MgbGlzdHMgYHYwLjQuMGAuCjQuIE9uIHRoZSBleGlzdGluZyBWTSwgYXMgcm9vdCwgcnVuOgogICBgYGAKICAgY3VybCAtZnNTTCBodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vdGtjcy1sYWIvYXJjaG9uLXdvcmsvdjAuNC4wL2Jvb3RzdHJhcC5zaCBcCiAgICAgfCBzdWRvIEJPT1RTVFJBUF9SRUY9djAuNC4wIFVQR1JBREU9MCBiYXNoCiAgIGBgYAo1LiBUaGUgc3VtbWFyeSBoYXMgbm8gYEFkbWluIHRvb2xzIG5vdCBpbnN0YWxsZWRgIGxpbmUuCjYuIFJlcGVhdCBzdGVwIDMgKGlzb2xhdGlvbikgYW5kIHN0ZXAgNCAoUEFUIGxvZ2luIGFuZCBhdWRpdCkgb24gdGhpcyBWTS4gVXNlIGEgbmV3IFBBVCBuYW1lZAogICBgZ2hhZG1pbiBvbiA8ZXhpc3Rpbmctdm0+YC4KCioqUmVwb3J0OioqIGBtYTUgdjAuNC4wIHJvbGxvdXQ6IFBBU1MgKHRhZyBwdXNoZWQsIGV4aXN0aW5nIFZNIGJvb3RzdHJhcHBlZCwgaXNvbGF0aW9uIGFuZCBhdWRpdCBPSylgIG9yIGBGQUlMOiA8c3RlcCBhbmQgb3V0cHV0PmAK' | base64 -d > \"$ARTIFACTS_DIR/after.md\"\necho \"after.md written\"\n"
+  - id: worktree-check
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nB='feat/gh-admin-baseline'\ngit fetch origin \"$B\" 2>/dev/null || true\nHELD=$(awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}' <(git worktree list --porcelain))\nQ=\"\"\nif [ -n \"$HELD\" ]; then\n  AHEAD=$(git rev-list --count \"origin/$B..refs/heads/$B\" 2>/dev/null || echo unknown)\n  Q=\"The branch $B is already checked out in another worktree, probably left by an earlier run. Approving removes these worktrees (git worktree remove, never forced; a worktree with uncommitted changes is refused and the run fails). Do not approve if another run is still using one.\\n\\nCommits on the branch not on origin: $AHEAD\"\n  while IFS= read -r w; do Q=\"$Q\\n\\n$w\\nuncommitted paths: $(git -C \"$w\" status --porcelain | wc -l | tr -d ' ')\"; done <<< \"$HELD\"\nfi\nH=\"$HELD\" Q=\"$Q\" python3 -c 'import json,os; print(json.dumps({\"held\": os.environ[\"H\"], \"question\": os.environ[\"Q\"].replace(\"\\\\n\", \"\\n\")}))' >&3\n"
+    output_format:
+      type: object
+      properties:
+        held:
+          type: string
+        question:
+          type: string
+      required:
+        - held
+        - question
+  - id: confirm-worktree-removal
+    depends_on:
+      - worktree-check
+    when: "$worktree-check.output.held != ''"
+    wait:
+      attention: $worktree-check.output.question
+      form: approval
+      labels:
+        workflow: devflow-run
+        stage: worktree-removal
+  - id: stop-at-worktrees
+    depends_on:
+      - confirm-worktree-removal
+    when: "$confirm-worktree-removal.output.decision == 'reject'"
+    cancel: "Stopped before implementation: the worktree holding the feature branch was not removed."
+  - id: remove-worktrees
+    depends_on:
+      - confirm-worktree-removal
+    when: "$confirm-worktree-removal.output.decision == 'approve'"
+    bash: "set -euo pipefail\nB='feat/gh-admin-baseline'\nHELD=$(awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}' <(git worktree list --porcelain))\nwhile IFS= read -r w; do [ -n \"$w\" ] && git worktree remove \"$w\" && echo \"removed $w\" >&2; done <<< \"$HELD\"\n"
+  - id: start
+    depends_on:
+      - worktree-check
+      - confirm-worktree-removal
+      - stop-at-worktrees
+      - remove-worktrees
+    trigger_rule: none_failed_min_one_success
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nB='feat/gh-admin-baseline'; M='main'; PR='plans'\ngit fetch origin \"$M\"\ngit fetch origin \"$PR\"\nPC=$(git rev-parse FETCH_HEAD)\nHELD=$(git worktree list --porcelain | awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}')\nif [ -n \"$HELD\" ]; then echo \"devflow: branch $B is already checked out in another worktree: $HELD\" >&2; echo \"devflow: if no run is using it and it has nothing unpushed, remove it with: git worktree remove $HELD\" >&2; exit 1; fi\nif git ls-remote --exit-code --heads origin \"$B\" >/dev/null 2>&1; then\n  git fetch origin \"$B\"\n  if git rev-parse --verify --quiet \"refs/heads/$B\" >/dev/null; then git switch \"$B\"; git merge --ff-only \"origin/$B\"; else git switch -c \"$B\" --track \"origin/$B\"; fi\nelif git rev-parse --verify --quiet \"refs/heads/$B\" >/dev/null; then git switch \"$B\"\nelse git switch -c \"$B\" \"origin/$M\"; fi\nprintf '{\"head\":\"%s\",\"plan_commit\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" \"$PC\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+        plan_commit:
+          type: string
+      required:
+        - head
+        - plan_commit
+  - id: phase-p2-merge-script
+    workflow: github-admin-2:devflow-phase
+    isolation: worktree
+    depends_on:
+      - start
+    with:
+      plan_ref: plans
+      plan_path: plans/gh-admin-baseline/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p2-merge-script
+      base: $start.output.head
+  - id: merge-1
+    depends_on:
+      - phase-p2-merge-script
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p2-merge-script.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p2-merge-script already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge gh-admin-baseline p2-merge-script: Merge gh_snapshot.py and gh_baseline.py into admin/gh-baseline.py with subcommands' -m 'Plan-Phase: gh-admin-baseline/p2-merge-script' || { git merge --abort; echo \"devflow: merging p2-merge-script conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p3-policy-file
+    workflow: github-admin-2:devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-1
+    with:
+      plan_ref: plans
+      plan_path: plans/gh-admin-baseline/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p3-policy-file
+      base: $merge-1.output.head
+  - id: merge-2
+    depends_on:
+      - phase-p3-policy-file
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p3-policy-file.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p3-policy-file already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge gh-admin-baseline p3-policy-file: Move the checklist into the policy file, validate it, ship policy.example.json' -m 'Plan-Phase: gh-admin-baseline/p3-policy-file' || { git merge --abort; echo \"devflow: merging p3-policy-file conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p1-slim-devflow-config
+    workflow: github-admin-2:devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-2
+    with:
+      plan_ref: plans
+      plan_path: plans/gh-admin-baseline/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p1-slim-devflow-config
+      base: $merge-2.output.head
+  - id: merge-3
+    depends_on:
+      - phase-p1-slim-devflow-config
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p1-slim-devflow-config.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p1-slim-devflow-config already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge gh-admin-baseline p1-slim-devflow-config: Strip the admin settings-apply path from devflow-config; add the Archon-config area' -m 'Plan-Phase: gh-admin-baseline/p1-slim-devflow-config' || { git merge --abort; echo \"devflow: merging p1-slim-devflow-config conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p4-bootstrap-admin-user
+    workflow: github-admin-2:devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-3
+    with:
+      plan_ref: plans
+      plan_path: plans/gh-admin-baseline/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p4-bootstrap-admin-user
+      base: $merge-3.output.head
+  - id: merge-4
+    depends_on:
+      - phase-p4-bootstrap-admin-user
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p4-bootstrap-admin-user.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p4-bootstrap-admin-user already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge gh-admin-baseline p4-bootstrap-admin-user: Bootstrap the sealed ghadmin user, install the hash-checked admin tools, add CODEOWNERS' -m 'Plan-Phase: gh-admin-baseline/p4-bootstrap-admin-user' || { git merge --abort; echo \"devflow: merging p4-bootstrap-admin-user conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p5-docs-and-retire
+    workflow: github-admin-2:devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-4
+    with:
+      plan_ref: plans
+      plan_path: plans/gh-admin-baseline/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p5-docs-and-retire
+      base: $merge-4.output.head
+  - id: merge-5
+    depends_on:
+      - phase-p5-docs-and-retire
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p5-docs-and-retire.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p5-docs-and-retire already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge gh-admin-baseline p5-docs-and-retire: Document the admin user, the agent workflow scope and the new devflow-config split in the root README' -m 'Plan-Phase: gh-admin-baseline/p5-docs-and-retire' || { git merge --abort; echo \"devflow: merging p5-docs-and-retire conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: deliver
+    workflow: github-admin-2:devflow-deliver
+    depends_on:
+      - merge-5
+      - after-steps
+    with:
+      plan_ref: plans
+      plan_path: plans/gh-admin-baseline/plan.md
+      plan_commit: $start.output.plan_commit
+      slug: gh-admin-baseline
+      branch: feat/gh-admin-baseline
+      title: Strip the admin path from devflow-config; bootstrap a sealed ghadmin user with the gh-baseline tool
+      head: $merge-5.output.head
+  - id: result
+    depends_on:
+      - deliver
+    bash: "m=$deliver.output.merged; printf '{\"merged\":%s}\\n' \"$m\"\n"
+    output_format:
+      type: object
+      properties:
+        merged:
+          type: boolean
+      required:
+        - merged
