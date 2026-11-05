@@ -1,5 +1,5 @@
 name: devflow-run-devflow-refine
-description: "Implementation of the devflow plan devflow-refine (\"Add devflow-refine: refine a published plan before its implementation starts\") from run 4f539cc9-9fb2-4e5a-94c3-187874466505.\nThe plan is plans/devflow-refine/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then plan-refine:devflow-deliver reviews, opens the PR and watches it."
+description: "Implementation of the devflow plan devflow-refine (\"Add devflow-refine: refine a published plan before its implementation starts\") from run 4f539cc9-9fb2-4e5a-94c3-187874466505.\nThe plan is plans/devflow-refine/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:devflow-deliver reviews, opens the PR and watches it."
 worktree:
   enabled: true
 returns: result
@@ -56,7 +56,7 @@ nodes:
         - head
         - plan_commit
   - id: phase-p1-shared-publish-render
-    workflow: plan-refine:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - start
@@ -78,7 +78,7 @@ nodes:
       required:
         - head
   - id: phase-p2-load-published
-    workflow: plan-refine:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - merge-1
@@ -100,7 +100,7 @@ nodes:
       required:
         - head
   - id: phase-p3-refine-workflow
-    workflow: plan-refine:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - merge-2
@@ -122,7 +122,7 @@ nodes:
       required:
         - head
   - id: phase-p4-docs-retire
-    workflow: plan-refine:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - merge-3
@@ -144,7 +144,7 @@ nodes:
       required:
         - head
   - id: deliver
-    workflow: plan-refine:devflow-deliver
+    workflow: tkcs-lab/devflow:devflow-deliver
     depends_on:
       - merge-4
     with:

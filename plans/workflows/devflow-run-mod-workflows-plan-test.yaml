@@ -1,5 +1,5 @@
 name: devflow-run-mod-workflows-plan-test
-description: "Implementation of the devflow plan mod-workflows-plan-test (\"Rename the devflow pack's internal workflows to mod-devflow-* and test every plan before devflow-plan publishes it\") from run 9a7598c7-2ecf-440a-ac3a-35e6b09ab4f6.\nThe plan is plans/mod-workflows-plan-test/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then workflow-improvements:devflow-deliver reviews, opens the PR and watches it."
+description: "Implementation of the devflow plan mod-workflows-plan-test (\"Rename the devflow pack's internal workflows to mod-devflow-* and test every plan before devflow-plan publishes it\") from run 9a7598c7-2ecf-440a-ac3a-35e6b09ab4f6.\nThe plan is plans/mod-workflows-plan-test/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:devflow-deliver reviews, opens the PR and watches it."
 worktree:
   enabled: true
 returns: result
@@ -58,7 +58,7 @@ nodes:
         - head
         - plan_commit
   - id: phase-p1-rename-internal-workflows
-    workflow: workflow-improvements:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - start
@@ -80,7 +80,7 @@ nodes:
       required:
         - head
   - id: phase-p2-plan-test-scripts
-    workflow: workflow-improvements:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - merge-1
@@ -102,7 +102,7 @@ nodes:
       required:
         - head
   - id: phase-p3-plan-test-loop
-    workflow: workflow-improvements:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - merge-2
@@ -124,7 +124,7 @@ nodes:
       required:
         - head
   - id: phase-p4-retire-docs
-    workflow: workflow-improvements:devflow-phase
+    workflow: tkcs-lab/devflow:devflow-phase
     isolation: worktree
     depends_on:
       - merge-3
@@ -146,7 +146,7 @@ nodes:
       required:
         - head
   - id: deliver
-    workflow: workflow-improvements:devflow-deliver
+    workflow: tkcs-lab/devflow:devflow-deliver
     depends_on:
       - merge-4
       - after-steps
