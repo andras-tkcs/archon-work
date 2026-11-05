@@ -1,5 +1,5 @@
 name: devflow-run-devflow-model-tiers
-description: "Implementation of the devflow plan devflow-model-tiers (\"Cheaper planning models, a model per phase, and a sized final review in the devflow pack\") from run 2decf601-17ed-4f4e-8623-28427d3f84b1.\nThe plan is plans/devflow-model-tiers/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then models:devflow-deliver reviews, opens the PR and watches it."
+description: "Implementation of the devflow plan devflow-model-tiers (\"Cheaper planning models, a model per phase, and a sized final review in the devflow pack\") from run 2decf601-17ed-4f4e-8623-28427d3f84b1.\nThe plan is plans/devflow-model-tiers/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
 worktree:
   enabled: true
 returns: result
@@ -56,7 +56,7 @@ nodes:
         - head
         - plan_commit
   - id: phase-p1-manifest-models
-    workflow: models:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - start
@@ -67,7 +67,7 @@ nodes:
       phase: p1-manifest-models
       base: $start.output.head
   - id: phase-p4-plan-validation
-    workflow: models:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - start
@@ -90,7 +90,7 @@ nodes:
       required:
         - head
   - id: phase-p2-phase-routing
-    workflow: models:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-1
@@ -101,7 +101,7 @@ nodes:
       phase: p2-phase-routing
       base: $merge-1.output.head
   - id: phase-p3-review-routing
-    workflow: models:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-1
@@ -112,7 +112,7 @@ nodes:
       phase: p3-review-routing
       base: $merge-1.output.head
   - id: phase-p5-refine-validation
-    workflow: models:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-1
@@ -136,7 +136,7 @@ nodes:
       required:
         - head
   - id: phase-p6-docs-retire
-    workflow: models:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-2
@@ -158,7 +158,7 @@ nodes:
       required:
         - head
   - id: deliver
-    workflow: models:devflow-deliver
+    workflow: tkcs-lab/devflow:mod-devflow-deliver
     depends_on:
       - merge-3
     with:

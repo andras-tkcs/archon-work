@@ -41,24 +41,24 @@ All paths are relative to the repository root. `<pack>` is `packs/devflow`.
   `finalize`. `<pack>/devflow-refine/commands/{draft,challenge,finalize}.md` have the same text as
   devflow-plan's plus refine-specific lines. In `finalize.md`, overrides 1-6 are l.41-60, override 7
   is l.61-64, and the section 4 text is l.19-20 and l.48.
-- `<pack>/devflow-phase/devflow-phase.yaml`: workflow `model: medium` (l.9). The `build` loop
+- `<pack>/mod-devflow-phase/mod-devflow-phase.yaml`: workflow `model: medium` (l.9). The `build` loop
   (l.64-96) has `implement` (l.69-79, `command: implement-phase`, `model: medium`) and `check`.
   `until_bash` (l.95) reads `$implement.output.status`. `load-plan` (l.48-62) returns
   `{slug, branch, title, done}`. `commands/implement-phase.md` l.1 says "(Sonnet)" and l.15 reads
   `$LOOP_PREV.implement.output`.
-- `<pack>/devflow-tail/devflow-tail.yaml`: no `inputs:`. The `review-loop` (l.18-41) holds
+- `<pack>/mod-devflow-tail/mod-devflow-tail.yaml`: no `inputs:`. The `review-loop` (l.18-41) holds
   `fix-blocking` (medium, `when: "$LOOP_PREV.review.output.blocking > 0"`) and `review`
   (l.26-39, `model: large`). `until_bash` reads `$review.output.blocking`, and `review-gate` (l.43)
   reads `$review-loop.output.blocking`. `commands/review.md` l.8 says "(Opus) for a plan that Sonnet
-  workers implemented". devflow-tail is included by devflow-deliver (l.110), devflow-quick (l.132),
-  devflow-docs (l.131), devflow-config (l.261), devflow-deps (l.239) and devflow-audit-fix (l.158).
-  devflow-audit includes devflow-audit-fix.
-- `<pack>/devflow-deliver/devflow-deliver.yaml`: workflow `model: large` (l.8). `load-plan`
+  workers implemented". mod-devflow-tail is included by mod-devflow-deliver (l.110), devflow-quick (l.132),
+  devflow-docs (l.131), devflow-config (l.261), devflow-deps (l.239) and mod-devflow-audit-fix (l.158).
+  devflow-audit includes mod-devflow-audit-fix.
+- `<pack>/mod-devflow-deliver/mod-devflow-deliver.yaml`: workflow `model: large` (l.8). `load-plan`
   (l.54-68) returns `{slug, branch, title, done}`. The `tail` include (l.109-111) has no `with:`.
 - `<pack>/.shared/render-run.ts`: the `Phase` (l.5-9) and `Manifest` (l.11-18) interfaces,
   `extractManifest` (l.35), `validate` (l.64-72, called first in `renderRunWorkflow`, l.75) and the
-  CLI (l.282-310). It renders one `workflow: <pack>:devflow-phase` node per phase and one
-  `devflow-deliver` node. `<pack>/.shared/load-plan.ts` imports `extractManifest` (l.5), reads the
+  CLI (l.282-310). It renders one `workflow: <pack>:mod-devflow-phase` node per phase and one
+  `mod-devflow-deliver` node. `<pack>/.shared/load-plan.ts` imports `extractManifest` (l.5), reads the
   plan (l.15-23) and prints `{slug, branch, title, done}` (l.64).
   `<pack>/.shared/render-plan.ts` calls `renderRunWorkflow` in a try/fail (l.50-66).
 - The toolkit's `validate_manifest.py` accepts `worker_model` only as `opus|sonnet` (l.174-178) and
@@ -74,14 +74,14 @@ All paths are relative to the repository root. `<pack>` is `packs/devflow`.
     `INPUTS_<NAME>` environment variables. A `with:` value that is a node-output reference
     (`$load-plan.output.review_model`) is resolved at run time.
   - The prototype passed `archon validate` and the fixtures for the routing in D4, D5 and D7: a
-    medium-routed devflow-deliver completed with only the `review-medium` stub, and a devflow-plan
+    medium-routed mod-devflow-deliver completed with only the `review-medium` stub, and a devflow-plan
     whose validation never clears still completed and published.
 - Tests: `scripts/test-render-run.sh` (renderer, load-plan, publish-plan and load-published, with
   fixtures in `scripts/fixtures/render-run/`) and `scripts/test-devflow-pack.sh` (`archon validate
   workflows` and every `<pack>/*/fixtures/*.stubs.yaml`; 36 fixtures pass today).
 - The profile (`.claude/toolkit.yaml`) has no `docs.adr_dir` and no `docs.changelog`. Its must-read
   docs are `README.md` and `<pack>/README.md`. `<pack>/README.md` l.72 says the interview runs on
-  the "large tier", and l.27-29 list only four of devflow-tail's six includers.
+  the "large tier", and l.27-29 list only four of mod-devflow-tail's six includers.
 
 ## Design
 
@@ -241,7 +241,7 @@ export function validateModels(m: Manifest): void {
 
 - `validate(o)` calls `validateModels(o.manifest)` as its last statement, so the id and slug checks
   run first.
-- The rendered workflow does not change. devflow-phase and devflow-deliver read the tiers from the
+- The rendered workflow does not change. mod-devflow-phase and mod-devflow-deliver read the tiers from the
   plan through `load-plan` (D4, D5), so the plan at `plan_commit` is the only source.
 
 In `<pack>/.shared/load-plan.ts`:
@@ -255,9 +255,9 @@ In `<pack>/.shared/load-plan.ts`:
   `JSON.stringify({ slug, branch, title, done, model, review_model: manifest.review_model })`.
   `model` is `""` in deliver mode.
 
-### D4. Phase model routing (devflow-phase)
+### D4. Phase model routing (mod-devflow-phase)
 
-In `<pack>/devflow-phase/devflow-phase.yaml`:
+In `<pack>/mod-devflow-phase/mod-devflow-phase.yaml`:
 
 - `load-plan`'s `output_format` gains `model: { type: string }`, and `required` becomes
   `[slug, branch, title, done, model]`.
@@ -309,9 +309,9 @@ In `<pack>/devflow-phase/devflow-phase.yaml`:
 - `commands/implement-phase.md` l.1: "(Sonnet)" → "(on the model tier the plan's manifest gives
   this phase)".
 
-### D5. Review model routing (devflow-tail and devflow-deliver)
+### D5. Review model routing (mod-devflow-tail and mod-devflow-deliver)
 
-In `<pack>/devflow-tail/devflow-tail.yaml`:
+In `<pack>/mod-devflow-tail/mod-devflow-tail.yaml`:
 
 - Add, after `returns: finish`:
 
@@ -319,7 +319,7 @@ In `<pack>/devflow-tail/devflow-tail.yaml`:
 inputs:
   review_model:
     default: large
-    description: The tier of the final review, medium or large. devflow-deliver passes the plan's review_model; the other includers keep the default.
+    description: The tier of the final review, medium or large. mod-devflow-deliver passes the plan's review_model; the other includers keep the default.
 ```
 
 - Add a first node, before `review-loop`, and give `review-loop` `depends_on: [review-tier]`. The
@@ -385,7 +385,7 @@ inputs:
 - `commands/review.md` l.8: "You are the **final reviewer** (Opus) for a plan that Sonnet workers
   implemented." → "You are the **final reviewer** for a change that worker sessions implemented."
 
-In `<pack>/devflow-deliver/devflow-deliver.yaml`:
+In `<pack>/mod-devflow-deliver/mod-devflow-deliver.yaml`:
 
 - `load-plan`'s `output_format` gains `review_model: { type: string }`, and `required` becomes
   `[slug, branch, title, done, review_model]`.
@@ -397,7 +397,7 @@ In `<pack>/devflow-deliver/devflow-deliver.yaml`:
 ```
 
 The other five includers (devflow-quick, devflow-docs, devflow-config, devflow-deps,
-devflow-audit-fix) are not edited. They get the default `large`, so their behaviour does not change.
+mod-devflow-audit-fix) are not edited. They get the default `large`, so their behaviour does not change.
 Their fixtures need the new stubs (p3).
 
 ### D6. The `pick-one` script
@@ -414,14 +414,14 @@ console.log(ran[0][1].trim());
 ```
 
 Thin entries, each holding exactly these two lines, in the pattern of
-`<pack>/devflow-tail/scripts/verify.ts`:
+`<pack>/mod-devflow-tail/scripts/verify.ts`:
 
 ```ts
 // Thin entry point: the logic lives in the pack's .shared/pick-one.ts.
 import "../../.shared/pick-one.ts";
 ```
 
-at `<pack>/devflow-phase/scripts/pick-one.ts` (p2) and `<pack>/devflow-tail/scripts/pick-one.ts`
+at `<pack>/mod-devflow-phase/scripts/pick-one.ts` (p2) and `<pack>/mod-devflow-tail/scripts/pick-one.ts`
 (p3).
 
 ### D7. The validation commands: validate-plan, fix-plan, settle-plan
@@ -548,7 +548,7 @@ Apply the same edits to devflow-plan's and devflow-refine's copies (p4 and p5):
 ### D9. Workflows rendered before this change (decision 4)
 
 No compatibility code is added. A `devflow-run-<slug>` rendered before this change still passes
-`phase`, `base` and the rest, and the new devflow-phase and devflow-deliver read the tiers from the
+`phase`, `base` and the rest, and the new mod-devflow-phase and mod-devflow-deliver read the tiers from the
 plan. For an old plan with no `model` keys, `load-plan` therefore fails with D3's message
 (`phase '<id>': model must be small, medium or large (got nothing)`). Validation is shared with the
 renderer, so the run stops and implements nothing. It never runs silently without an implement step.
@@ -559,8 +559,8 @@ about it.
 
 `<pack>/README.md`:
 
-- l.27-29: devflow-tail's includers become "`devflow-quick`, `devflow-docs`, `devflow-config`,
-  `devflow-deps`, `devflow-audit-fix` (which `devflow-audit` includes) and `devflow-deliver`".
+- l.27-29: mod-devflow-tail's includers become "`devflow-quick`, `devflow-docs`, `devflow-config`,
+  `devflow-deps`, `mod-devflow-audit-fix` (which `devflow-audit` includes) and `mod-devflow-deliver`".
 - In "devflow-plan, step by step", replace step 1's "(large tier)" with "(medium tier)". Replace
   step 2 with "**Plan** (medium tier): researches and writes `plan.md` with an implementation
   manifest, validated by the toolkit's `validate_manifest.py`. Each phase gets the smallest model
@@ -574,8 +574,8 @@ about it.
   non-blocking ones. Blocking findings still left are recorded under the plan's \"Risks and open
   questions\", with a warning at the top of plan.md, and the plan is published anyway.
   `plan-review.md` in the run's artifacts holds the last report."
-- In the paragraph after the steps, replace "each as a `devflow-phase` child run in its own
-  worktree" with "each as a `devflow-phase` child run in its own worktree on the phase's model
+- In the paragraph after the steps, replace "each as a `mod-devflow-phase` child run in its own
+  worktree" with "each as a `mod-devflow-phase` child run in its own worktree on the phase's model
   tier". Replace "and the shared tail (review, fixes, ..." with "and the shared tail (review on the
   plan's final-review tier, fixes, ...".
 - In "devflow-refine, step by step", step 3, append: "It uses the same tiers and validation as
@@ -591,7 +591,7 @@ Root `README.md` is unchanged: it describes the pack only by link.
   holds them, and `load-plan` reads the plan at `plan_commit`. A second source could drift, and the
   rendered workflow stays unchanged.
 - **Reusing `worker_model`:** the toolkit validator allows only `opus|sonnet`.
-- **`$INPUTS.review_model` directly in devflow-tail's `when:`:** an includer's literal value makes
+- **`$INPUTS.review_model` directly in mod-devflow-tail's `when:`:** an includer's literal value makes
   the expression unparseable at load time. The `review-tier` bash node avoids that.
 - **Duplicating the whole review loop, or the whole build loop, per tier:** that would change every
   downstream reference (`until_bash`, `review-gate`, `$LOOP_PREV.*`). The picker keeps the ids
@@ -603,8 +603,8 @@ Root `README.md` is unchanged: it describes the pack only by link.
 |---|---|---|---|---|---|
 | p1-manifest-models | Manifest model keys in the renderer and load-plan, and the pick-one script | S | — | small | default |
 | p4-plan-validation | devflow-plan: medium planning, large validation loop, the model rules | M | — | medium | writes three new prompt files and edits three more from a spec whose exact wording it must compose |
-| p2-phase-routing | devflow-phase runs each phase on its manifest model | S | p1-manifest-models | small | default |
-| p3-review-routing | devflow-tail and devflow-deliver run the final review on the plan's review model | M | p1-manifest-models | small | default |
+| p2-phase-routing | mod-devflow-phase runs each phase on its manifest model | S | p1-manifest-models | small | default |
+| p3-review-routing | mod-devflow-tail and mod-devflow-deliver run the final review on the plan's review model | M | p1-manifest-models | small | default |
 | p5-refine-validation | devflow-refine gets the same models, validation loop and rules | S | p4-plan-validation | small | default |
 | p6-docs-retire | Document the model tiers and retire the plan | S | p1-manifest-models, p2-phase-routing, p3-review-routing, p4-plan-validation, p5-refine-validation | small | default |
 
@@ -619,7 +619,7 @@ not a step of this plan.
 ## Risks and open questions
 
 - **From the interview, "Why no more questions":** the scope is devflow-plan, devflow-refine,
-  devflow-phase, devflow-tail and devflow-deliver with their includers' fixtures, the renderer and
+  mod-devflow-phase, mod-devflow-tail and mod-devflow-deliver with their includers' fixtures, the renderer and
   its tests, and the docs. Behaviour is settled by Q2 (picked once), Q6 (>= 7 phases), Q7 (C: no
   handling of old rendered workflows) and Q8 (publish anyway, with a top callout). Names follow the
   pack's conventions. No credentials, secrets or permissions change. There are no prerequisites
@@ -631,7 +631,7 @@ not a step of this plan.
 - **Archon rejects the YAML anchors in D4/D5:** write each `output_format` out in full (the only
   allowed deviation). If `archon validate` rejects anything else in D1, D4 or D5 (`trigger_rule:
   one_success`, `when:` on `$load-plan.output.model` inside a loop, `with:` on the `tail` include,
-  `inputs:` on devflow-tail), the brief is wrong: stop with `status=blocked` and paste the
+  `inputs:` on mod-devflow-tail), the brief is wrong: stop with `status=blocked` and paste the
   validator output. The prototype accepted all of them on Archon 0.13.4.
 - **A routed fixture does not route:** if a fixture's `implement-<tier>` or `review-<tier>` stub is
   reported as an unused stub while another tier's node reports "Missing reachable stub", the `when:`
@@ -666,7 +666,7 @@ verify_after_merge:
   - scripts/test-render-run.sh
   - scripts/test-devflow-pack.sh
 final_checks:
-  - 'grep -rn "Opus" packs/devflow/devflow-plan/commands packs/devflow/devflow-refine/commands packs/devflow/devflow-phase/commands/implement-phase.md packs/devflow/devflow-tail/commands/review.md prints nothing, and grep -n "Sonnet" packs/devflow/devflow-phase/commands/implement-phase.md packs/devflow/devflow-tail/commands/review.md prints nothing'
+  - 'grep -rn "Opus" packs/devflow/devflow-plan/commands packs/devflow/devflow-refine/commands packs/devflow/mod-devflow-phase/commands/implement-phase.md packs/devflow/mod-devflow-tail/commands/review.md prints nothing, and grep -n "Sonnet" packs/devflow/mod-devflow-phase/commands/implement-phase.md packs/devflow/mod-devflow-tail/commands/review.md prints nothing'
   - 'grep -c "model: large" packs/devflow/devflow-plan/devflow-plan.yaml packs/devflow/devflow-refine/devflow-refine.yaml prints 1 for each file (only validate-plan)'
   - 'scripts/test-render-run.sh ends with "test-render-run: all ok" and scripts/test-devflow-pack.sh ends with "0 failed"'
 phases:
@@ -773,20 +773,20 @@ phases:
       - 'grep -n "depends_on: \[settle-plan\]" packs/devflow/devflow-plan/devflow-plan.yaml prints the render node''s line'
 
   - id: p2-phase-routing
-    title: devflow-phase runs each phase on its manifest model
+    title: mod-devflow-phase runs each phase on its manifest model
     depends_on: [p1-manifest-models]
     complexity: S
     model: small
     touches:
-      - packs/devflow/devflow-phase/**
+      - packs/devflow/mod-devflow-phase/**
     brief: |
       Read the plan's Design sections D4 and D6 first.
-      1. packs/devflow/devflow-phase/devflow-phase.yaml: load-plan's output_format gains `model`
+      1. packs/devflow/mod-devflow-phase/mod-devflow-phase.yaml: load-plan's output_format gains `model`
          (D4), and the `implement` node in the build loop is replaced by the four nodes of D4,
          verbatim. Do not touch `check`, `until_bash` or `gate`.
-      2. Create packs/devflow/devflow-phase/scripts/pick-one.ts, the thin entry of D6.
+      2. Create packs/devflow/mod-devflow-phase/scripts/pick-one.ts, the thin entry of D6.
       3. commands/implement-phase.md line 1: the D4 wording change.
-      4. Fixtures in packs/devflow/devflow-phase/fixtures/:
+      4. Fixtures in packs/devflow/mod-devflow-phase/fixtures/:
          - In all three existing files, add `model: medium` as the last key of the `load-plan:` stub.
          - happy-path.stubs.yaml: rename the `implement:` stub key to `implement-medium:` and add an
            `implement:` stub with the same three fields after it (the picker is stubbed in non-exec fixtures).
@@ -801,34 +801,34 @@ phases:
       another tier's node: the routing is wrong, and changing `when:` to make it pass is not allowed.
     acceptance:
       - 'scripts/test-devflow-pack.sh ends with "0 failed" and shows small-route.stubs.yaml and large-route.stubs.yaml with "Simulation outcome: completed"'
-      - 'grep -c "command: implement-phase" packs/devflow/devflow-phase/devflow-phase.yaml prints 3'
-      - 'grep -n "script: pick-one" packs/devflow/devflow-phase/devflow-phase.yaml prints one line'
-      - 'grep -n "Sonnet" packs/devflow/devflow-phase/commands/implement-phase.md prints nothing'
+      - 'grep -c "command: implement-phase" packs/devflow/mod-devflow-phase/mod-devflow-phase.yaml prints 3'
+      - 'grep -n "script: pick-one" packs/devflow/mod-devflow-phase/mod-devflow-phase.yaml prints one line'
+      - 'grep -n "Sonnet" packs/devflow/mod-devflow-phase/commands/implement-phase.md prints nothing'
 
   - id: p3-review-routing
-    title: devflow-tail and devflow-deliver run the final review on the plan's review model
+    title: mod-devflow-tail and mod-devflow-deliver run the final review on the plan's review model
     depends_on: [p1-manifest-models]
     complexity: M
     model: small
     touches:
-      - packs/devflow/devflow-tail/**
-      - packs/devflow/devflow-deliver/**
+      - packs/devflow/mod-devflow-tail/**
+      - packs/devflow/mod-devflow-deliver/**
       - packs/devflow/devflow-quick/fixtures/**
       - packs/devflow/devflow-docs/fixtures/**
       - packs/devflow/devflow-config/fixtures/**
       - packs/devflow/devflow-deps/fixtures/**
       - packs/devflow/devflow-audit/fixtures/**
-      - packs/devflow/devflow-audit-fix/fixtures/**
+      - packs/devflow/mod-devflow-audit-fix/fixtures/**
     brief: |
       Read the plan's Design sections D5 and D6 first.
-      1. packs/devflow/devflow-tail/devflow-tail.yaml: add `inputs:`, the `review-tier` node,
+      1. packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml: add `inputs:`, the `review-tier` node,
          `review-loop`'s `depends_on: [review-tier]`, and replace the `review` node with the three
          nodes of D5, verbatim. Update the description and the l.15 comment as D5 says.
-      2. Create packs/devflow/devflow-tail/scripts/pick-one.ts, the thin entry of D6.
-      3. packs/devflow/devflow-tail/commands/review.md line 8: the D5 wording change.
-      4. packs/devflow/devflow-deliver/devflow-deliver.yaml: load-plan's output_format gains
+      2. Create packs/devflow/mod-devflow-tail/scripts/pick-one.ts, the thin entry of D6.
+      3. packs/devflow/mod-devflow-tail/commands/review.md line 8: the D5 wording change.
+      4. packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml: load-plan's output_format gains
          `review_model`, and the `tail` include gains the `with:` of D5.
-      5. Fixtures. Do not edit any workflow YAML other than devflow-tail and devflow-deliver.
+      5. Fixtures. Do not edit any workflow YAML other than mod-devflow-tail and mod-devflow-deliver.
          - The 17 fixtures that have a top-level `review:` stub, listed by
            `grep -ln "^review:" packs/devflow/*/fixtures/*.yaml`, get two edits each:
            a. directly before the `review:` line, a `review-large:` stub whose body is a copy of
@@ -838,10 +838,10 @@ phases:
               `ship__tail__review-tier: '{"model":"large"}'` in the two packs/devflow/devflow-audit/fixtures/
               files. Included top-level nodes are renamed `<include id>__<id>`; loop-body nodes such
               as `review-large` keep their ids.
-         - Both packs/devflow/devflow-deliver/fixtures files also get `review_model: large` as the
+         - Both packs/devflow/mod-devflow-deliver/fixtures files also get `review_model: large` as the
            last key of the `load-plan:` stub.
          - No other fixture changes. Exec-code fixtures get the same stubs (stubs win over real code).
-         - New packs/devflow/devflow-deliver/fixtures/medium-review.stubs.yaml: start from the edited
+         - New packs/devflow/mod-devflow-deliver/fixtures/medium-review.stubs.yaml: start from the edited
            happy-path.stubs.yaml; put `exec-code: true` as its first key (before `fixture:`); make the
            first comment line `# The plan's review_model is medium: only the medium review runs.`;
            set `review_model: medium` in the load-plan stub; rename the `review:` stub key to
@@ -854,11 +854,11 @@ phases:
       'review-large'" (the routing is wrong), or if any fixture still fails after these exact edits:
       do not invent other stub changes and never edit an includer's workflow YAML.
     acceptance:
-      - 'scripts/test-devflow-pack.sh ends with "0 failed" and shows devflow-deliver/fixtures/medium-review.stubs.yaml with "Simulation outcome: completed"'
-      - 'grep -n "default: large" packs/devflow/devflow-tail/devflow-tail.yaml prints the review_model input'
-      - 'grep -n ''review_model: "$load-plan.output.review_model"'' packs/devflow/devflow-deliver/devflow-deliver.yaml prints one line'
-      - 'git diff --name-only <this phase''s base commit> HEAD -- ''packs/devflow/*/*.yaml'' lists only packs/devflow/devflow-tail/devflow-tail.yaml and packs/devflow/devflow-deliver/devflow-deliver.yaml'
-      - 'grep -n "Opus" packs/devflow/devflow-tail/commands/review.md prints nothing'
+      - 'scripts/test-devflow-pack.sh ends with "0 failed" and shows mod-devflow-deliver/fixtures/medium-review.stubs.yaml with "Simulation outcome: completed"'
+      - 'grep -n "default: large" packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml prints the review_model input'
+      - 'grep -n ''review_model: "$load-plan.output.review_model"'' packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml prints one line'
+      - 'git diff --name-only <this phase''s base commit> HEAD -- ''packs/devflow/*/*.yaml'' lists only packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml and packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml'
+      - 'grep -n "Opus" packs/devflow/mod-devflow-tail/commands/review.md prints nothing'
 
   - id: p5-refine-validation
     title: devflow-refine gets the same models, validation loop and rules
@@ -906,14 +906,14 @@ phases:
       1. packs/devflow/README.md: make exactly the D10 edits (the includer list, devflow-plan steps 1-5
          with the new Validate step 3, the paragraph after the steps, devflow-refine step 3).
       2. Check every statement the edits make against the merged code: tiers in
-         devflow-plan.yaml/devflow-refine.yaml, the 3-round loop, devflow-tail's default, and the
-         includer list (grep -rn "include: devflow-tail" packs/devflow).
+         devflow-plan.yaml/devflow-refine.yaml, the 3-round loop, mod-devflow-tail's default, and the
+         includer list (grep -rn "include: mod-devflow-tail" packs/devflow).
       3. Run scripts/test-render-run.sh and scripts/test-devflow-pack.sh.
       Stop with status=blocked if the code contradicts a D10 sentence: report the difference and do
       not reword around it.
     acceptance:
       - 'grep -n "large tier" packs/devflow/README.md shows only the Validate step'
       - 'grep -n "Phases and models" packs/devflow/README.md prints one line'
-      - 'grep -n "devflow-config" packs/devflow/README.md includes the devflow-tail includer sentence'
+      - 'grep -n "devflow-config" packs/devflow/README.md includes the mod-devflow-tail includer sentence'
       - 'scripts/test-render-run.sh and scripts/test-devflow-pack.sh both pass'
 ```
