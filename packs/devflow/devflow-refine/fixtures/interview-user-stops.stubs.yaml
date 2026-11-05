@@ -1,0 +1,30 @@
+# RED: the user's answer says stop; the run is cancelled and the published plan is unchanged.
+fixture:
+  expect: cancelled
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+load:
+  slug: x
+  branch: feat/x
+  title: X
+  plan_commit: abc
+  started: false
+  reason: ""
+  refusal: ""
+  work: split p2
+ask:
+  text: "x"
+draft:
+  status: stop
+  question: ""
+  why_no_more: ""
+challenge:
+  question: ""
+  reason: none
+next:
+  done: true
+  stop: true
+  question: ""
