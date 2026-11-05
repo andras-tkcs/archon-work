@@ -1,7 +1,7 @@
 name: mod-devflow-tail
 description: |
   Building block, not a workflow to run alone. The delivery tail every devflow workflow shares:
-  Opus review with fix rounds until no blocking finding is left, the non-blocking findings fixed
+  a review (large tier unless the includer passes `review_model: medium`) with fix rounds until no blocking finding is left, the non-blocking findings fixed
   or declined, the definition of done (verify.dod), one ready PR, then a watch that hands
   conflicts, red checks and review threads to a steward until a person merges or closes it.
   Never merges.
@@ -10,12 +10,30 @@ description: |
   the including workflow writes before it starts; the branch is committed and the tree clean.
 model: large
 returns: finish
+inputs:
+  review_model:
+    default: large
+    description: The tier of the final review, medium or large. mod-devflow-deliver passes the plan's review_model; the other includers keep the default.
 
 nodes:
-  # ---- 3 + 4. review (Opus, fresh) and fix the blocking findings, until none are left ------
+  - id: review-tier
+    bash: |
+      m=$INPUTS.review_model
+      case "$m" in
+        medium|large) printf '{"model":"%s"}\n' "$m" ;;
+        *) echo "devflow: review_model must be medium or large, not '$m'" >&2; exit 1 ;;
+      esac
+    output_format:
+      type: object
+      properties:
+        model: { type: string }
+      required: [model]
+
+  # ---- 3 + 4. review (fresh) and fix the blocking findings, until none are left ------
   # Each round fixes what the previous review found, then reviews again, so the loop's output
   # is always the latest review's verdict; review-gate reads it after the loop.
   - id: review-loop
+    depends_on: [review-tier]
     loop_group:
       nodes:
         - id: fix-blocking
@@ -23,13 +41,14 @@ nodes:
           command: fix-blocking
           model: medium
           context: fresh
-        - id: review
+        - id: review-medium
           depends_on: [fix-blocking]
           trigger_rule: all_done
+          when: "$review-tier.output.model == 'medium'"
           command: review
-          model: large
+          model: medium
           context: fresh
-          output_format:
+          output_format: &review_out
             type: object
             properties:
               verdict: { type: string, enum: [approve, changes] }
@@ -37,6 +56,23 @@ nodes:
               non_blocking: { type: integer }
               head: { type: string }
             required: [verdict, blocking, non_blocking, head]
+        - id: review-large
+          depends_on: [fix-blocking]
+          trigger_rule: all_done
+          when: "$review-tier.output.model == 'large'"
+          command: review
+          model: large
+          context: fresh
+          output_format: *review_out
+        - id: review
+          depends_on: [review-medium, review-large]
+          trigger_rule: one_success
+          script: pick-one
+          runtime: bun
+          with:
+            medium: { from: "$review-medium.output", if_skipped: "" }
+            large: { from: "$review-large.output", if_skipped: "" }
+          output_format: *review_out
       until_bash: 'b=$review.output.blocking; [ "$b" -eq 0 ]'
       max_iterations: 3
 

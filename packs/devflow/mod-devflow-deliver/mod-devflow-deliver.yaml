@@ -65,7 +65,8 @@ nodes:
         branch: { type: string }
         title: { type: string }
         done: { type: boolean }
-      required: [slug, branch, title, done]
+        review_model: { type: string }
+      required: [slug, branch, title, done, review_model]
 
   - id: fast-loop
     depends_on: [load-plan]
@@ -109,3 +110,5 @@ nodes:
   - id: tail
     include: mod-devflow-tail
     depends_on: [gate-build]
+    with:
+      review_model: "$load-plan.output.review_model"
