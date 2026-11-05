@@ -1,4 +1,4 @@
 .env
 *.env
-.archon/
- 
+.archon/*
+!.archon/config.yaml
