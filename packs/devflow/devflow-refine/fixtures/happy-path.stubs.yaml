@@ -1,0 +1,47 @@
+# GREEN: the plan loads, the interview ends at once, the refined plan is rendered and republished.
+fixture:
+  expect: completed
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+load:
+  slug: x
+  branch: feat/x
+  title: X
+  plan_commit: abc
+  started: false
+  reason: ""
+  refusal: ""
+  work: split p2
+ask:
+  text: "x"
+draft:
+  status: done
+  question: ""
+  why_no_more: all settled
+challenge:
+  question: ""
+  reason: none
+next:
+  done: true
+  stop: false
+  question: ""
+finalize:
+  scope: large
+  slug: x
+  branch: feat/x
+  title: X
+  prerequisites: true
+  after: false
+render:
+  workflow: devflow-run-x
+  file: /stub/x.yaml
+  waves: 2
+publish:
+  commit: abc
+  workflow: devflow-run-x
+  message: ok
+still-unstarted:
+  ok: true
