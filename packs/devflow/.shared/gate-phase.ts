@@ -1,4 +1,4 @@
-// The deterministic gate at the end of a devflow-phase child run. A phase that was already merged
+// The deterministic gate at the end of a mod-devflow-phase child run. A phase that was already merged
 // on the base passes untouched; otherwise it fails when the implementer stopped as blocked (its
 // reason is in $ARTIFACTS_DIR/blocked.md), when the last fast checks were red, when the worktree is
 // dirty, or when nothing was committed beyond the base.

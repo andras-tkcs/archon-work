@@ -1,6 +1,6 @@
-name: devflow-phase
+name: mod-devflow-phase
 description: |
-  Building block, started by a devflow-run-<slug> workflow; not run on its own.
+  Internal building block (mod-), started by a devflow-run-<slug> workflow; never start it yourself.
 
   Implements one phase of a published plan in its own worktree: it reads the plan, resets the
   worktree to the base the parent hands over, implements the phase with fast checks after each

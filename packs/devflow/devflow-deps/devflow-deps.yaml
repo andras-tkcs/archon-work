@@ -9,7 +9,7 @@ description: |
      read back; an item gets at most two attempts and is then handed to a person with the evidence.
   2. GitHub vulnerability findings (Dependabot alerts and open code scanning alerts) that no pull
      request covers are fixed on a new branch and taken through the shared review, definition of
-     done and PR (devflow-tail) like any other change.
+     done and PR (mod-devflow-tail) like any other change.
 
   Merging is never done here, and alerts are never dismissed: both stay with a person. The steward
   policy says not to follow Dependabot PRs unless the maintainer asks; running this workflow is that ask.
@@ -236,7 +236,7 @@ nodes:
       phases: none
 
   - id: tail
-    include: devflow-tail
+    include: mod-devflow-tail
     depends_on: [gate-build]
 
   - id: report
