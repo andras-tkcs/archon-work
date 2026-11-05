@@ -155,6 +155,9 @@ exit
 in without it: `gh auth refresh -s workflow`, then replace the `GH_TOKEN=` line in
 `~/.archon/.env` with the new `gh auth token`.
 
+Then re-run the bootstrap (same command as above). This time it installs the Slack plugin
+if the tokens are set, starts Archon and checks `/api/health`. The summary prints the URL.
+
 ### Admin GitHub identity
 
 The owner/admin login lives in the sealed `ghadmin` user, never in `agent`. As root:
@@ -173,9 +176,6 @@ gh-baseline audit YOUR_ORG --all --policy ~/policy.json
 this repo. Run `gh-baseline audit` / `apply` by hand; nothing runs it on a schedule.
 `devflow-config` lists settings gaps with the `gh-baseline apply … --only <ID>` line to run
 here.
-
-Then re-run the bootstrap (same command as above). This time it installs the Slack plugin
-if the tokens are set, starts Archon and checks `/api/health`. The summary prints the URL.
 
 ### Check it works
 1. On the iPad (Tailscale on): open `https://<TS_HOSTNAME>.<tailnet>.ts.net`, add a
