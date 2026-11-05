@@ -66,7 +66,7 @@ if (!pack) {
   if (!m) {
     fail(`the run's workflow '${wfName}' is not from an installed pack; start the workflow with --input pack=<owner>/devflow`);
   }
-  pack = m![1];
+  pack = m[1];
 }
 const missing = ["mod-devflow-phase", "mod-devflow-deliver"].map((n) => `${pack}:${n}`).filter((n) => !names.includes(n));
 if (missing.length) {
