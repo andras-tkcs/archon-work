@@ -40,6 +40,11 @@ check:
   unavailable: []
   report: /stub/verify-fast.md
 ship__gate-build: '{"commits":2,"phases":1,"head":"abc"}'
+review-large:
+  verdict: approve
+  blocking: 0
+  non_blocking: 1
+  head: abc
 review:
   verdict: approve
   blocking: 0
@@ -67,3 +72,4 @@ ship__tail__finish:
   merged: true
   state: MERGED
   url: https://github.com/example/project/pull/1100
+ship__tail__review-tier: '{"model":"large"}'
