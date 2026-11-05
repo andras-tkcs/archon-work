@@ -6,8 +6,8 @@
   "compatibility": { "archon": ">=0.13.0" },
   "entrypoints": {
     "devflow-plan": "devflow-plan/devflow-plan.yaml",
-    "devflow-phase": "devflow-phase/devflow-phase.yaml",
-    "devflow-deliver": "devflow-deliver/devflow-deliver.yaml",
+    "mod-devflow-phase": "mod-devflow-phase/mod-devflow-phase.yaml",
+    "mod-devflow-deliver": "mod-devflow-deliver/mod-devflow-deliver.yaml",
     "devflow-quick": "devflow-quick/devflow-quick.yaml",
     "devflow-docs": "devflow-docs/devflow-docs.yaml",
     "devflow-audit": "devflow-audit/devflow-audit.yaml",

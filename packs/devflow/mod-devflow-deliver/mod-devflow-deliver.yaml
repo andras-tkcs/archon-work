@@ -1,6 +1,6 @@
-name: devflow-deliver
+name: mod-devflow-deliver
 description: |
-  Building block, started by a devflow-run-<slug> workflow; not run on its own.
+  Internal building block (mod-), started by a devflow-run-<slug> workflow; never start it yourself.
 
   Delivers a published plan after its phases are merged: it fixes red fast checks on the
   feature branch, checks the build gate, then runs the shared tail (review, fixes, definition
@@ -107,5 +107,5 @@ nodes:
       phases: plan
 
   - id: tail
-    include: devflow-tail
+    include: mod-devflow-tail
     depends_on: [gate-build]

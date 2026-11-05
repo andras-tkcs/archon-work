@@ -1,6 +1,6 @@
 # devflow pack for Archon
 
-Six workflows (and the building blocks devflow-phase and devflow-deliver) built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
+Six workflows (and the building blocks mod-devflow-phase and mod-devflow-deliver) built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
 for any repository that has a devflow profile (`.claude/toolkit.yaml`). The pack holds no project
 facts: branch rules, checks, docs to read, changelog and CI come from the profile, and the project's
 environment comes from its own SessionStart hook.
@@ -23,9 +23,9 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 | `devflow-config` | Review a repo's rulesets, Actions, access and security settings and workflow files; apply what you approve | Choosing which settings changes to apply (needs an admin token) |
 | `devflow-deps` | Repair and push Dependabot PRs; fix vulnerability alerts no PR covers | Never; PRs it cannot fix are handed to a person with the evidence |
 
-`devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch). It is
-included by `devflow-quick`, `devflow-docs`, `devflow-audit-fix` (which `devflow-audit` includes) and
-`devflow-deliver`, and is not run on its own. `devflow-phase` and `devflow-deliver` are building
+`mod-devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch). It is
+included by `devflow-quick`, `devflow-docs`, `mod-devflow-audit-fix` (which `devflow-audit` includes) and
+`mod-devflow-deliver`, and is not run on its own. `mod-devflow-phase` and `mod-devflow-deliver` are building
 blocks too: a generated `devflow-run-<slug>` workflow starts them. No workflow merges.
 
 ## Run it
@@ -80,7 +80,7 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
    where and how to start the workflow. The run does not run `archon workflow sync`; you do.
 
 Then run `devflow-run-<slug>`. It implements the phases up to three at a time, each as a
-`devflow-phase` child run in its own worktree, merged by SHA; then `devflow-deliver` runs the
+`mod-devflow-phase` child run in its own worktree, merged by SHA; then `mod-devflow-deliver` runs the
 fast-check fixes and the build gate, and the shared tail (review, fixes, definition of done, one PR,
 a watch every 10 minutes that hands conflicts, red checks and review threads to a steward session)
 follows. The run ends when a person merges or closes the PR. It never merges.
@@ -128,7 +128,7 @@ With two devflow packs installed, `render` needs `--input pack=<owner>/devflow`.
   there is one, documented commands, links, changelog coverage). The fixes become `work.md`; what is a
   product or wording decision goes to the PR's "Needs a person" section instead of into edits.
 - **devflow-audit** runs an auditor, then a fresh verifier that tries to disprove every finding and
-  decides fix, not doing or needs a decision, then includes `devflow-audit-fix`, a confidential
+  decides fix, not doing or needs a decision, then includes `mod-devflow-audit-fix`, a confidential
   one-run plan and implementation, with the surviving findings as the work. The findings never leave the run's artifacts: no issue, and the PR names the class of
   fix, not how to attack it.
 - **devflow-config** snapshots the repository's configuration through the GitHub API (read-only; each

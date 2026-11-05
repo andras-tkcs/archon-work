@@ -258,5 +258,5 @@ nodes:
       phases: none
 
   - id: tail
-    include: devflow-tail
+    include: mod-devflow-tail
     depends_on: [gate-build]

@@ -1,5 +1,5 @@
 // Renders the devflow-run-<slug> workflow that runs a published plan's phases (up to 3 at a time, each
-// in its own worktree) and then hands over to devflow-deliver. A pure function plus a small CLI for tests.
+// in its own worktree) and then hands over to mod-devflow-deliver. A pure function plus a small CLI for tests.
 import { readFileSync } from "node:fs";
 
 export interface Phase {
@@ -80,7 +80,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
     description: [
       `Implementation of the devflow plan ${o.slug} ("${safe(o.title)}") from run ${o.sourceRun ?? ""}.`,
       `The plan is ${planPath} on the ${o.plansRef} branch.`,
-      `Phases run up to 3 at a time in their own worktrees, then ${o.pack}:devflow-deliver reviews, opens the PR and watches it.`,
+      `Phases run up to 3 at a time in their own worktrees, then ${o.pack}:mod-devflow-deliver reviews, opens the PR and watches it.`,
     ].join("\n"),
     worktree: { enabled: true },
     returns: "result",
@@ -220,7 +220,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
     for (const p of wave) {
       nodes.push({
         id: `phase-${p.id}`,
-        workflow: `${o.pack}:devflow-phase`,
+        workflow: `${o.pack}:mod-devflow-phase`,
         isolation: "worktree",
         depends_on: [k === 1 ? "start" : `merge-${k - 1}`],
         with: {
@@ -256,7 +256,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
   if (o.after !== null) deps.push("after-steps");
   nodes.push({
     id: "deliver",
-    workflow: `${o.pack}:devflow-deliver`,
+    workflow: `${o.pack}:mod-devflow-deliver`,
     depends_on: deps,
     with: {
       plan_ref: o.plansRef,

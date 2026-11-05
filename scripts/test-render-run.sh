@@ -37,14 +37,16 @@ const [wide, serial] = process.argv.slice(1).map((f) => Bun.YAML.parse(require("
 const eq = (a: unknown, b: unknown, what: string) => { if (JSON.stringify(a) !== JSON.stringify(b)) { console.error(`FAIL ${what}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`); process.exit(1); } };
 const ids = (d: any) => d.nodes.map((n: any) => n.id);
 const node = (d: any, id: string) => d.nodes.find((n: any) => n.id === id);
-eq(ids(wide).sort(), ["phase-p1","phase-p2","phase-p3","phase-p4","phase-p5","start","merge-1","merge-2","deliver","result","prerequisites","stop-at-prerequisites","after-steps"].sort(), "three-wide node ids");
+eq(ids(wide).sort(), ["phase-p1","phase-p2","phase-p3","phase-p4","phase-p5","start","merge-1","merge-2","deliver","result","prerequisites","stop-at-prerequisites","after-steps","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "three-wide node ids");
 for (const p of ["p1","p2","p3"]) eq(node(wide, `phase-${p}`).depends_on, ["start"], `phase-${p} deps`);
 for (const p of ["p4","p5"]) eq(node(wide, `phase-${p}`).depends_on, ["merge-1"], `phase-${p} deps`);
 for (const p of ["p1","p2","p3","p4","p5"]) eq(node(wide, `phase-${p}`).isolation, "worktree", `phase-${p} isolation`);
+eq(node(wide,"phase-p1").workflow, "test/devflow:mod-devflow-phase", "phase workflow");
+eq(node(wide,"deliver").workflow, "test/devflow:mod-devflow-deliver", "deliver workflow");
 eq(wide.returns, "result", "returns");
 eq(ids(wide).includes("merge-3"), false, "no merge-3");
 if (!node(wide, "merge-1").bash.includes("Merge three-wide p1: it’s ＄x")) { console.error("FAIL title replacement"); process.exit(1); }
-eq(ids(serial).sort(), ["phase-p1","phase-p2","start","merge-1","merge-2","deliver","result"].sort(), "serial node ids");
+eq(ids(serial).sort(), ["phase-p1","phase-p2","start","merge-1","merge-2","deliver","result","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "serial node ids");
 ' "$scratch/three-wide.yaml" "$scratch/serial.yaml"
 echo "structure: ok"
 
