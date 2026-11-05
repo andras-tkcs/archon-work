@@ -1,5 +1,5 @@
 name: devflow-run-devflow-model-tiers
-description: "Implementation of the devflow plan devflow-model-tiers (\"Cheaper planning models, a model per phase, and a sized final review in the devflow pack\") from run 0e4444a6-c83e-45ab-b1fe-53aa37c4971f.\nThe plan is plans/devflow-model-tiers/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
+description: "Implementation of the devflow plan devflow-model-tiers (\"Cheaper planning models, a model per phase, and a sized final review in the devflow pack\") from run 291c0e4e-6cea-469c-8c22-e344e1c7df53.\nThe plan is plans/devflow-model-tiers/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
 worktree:
   enabled: true
 returns: result

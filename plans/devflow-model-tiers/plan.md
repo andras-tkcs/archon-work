@@ -161,7 +161,14 @@ branch `feat/devflow-model-tiers` are unchanged.
    callout right under the plan's title points to them (D7a). If any `render` or
    `validate_manifest` finding remains, the run fails and publishes nothing, as on main: such a plan
    would fail at its first phase. The same applies to devflow-refine.
-6. **The request:** planning runs on medium, the final validation on large, and plan fixes on medium
+6. **Refinement 2, Q2 = A:** no fixture tests "published anyway": the dry run of `archon workflow
+   test` runs a `loop_group` body once, so no fixture can reach check-plan's round-3 branch.
+   devflow-plan keeps one red fixture, `plan-test-never-clears`, rewritten to the hard case
+   (`plan-test` returns a `validate_manifest` finding; `expect: failed`, `fail-node: plan-result`;
+   its comment says the loop ended without a passing test, so nothing is published). There is no
+   `plan-test-hard-never-clears`. The round-3 split stays covered by `scripts/test-render-run.sh`
+   d5 and f. p5 copies that one fixture to devflow-refine.
+7. **The request:** planning runs on medium, the final validation on large, and plan fixes on medium
    ("sonnet"). Phases default to small and escalate to medium or large only with a reason. plan.md
    has a phases/models overview. The final build review is medium or large by size and nature.
 
@@ -644,6 +651,51 @@ Root `README.md` is unchanged: it describes the pack only by link.
   downstream reference (`until_bash`, `review-gate`, `$LOOP_PREV.*`). The picker keeps the ids
   `implement` and `review`.
 
+### Refinement 2: p4 blocked on the "published anyway" fixture
+
+The requested change (the blocked p4 worker's report, its question quoted):
+
+> How should the "published anyway" case be tested in a fixture? Options:
+> (a) stub `plan-check` in the fixture with `{done: true, round: 3, findings: 1}` and also provide a
+>     `tested.json`-free path, e.g. stub `plan-result` too (weakens what the fixture covers; the
+>     check-plan behaviour stays covered by scripts/test-render-run.sh d5);
+> (b) make the simulation carry `LOOP_PREV` (an Archon matter);
+> (c) change `plan-check`'s input so the round does not depend on `$LOOP_PREV`.
+
+The user's answer is decision 6 (refinement 2, Q2 = A). Only p4 step 6, p4's stop condition and
+acceptance, and p5 step 5 and its acceptance change. D1-D10 and every other phase are unchanged.
+
+p4's worker (run 77b77ba4) implemented all of p4 and stopped at its stop condition:
+`plan-test-never-clears.stubs.yaml`, changed to `expect: completed`, still fails in `plan-result`
+(`tested.json does not exist`). Everything else passed (37 of 38 fixtures, `check-plan: ok`,
+`publish-plan unresolved: ok`).
+
+Checked by instrumenting `check-plan.ts` in a scratch copy of the pack on main and running
+`archon workflow test devflow-plan` (Archon 0.13.4): in the dry run, **a `loop_group` body runs
+exactly once**. `check-plan` is called a single time, with an empty `round` input, so it computes
+round 1, prints `done:false`, the loop ends, and `plan-result` fails. The worker's guess
+("`$LOOP_PREV` is not carried") is the visible symptom, not the cause: there is no second
+iteration to carry it to. The run log agrees ("Loop-group node 'build' completed after 1
+iteration"). Consequences:
+
+- No fixture can reach check-plan's round-3 branch. The fixture on main (`fail-node:
+  plan-result`) never exercised check-plan's round-3 failure either; it tests "the loop ended
+  without `tested.json`, so nothing is published".
+- Option (c) of the worker (feed the round differently) cannot help: there is one iteration
+  whatever the input. Option (b) is a change to Archon, outside this repository.
+- The round-3 split itself (review-only findings publish, render/validator findings fail) is
+  covered by `scripts/test-render-run.sh` d5 cases (a) and (b), and the plan.md annotation by f.
+  Those passed in the worker's run.
+- The other loop fixtures of the pack (`review-never-clears`, `dod-stays-red`, `fast-stays-red`)
+  likewise model the loop's end state with stubs in one iteration.
+
+State of the feature branch: `feat/devflow-model-tiers` holds p1 (merged, `d4444db`). p4's step 0
+(the script move) was committed only on p4's own phase branch, so p4 starts again from the feature
+branch and does step 0 again. The worker's full p4 diff is
+`artifacts/runs/77b77ba4-4ca7-46dc-a2ad-2d6c89bede47/p4-wip.patch`; the plan does not depend on it.
+
+p4 step 6 and p5 step 5 follow decision 6 (refinement 2, Q2 = A).
+
 ### Refinement notes for the phases (folded into the briefs)
 
 - p1 (renderer): the new test block is `# d6. model keys are required`, after the `d5` block
@@ -651,7 +703,7 @@ Root `README.md` is unchanged: it describes the pack only by link.
   becomes an `ok:false` finding that `finalize` can fix; no change to render-plan.ts is needed.
   test-plan's dry run stubs the child workflows, so it is not affected by D4/D5.
 - p4 (devflow-plan): D1's model changes, review-plan.md (D7), D7a in check-plan.ts and
-  publish-plan.ts, draft/challenge/finalize (D8), and the `plan-test-never-clears` fixture split.
+  publish-plan.ts, draft/challenge/finalize (D8), and the rewrite of the `plan-test-never-clears` fixture to the hard case (decision 6).
   It touches `scripts/test-render-run.sh` like p1, so it depends on p1.
 - p4 moves test-plan/check-plan/plan-result to `.shared/` with devflow-plan's thin entries (step
   0, before its check-plan change), so p5 stays within M.
@@ -723,6 +775,38 @@ not a step of this plan.
   the Risks section lands before the manifest, and removes unresolved.md before section g.
 - **Default taken:** publish-plan creates `## Risks and open questions` if a plan lacks it, before
   `## Assumptions` (else before `## Implementation manifest`).
+- **From refinement 2's interview, "Why no more questions":** the change is limited to how p4 and
+  p5 test the "published anyway" case (decision 6): one red fixture, `plan-test-never-clears`,
+  rewritten to the hard `validate_manifest` case, no `plan-test-hard-never-clears`, no green
+  "published anyway" fixture. Behaviour is unchanged: decision 5 stays as it is, and the dry-run
+  limit (one `loop_group` iteration, checked on Archon 0.13.4) leaves `scripts/test-render-run.sh`
+  d5/f as the only place the round-3 split can be tested. The fixture name stays as on main, and
+  the plan gives both comment lines word for word. No data or schema change (the stub shapes are
+  the ones main's fixtures use), no security impact, no prerequisites (p4 does step 0 again from the
+  feature branch and does not use the earlier worker's patch), and no new after-merge steps (option
+  C, an Archon change, was rejected, so nothing waits on Archon).
+- **The rewritten red fixture fails somewhere other than `plan-result`:** with `plan-test` returning
+  `ok: false`, `plan-review` is skipped by its `when:`, the real `check-plan` (exec-code) writes
+  `test-findings.md` and prints `done:false`, the one dry-run iteration ends, and `plan-result`
+  fails on the missing `tested.json`. If the simulation fails in another node, or completes, p4's
+  brief is wrong: stop with `status=blocked`.
+- **The feature branch's base is older than main.** `feat/devflow-model-tiers` was cut at
+  `7d875ea` (PR #22). It does not have PR #23 (`scripts/test-admin-tools.sh`, devflow-config's
+  include moved to l.181) or PR #24 (the `pack` default in `render-plan.ts`). The missing
+  `scripts/test-admin-tools.sh` in `verify.fast` is that gap, not something a phase broke. It is
+  out of this plan's scope, and no phase creates or edits it. The line numbers in "What moved on
+  main" are main's. On the feature branch, find the lines by the quoted text. p3's fixture edits
+  do not depend on either PR.
+- **Refinement 2's plan review:** it found nothing blocking. Applied: p4 step 6 gives the exact
+  `plan-test` block, p4 and p5 check that the `plan-review` stub is gone and that `fail-node` is
+  kept, p5 names the target fixture file and gets the same stop condition as p4, and p3's
+  `git diff` acceptance diffs against `git merge-base feat/devflow-model-tiers HEAD` (the base
+  of the phase) instead of origin/main. Kept as it is: the acceptance string "Simulation outcome:
+  failed". `scripts/test-devflow-pack.sh` prints it, and the acceptance also requires "0 failed",
+  which covers the declared `fail-node`.
+- **Earlier work on phase branches:** the blocked run also left p2 and p3 commits (`307ca4b`,
+  `860661d`) on their own child branches. They were not merged into the feature branch. This plan
+  does not depend on them: p2 and p3 run again from the feature branch as their briefs say.
 
 ## Implementation manifest
 
@@ -863,24 +947,28 @@ phases:
            `rm -f "$pub_art/unresolved.md"` (section g publishes again and must not get the
            callout). End with `echo "publish-plan unresolved: ok"`.
       6. Fixtures in packs/devflow/devflow-plan/fixtures/:
-         - plan-test-never-clears.stubs.yaml: first comment line becomes
-           `# The reviewer keeps finding a problem; after two fix rounds the plan is published anyway, with the findings recorded.`,
-           and `fixture:` becomes `expect: completed` with no `fail-node`. Nothing else changes.
-         - New plan-test-hard-never-clears.stubs.yaml: a copy of the original
-           plan-test-never-clears.stubs.yaml as it is on main (`expect: failed`,
-           `fail-node: plan-result`), whose first comment line is
-           `# RED: the manifest validator keeps rejecting the plan; after two fix rounds the run fails and nothing is published.`,
-           with `plan-test: {ok: false, findings: [{id: T1, source: validate_manifest, kind: mechanical, phase: "", problem: stub, fix: stub}]}`
-           (block YAML like the others) and no `plan-review` stub (it is skipped when plan-test is
-           not ok). If the simulation fails in another node than plan-result, stop with
-           status=blocked.
+         - plan-test-never-clears.stubs.yaml (decision 6): the first comment line becomes
+           `# RED: the manifest validator keeps rejecting the plan; the loop ends without a passing test, so the run fails and nothing is published.`,
+           followed by a second comment line
+           `# The dry run runs plan-loop once, so check-plan's round-3 split is tested in scripts/test-render-run.sh (d5, f), not here.`.
+           Replace the `plan-test:` stub with exactly these four lines:
+             plan-test:
+               ok: false
+               findings:
+                 - {id: T1, source: validate_manifest, kind: mechanical, phase: "", problem: stub, fix: stub}
+           and delete the `plan-review:` stub with its lines (the node is skipped when plan-test
+           is not ok). `fixture:` stays `expect: failed`, `fail-node: plan-result`.
+           Nothing else changes. Do not add a `plan-test-hard-never-clears` fixture or any other
+           fixture for the "published anyway" case.
          - happy-path, interview-done and interview-user-stops: unchanged.
       7. Run scripts/test-render-run.sh and scripts/test-devflow-pack.sh.
-      Stop with status=blocked if plan-test-never-clears does not complete, or if
-      plan-test-hard-never-clears does not fail: do not change the loop or add a node to make it pass.
+      Stop with status=blocked if the simulation of plan-test-never-clears completes, or fails in
+      a node other than plan-result. Do not change the loop, add a node, change `expect` or
+      `fail-node`, or add a fixture.
     acceptance:
       - 'ls packs/devflow/.shared/test-plan.ts packs/devflow/.shared/check-plan.ts packs/devflow/.shared/plan-result.ts succeeds, and wc -l packs/devflow/devflow-plan/scripts/{test-plan,check-plan,plan-result}.ts prints 2 for each'
-      - 'scripts/test-devflow-pack.sh ends with "0 failed" and lists devflow-plan/fixtures/plan-test-never-clears.stubs.yaml with "Simulation outcome: completed" and plan-test-hard-never-clears.stubs.yaml with "Simulation outcome: failed"'
+      - 'scripts/test-devflow-pack.sh ends with "0 failed" and lists devflow-plan/fixtures/plan-test-never-clears.stubs.yaml with "Simulation outcome: failed"; ls packs/devflow/devflow-plan/fixtures/plan-test-hard-never-clears.stubs.yaml fails, and grep -c "validate_manifest" packs/devflow/devflow-plan/fixtures/plan-test-never-clears.stubs.yaml prints 1'
+      - 'grep -c "^plan-review:" packs/devflow/devflow-plan/fixtures/plan-test-never-clears.stubs.yaml prints 0, and grep -c "fail-node: plan-result" on the same file prints 1'
       - 'scripts/test-render-run.sh prints "check-plan: ok" and "publish-plan unresolved: ok" and ends with "test-render-run: all ok"'
       - 'grep -n "model:" packs/devflow/devflow-plan/devflow-plan.yaml shows medium for the workflow, draft, challenge and finalize, and large only for plan-review'
       - 'for f in draft finalize review-plan; do sed -n ''/^## Models: the smallest model for each phase$/,/^   then the line/p'' packs/devflow/devflow-plan/commands/$f.md | md5sum; done prints the same hash three times, and the extracted text is non-empty'
@@ -981,7 +1069,7 @@ phases:
       - 'scripts/test-devflow-pack.sh ends with "0 failed" and shows mod-devflow-deliver/fixtures/medium-review.stubs.yaml and devflow-quick/fixtures/default-review-tier.stubs.yaml with "Simulation outcome: completed"'
       - 'grep -n "default: large" packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml prints the review_model input'
       - 'grep -n ''review_model: "$load-plan.output.review_model"'' packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml prints one line'
-      - 'git diff --name-only "$(git merge-base origin/main HEAD)" HEAD -- '':(glob)packs/devflow/*/*.yaml'' lists only packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml and packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml'
+      - 'git diff --name-only "$(git merge-base feat/devflow-model-tiers HEAD)" HEAD -- '':(glob)packs/devflow/*/*.yaml'' lists only packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml and packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml'
       - 'grep -n "Opus" packs/devflow/mod-devflow-tail/commands/review.md prints nothing'
 
   - id: p5-refine-validation
@@ -1019,14 +1107,19 @@ phases:
          packs/devflow/devflow-plan/commands/draft.md so it is byte-identical.
       5. Fixtures in packs/devflow/devflow-refine/fixtures/: in happy-path.stubs.yaml, replace the
          `render:` stub by devflow-plan happy-path's `render`, `plan-test`, `plan-review`,
-         `plan-check` and `plan-result` stubs. Add copies of devflow-plan's (p4-edited)
-         plan-test-never-clears and plan-test-hard-never-clears, each with devflow-refine
+         `plan-check` and `plan-result` stubs. Add
+         packs/devflow/devflow-refine/fixtures/plan-test-never-clears.stubs.yaml, a copy of
+         devflow-plan's (p4-edited) plan-test-never-clears (the only plan-loop red fixture,
+         decision 6), with devflow-refine
          happy-path's `load:` and `still-unstarted:` stubs added after `setup:` and at the end,
-         and with the first comment line kept.
+         and with both comment lines kept. No fixture for the "published anyway" case.
          interview-user-stops and refuse-started are unchanged.
       6. Run scripts/test-render-run.sh and scripts/test-devflow-pack.sh.
       Stop with status=blocked if a copied command or node does not fit devflow-refine (it names
-      devflow-plan, or reads a node devflow-refine does not have).
+      devflow-plan, or reads a node devflow-refine does not have). Stop with status=blocked if
+      devflow-refine's plan-test-never-clears completes or fails in a node other than plan-result:
+      plan-result or still-unstarted is wired wrong. Do not edit its stubs, `expect` or
+      `fail-node` to make it fail there.
     acceptance:
       - 'cmp packs/devflow/devflow-plan/commands/review-plan.md packs/devflow/devflow-refine/commands/review-plan.md exits 0'
       - 'for f in devflow-plan/commands/draft devflow-refine/commands/draft devflow-refine/commands/finalize devflow-refine/commands/review-plan; do sed -n ''/^## Models: the smallest model for each phase$/,/^   then the line/p'' packs/devflow/$f.md | md5sum; done prints the same hash four times, and the extracted text is non-empty'
@@ -1034,7 +1127,9 @@ phases:
       - 'ls packs/devflow/.shared/test-plan.ts packs/devflow/.shared/check-plan.ts packs/devflow/.shared/plan-result.ts succeeds, and wc -l on their thin entries in devflow-plan/scripts and devflow-refine/scripts prints 2 for each'
       - 'grep -rn "Opus" packs/devflow/devflow-refine/commands prints nothing, and grep -c "subagent review too" packs/devflow/devflow-refine/commands/finalize.md prints 0'
       - 'grep -n "^## " packs/devflow/devflow-refine/commands/finalize.md lists Your authority, Inputs from the interview, Fix rounds, Assumptions, Overrides, Files for the person, Models: the smallest model for each phase, Output in that order'
-      - 'scripts/test-render-run.sh ends with "test-render-run: all ok" and scripts/test-devflow-pack.sh ends with "0 failed" with devflow-refine''s plan-test-never-clears completed and plan-test-hard-never-clears failed'
+      - 'scripts/test-render-run.sh ends with "test-render-run: all ok" and scripts/test-devflow-pack.sh ends with "0 failed" with devflow-refine''s plan-test-never-clears failed (in plan-result)'
+      - 'grep -c "validate_manifest" packs/devflow/devflow-refine/fixtures/plan-test-never-clears.stubs.yaml prints 1, and grep -c "fail-node: plan-result" on the same file prints 1'
+      - 'ls packs/devflow/devflow-refine/fixtures lists exactly happy-path.stubs.yaml, interview-user-stops.stubs.yaml, plan-test-never-clears.stubs.yaml and refuse-started.stubs.yaml'
 
   - id: p6-docs-retire
     title: Document the model tiers and retire the plan
