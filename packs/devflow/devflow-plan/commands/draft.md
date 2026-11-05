@@ -12,7 +12,7 @@ The devflow toolkit's `/make-plan` command is the method. Read it in full first:
 `$preflight.output.devflow_root/commands/make-plan.md`. Follow its section 0 (understand the ask,
 read the must-read docs, the steward files and every ADR, decide small or large scope), section 2
 (the plan's sections, the implementation manifest, "Sizing for Sonnet") and section 3 (manual steps
-only at the very beginning and the very end), and the model rules below, with the rules below. Where make-plan.md and this
+only at the very beginning and the very end), with the rules below (the model rules included). Where make-plan.md and this
 file disagree, this file wins. Do not run section 4's review yet: a later step writes the final
 plan.
 
