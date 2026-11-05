@@ -22,6 +22,9 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer, its plan test scripts and its git scripts (needs `archon` and `bun`). |
 | `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
 | `scripts/test-archon-repo-switch.sh` | Tests the bootstrap's helpers that detect and replace plugins left by another Archon repo when `ARCHON_REPO` changes. |
+| `admin/` | The sealed admin user's GitHub baseline tool (`gh-baseline`) and the example policy; the bootstrap downloads them, hash-checked. |
+| `scripts/test-admin-tools.sh` | Tests the admin tool and checks that the hashes in `bootstrap.sh` match `admin/`. |
+| `.github/CODEOWNERS` | Code owners: the admin account reviews admin code, the bootstrap and CI workflows. |
 | `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh` and `scripts/test-render-run.sh`. |
 
 ---
@@ -76,13 +79,14 @@ SSH in as root (from a laptop or an iPad SSH app) and run:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/<tag>/bootstrap.sh \
   | sudo TS_AUTHKEY=tskey-auth-xxxx TS_HOSTNAME=runner1 TS_TAG=tag:runner \
-         GIT_NAME="Your Name" GIT_EMAIL="you@example.com" bash
+         GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
+         BOOTSTRAP_REF=<tag> bash
 ```
 
 It installs base tools, GitHub CLI, Tailscale (with Tailscale SSH), Claude Code, Archon and
 code-server (VS Code in the browser), the devflow toolkit plugins for Claude Code, bun and
 Node.js, and the devflow workflow pack for Archon, turns on unattended upgrades, creates an
-`agent` user (no sudo), registers `archon.service` and `code-server@agent.service`, sets up
+`agent` user (no sudo) and a sealed `ghadmin` user for the admin GitHub login, registers `archon.service` and `code-server@agent.service`, sets up
 the firewall and Tailscale Serve. The Archon service is
 **enabled but not started** until Claude is logged in.
 
@@ -93,6 +97,7 @@ the firewall and Tailscale Serve. The Archon service is
 | `TS_HOSTNAME` | VM hostname | Name in the tailnet / URL |
 | `TS_TAG` | `tag:runner` | Tailscale tag of the machine; must match the policy and the auth key. Re-runs warn if the machine doesn't carry it |
 | `AGENT_USER` | `agent` | User that runs Claude Code + Archon |
+| `ADMIN_USER` | `ghadmin` | Sealed user that holds the admin/owner GitHub login; no password, no SSH, no sudo; `agent` cannot read it |
 | `ARCHON_PORT` | `3090` | |
 | `CODE_SERVER_PORT` | `8080` | Local port of code-server (loopback only); the tailnet URL is always `:8443` |
 | `GIT_NAME`, `GIT_EMAIL` | – | Commit identity for the agents. With GitHub email privacy on, use the noreply address (`<id>+<user>@users.noreply.github.com`, see github.com/settings/emails), otherwise pushes fail with `GH007` |
@@ -101,6 +106,8 @@ the firewall and Tailscale Serve. The Archon service is
 | `REBOOT_TIME` | `03:00` | When that reboot may happen (VM clock: UTC on Hetzner, i.e. 04:00 in Budapest in winter) |
 | `LOCK_SSH_TO_TAILSCALE` | `0` | `1` closes public port 22 |
 | `DEVFLOW_PACK` | `tkcs-lab/archon-work/packs/devflow` | Archon workflow pack to install, `owner/repo/path[@tag]`. Point it at your fork, add `@<tag>` to pin it, or set it empty to install none |
+| `BOOTSTRAP_REPO` | `tkcs-lab/archon-work` | GitHub `owner/repo` this bootstrap comes from; the sealed admin user's tools are downloaded from its `admin/` folder |
+| `BOOTSTRAP_REF` | `main` | The tag or commit in your curl URL; the downloads must match the hashes in `bootstrap.sh`; if it does not match, the admin tools are skipped with a warning |
 
 **Which Archon.** By default the script installs the tkcs-lab fork of Archon
 (`tkcs-lab/Archon`): its binaries download their server, web UI, providers and plugins from
@@ -133,7 +140,7 @@ Variables are not remembered between runs: pass the ones you need each time
 sudo -iu agent
 
 claude                      # choose /login, sign in with your Claude subscription, then /exit
-gh auth login               # GitHub.com → HTTPS → login with browser/device code
+gh auth login --scopes workflow   # GitHub.com → HTTPS → login with browser/device code
 gh auth setup-git
 echo "GH_TOKEN=$(gh auth token)" >> ~/.archon/.env
 
@@ -143,6 +150,29 @@ nano ~/.archon/.env
 
 exit
 ```
+
+`workflow` lets Claude change `.github/workflows/` in a PR (CI files need it). Already logged
+in without it: `gh auth refresh -s workflow`, then replace the `GH_TOKEN=` line in
+`~/.archon/.env` with the new `gh auth token`.
+
+### Admin GitHub identity
+
+The owner/admin login lives in the sealed `ghadmin` user, never in `agent`. As root:
+
+```bash
+sudo -iu ghadmin
+# admin account (NOT the agent's): Settings > Developer settings > Tokens (classic),
+# scopes repo, admin:org, read:org, admin:repo_hook, expiry e.g. 90 days
+gh auth login --with-token               # paste the PAT, then Ctrl-D
+# rotate before it expires: new PAT, same command; then revoke the old one
+cp policy.example.json policy.json       # then edit it for your org
+gh-baseline audit YOUR_ORG --all --policy ~/policy.json
+```
+
+`policy.json` stays on the VM, in `~ghadmin`; only the generic `policy.example.json` is in
+this repo. Run `gh-baseline audit` / `apply` by hand; nothing runs it on a schedule.
+`devflow-config` lists settings gaps with the `gh-baseline apply … --only <ID>` line to run
+here.
 
 Then re-run the bootstrap (same command as above). This time it installs the Slack plugin
 if the tokens are set, starts Archon and checks `/api/health`. The summary prints the URL.
@@ -167,7 +197,8 @@ if the tokens are set, starts Archon and checks `/api/health`. The summary print
   Slack (`/archon …` or `/archon-workflow run …`).
 - **devflow:** in a repository with a devflow profile (`.claude/toolkit.yaml`), run
   `tkcs-lab/devflow:devflow-plan` (or `-refine`, `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
-  issue or the change; see [packs/devflow](packs/devflow/README.md).
+  issue or the change; see [packs/devflow](packs/devflow/README.md). `-config` reviews settings and fixes files by PR;
+  settings changes are for the admin user's `gh-baseline` (see §3 Admin GitHub identity).
 - **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
   runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
   It opens `~agent/.archon/workspaces`, where Archon keeps its clones and worktrees
@@ -235,8 +266,13 @@ More VMs: run the same bootstrap with a different `TS_HOSTNAME`; each runs its o
 - code-server listens on loopback only and has no password: anyone who reaches `:8443`
   through the tailnet gets an editor and a terminal as `agent`. Same trust boundary as Archon.
 - The `agent` user has no sudo; agents run with broad tool permissions inside it.
-- Secrets live only in `~agent/.archon/.env` (mode 600) and Claude's/gh's own credential
-  stores on the VM. Never commit them; `.gitignore` covers `.env` files.
+- Secrets live only in `~agent/.archon/.env` (mode 600), Claude's/gh's own credential
+  stores on the VM, and the admin token in `~ghadmin/.config/gh` (see below). Never commit them; `.gitignore` covers `.env` files.
+- The owner/admin GitHub login lives only in `~ghadmin` (mode 700, no password, no SSH, no
+  sudo); reach it as root with `sudo -iu ghadmin`. `agent` cannot read it. Never put the
+  admin token in `~agent/.archon/.env`.
+- Changes to `admin/`, `bootstrap.sh`, `.github/CODEOWNERS` and `.github/workflows/` need
+  review from the admin account (CODEOWNERS plus the `main` ruleset).
 - `SLACK_ALLOWED_USER_IDS` empty = anyone in the workspace can start agents on your VM.
 - Your Tailscale auth key ends up in shell history when passed on the command line;
   use a one-off key, or prefix the command with a space if `HISTCONTROL=ignorespace`.
