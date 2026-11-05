@@ -2,11 +2,12 @@ name: devflow-plan
 description: |
   The first half of the devflow toolkit's ship workflow: plans only. It interviews you one
   question at a time (the planner asks the most decisive open question, and before it stops a
-  fresh reviewer tries to find one more), writes the plan, tests it (the manifest validator, a dry run of the generated workflow, and a fresh reviewer
-  who checks every phase against the code; up to two fix rounds), publishes the plan and the steps you
-  must do by hand as run artifacts, and publishes a devflow-run-<slug> workflow that
-  implements the plan's phases up to three at a time and then reviews, opens the PR and
-  watches it. Nothing is implemented by this run.
+  fresh reviewer tries to find one more), writes the plan, tests it (the manifest validator, a
+  dry run of the generated workflow, and a fresh reviewer who checks every phase against the
+  code; up to two fix rounds), publishes the plan and the steps you must do by hand as run
+  artifacts, and publishes a devflow-run-<slug> workflow that implements the plan's phases up to
+  three at a time and then reviews, opens the PR and watches it. Nothing is implemented by this
+  run.
 
   Use when: a change should be planned with you in the loop, so you can start its implementation
   when you are ready, "plan this issue with devflow".
