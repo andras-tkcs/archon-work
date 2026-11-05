@@ -1,5 +1,5 @@
 name: devflow-run-devflow-model-tiers
-description: "Implementation of the devflow plan devflow-model-tiers (\"Cheaper planning models, a model per phase, and a sized final review in the devflow pack\") from run 2decf601-17ed-4f4e-8623-28427d3f84b1.\nThe plan is plans/devflow-model-tiers/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
+description: "Implementation of the devflow plan devflow-model-tiers (\"Cheaper planning models, a model per phase, and a sized final review in the devflow pack\") from run 0e4444a6-c83e-45ab-b1fe-53aa37c4971f.\nThe plan is plans/devflow-model-tiers/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
 worktree:
   enabled: true
 returns: result
@@ -66,22 +66,10 @@ nodes:
       plan_commit: $start.output.plan_commit
       phase: p1-manifest-models
       base: $start.output.head
-  - id: phase-p4-plan-validation
-    workflow: tkcs-lab/devflow:mod-devflow-phase
-    isolation: worktree
-    depends_on:
-      - start
-    with:
-      plan_ref: plans
-      plan_path: plans/devflow-model-tiers/plan.md
-      plan_commit: $start.output.plan_commit
-      phase: p4-plan-validation
-      base: $start.output.head
   - id: merge-1
     depends_on:
       - phase-p1-manifest-models
-      - phase-p4-plan-validation
-    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p1-manifest-models.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p1-manifest-models already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-model-tiers p1-manifest-models: Manifest model keys in the renderer and load-plan, and the pick-one script' -m 'Plan-Phase: devflow-model-tiers/p1-manifest-models' || { git merge --abort; echo \"devflow: merging p1-manifest-models conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p4-plan-validation.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p4-plan-validation already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-model-tiers p4-plan-validation: devflow-plan: medium planning, a large validation loop, and the model rules' -m 'Plan-Phase: devflow-model-tiers/p4-plan-validation' || { git merge --abort; echo \"devflow: merging p4-plan-validation conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p1-manifest-models.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p1-manifest-models already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-model-tiers p1-manifest-models: Manifest model keys in the renderer and load-plan, and the pick-one script' -m 'Plan-Phase: devflow-model-tiers/p1-manifest-models' || { git merge --abort; echo \"devflow: merging p1-manifest-models conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
     output_format:
       type: object
       properties:
@@ -89,6 +77,17 @@ nodes:
           type: string
       required:
         - head
+  - id: phase-p4-plan-validation
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-1
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-model-tiers/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p4-plan-validation
+      base: $merge-1.output.head
   - id: phase-p2-phase-routing
     workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
@@ -111,23 +110,34 @@ nodes:
       plan_commit: $start.output.plan_commit
       phase: p3-review-routing
       base: $merge-1.output.head
+  - id: merge-2
+    depends_on:
+      - phase-p4-plan-validation
+      - phase-p2-phase-routing
+      - phase-p3-review-routing
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p4-plan-validation.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p4-plan-validation already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-model-tiers p4-plan-validation: devflow-plan: medium planning, the model rules in the large review, publish with unresolved review findings' -m 'Plan-Phase: devflow-model-tiers/p4-plan-validation' || { git merge --abort; echo \"devflow: merging p4-plan-validation conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p2-phase-routing.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p2-phase-routing already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-model-tiers p2-phase-routing: mod-devflow-phase runs each phase on its manifest model' -m 'Plan-Phase: devflow-model-tiers/p2-phase-routing' || { git merge --abort; echo \"devflow: merging p2-phase-routing conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh3=$phase-p3-review-routing.output.head\nif git merge-base --is-ancestor \"$h3\" HEAD; then echo \"p3-review-routing already merged\" >&2\nelse git merge --no-ff \"$h3\" -m 'Merge devflow-model-tiers p3-review-routing: mod-devflow-tail and mod-devflow-deliver run the final review on the plan’s review model' -m 'Plan-Phase: devflow-model-tiers/p3-review-routing' || { git merge --abort; echo \"devflow: merging p3-review-routing conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
   - id: phase-p5-refine-validation
     workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
-      - merge-1
+      - merge-2
     with:
       plan_ref: plans
       plan_path: plans/devflow-model-tiers/plan.md
       plan_commit: $start.output.plan_commit
       phase: p5-refine-validation
-      base: $merge-1.output.head
-  - id: merge-2
+      base: $merge-2.output.head
+  - id: merge-3
     depends_on:
-      - phase-p2-phase-routing
-      - phase-p3-review-routing
       - phase-p5-refine-validation
-    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p2-phase-routing.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p2-phase-routing already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-model-tiers p2-phase-routing: devflow-phase runs each phase on its manifest model' -m 'Plan-Phase: devflow-model-tiers/p2-phase-routing' || { git merge --abort; echo \"devflow: merging p2-phase-routing conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p3-review-routing.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p3-review-routing already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-model-tiers p3-review-routing: devflow-tail and devflow-deliver run the final review on the plan’s review model' -m 'Plan-Phase: devflow-model-tiers/p3-review-routing' || { git merge --abort; echo \"devflow: merging p3-review-routing conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh3=$phase-p5-refine-validation.output.head\nif git merge-base --is-ancestor \"$h3\" HEAD; then echo \"p5-refine-validation already merged\" >&2\nelse git merge --no-ff \"$h3\" -m 'Merge devflow-model-tiers p5-refine-validation: devflow-refine gets the same models, validation loop and rules' -m 'Plan-Phase: devflow-model-tiers/p5-refine-validation' || { git merge --abort; echo \"devflow: merging p5-refine-validation conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p5-refine-validation.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p5-refine-validation already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-model-tiers p5-refine-validation: devflow-refine gets the same models, validation loop and rules' -m 'Plan-Phase: devflow-model-tiers/p5-refine-validation' || { git merge --abort; echo \"devflow: merging p5-refine-validation conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
     output_format:
       type: object
       properties:
@@ -139,14 +149,14 @@ nodes:
     workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
-      - merge-2
+      - merge-3
     with:
       plan_ref: plans
       plan_path: plans/devflow-model-tiers/plan.md
       plan_commit: $start.output.plan_commit
       phase: p6-docs-retire
-      base: $merge-2.output.head
-  - id: merge-3
+      base: $merge-3.output.head
+  - id: merge-4
     depends_on:
       - phase-p6-docs-retire
     bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p6-docs-retire.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p6-docs-retire already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-model-tiers p6-docs-retire: Document the model tiers and retire the plan' -m 'Plan-Phase: devflow-model-tiers/p6-docs-retire' || { git merge --abort; echo \"devflow: merging p6-docs-retire conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
@@ -160,7 +170,7 @@ nodes:
   - id: deliver
     workflow: tkcs-lab/devflow:mod-devflow-deliver
     depends_on:
-      - merge-3
+      - merge-4
     with:
       plan_ref: plans
       plan_path: plans/devflow-model-tiers/plan.md
@@ -168,7 +178,7 @@ nodes:
       slug: devflow-model-tiers
       branch: feat/devflow-model-tiers
       title: "Cheaper planning models, a model per phase, and a sized final review in the devflow pack"
-      head: $merge-3.output.head
+      head: $merge-4.output.head
   - id: result
     depends_on:
       - deliver

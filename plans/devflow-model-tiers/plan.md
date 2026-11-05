@@ -13,9 +13,10 @@ After this change:
 - plan.md has a **Phases and models** overview table.
 - The final build review in the generated run is **medium** or **large**: large for security-related
   changes, when any phase is on large, or when the plan has 7 or more phases.
-- If the large validation still has blocking findings after its last round, the plan is published
+- If the large-tier review still has findings after its last round, the plan is published
   anyway. The findings go into "Risks and open questions", and a warning at the top of plan.md
-  points to them.
+  points to them. If the renderer or `validate_manifest.py` still rejects the plan, the run fails
+  and publishes nothing, as main does today.
 
 The request (the run's message): "update the devflow-plan skill. it runs with medium model and at the
 end validation runs with large (and plan fixes with sonnet again). the plan must make the
@@ -26,7 +27,54 @@ large depending on the size and the nature (e.g. security related large)". There
 
 ## Current state
 
-All paths are relative to the repository root. `<pack>` is `packs/devflow`.
+All paths are relative to the repository root. `<pack>` is `packs/devflow`. Checked against main
+at `e987eb9` (after PR #22 mod-workflows-plan-test, #23 gh-admin-baseline and #24
+pack-default-from-own-run were merged).
+
+### What moved on main since this plan was written (refinement, 2026-11-05)
+
+- **PR #22 gave devflow-plan a large-tier plan test loop.** `<pack>/devflow-plan/devflow-plan.yaml`
+  now has, after the interview, a `plan-loop` loop (l.117-221, `max_iterations: 3`,
+  `until_bash` on `$plan-check.output.done`) holding `finalize` (`model: large`, l.124-137, it is
+  also the fixer: in rounds 2-3 it reads `test-findings.md` and fixes the plan in place),
+  `render` (`render-run`, `soft_errors: "true"`, plan errors become `{ok:false,error}` output),
+  `plan-test` (`test-plan` script: `validate_manifest.py` and a dry run of the rendered workflow),
+  `plan-review` (`command: review-plan`, `model: large`, `denied_tools: [Write, Edit,
+  NotebookEdit]`, the "executability reviewer") and `plan-check` (`check-plan` script, which
+  writes `tested.json` when there are no findings, else `test-findings.md`). After the loop,
+  `plan-result` (l.223-234) fails unless `tested.json` exists, and `publish` (l.236) depends on it.
+  **When findings remain after round 3, `check-plan.ts` fails the node and nothing is published**
+  (the red fixture `devflow-plan/fixtures/plan-test-never-clears.stubs.yaml`, `fail-node:
+  plan-result`). That was decision D4 of the mod-workflows-plan-test plan: "If findings remain
+  after that, the run fails with them and publishes nothing."
+- So the original D1 (a new `plan-check` loop with `validate-plan`/`fix-plan` after `finalize`,
+  and `render` depending on `settle-plan`) no longer fits: the id `plan-check` is taken, `render`
+  is inside `plan-loop`, and main already has a large validator (`review-plan`) and a fixer
+  (`finalize` in a fix round). D1, D7 and D8 below are rewritten to build on the existing loop.
+- `finalize.md` (devflow-plan) now has `## Fix rounds` (l.34-49) and `## Assumptions` (l.51-58,
+  the section right before the Implementation manifest heading). Its l.1 still says "(Opus)", l.13-16
+  still name the section 4 `Plan` subagent, override 2 (l.69) still says "Run the section 4 `Plan`
+  subagent review too.", and `## Output` (l.97-101) still has the "reviewer's findings" sentence.
+- `review-plan.md` l.1-2: "You are the **executability reviewer** (Opus, a fresh session) for a plan
+  that a Sonnet worker will implement phase by phase." It checks seven points per phase and returns
+  `{clean, summary, findings[{id, source: review, kind: mechanical|open-decision, phase, problem,
+  fix}]}`. It does not check models.
+- **devflow-refine did not get the test loop.** `devflow-refine.yaml` still has a single
+  `finalize` (l.144-159, `model: large`), `render` (l.161-180, no `soft_errors`, output
+  `{workflow, file, waves}`), `still-unstarted` (l.182) and `publish` (l.199). Its scripts are thin
+  entries into `.shared/`; `test-plan.ts`, `check-plan.ts` and `plan-result.ts` live only in
+  `<pack>/devflow-plan/scripts/` with their logic inline.
+- PR #24 only changed the `pack` input default of devflow-plan and devflow-refine
+  (`render-plan.ts`); nothing here depends on it. PR #23 moved devflow-config's
+  `include: mod-devflow-tail` from l.261 to l.181.
+- `grep -ln "^review:" <pack>/*/fixtures/*.yaml` now lists **18** fixtures (was 17), and the pack has
+  35 `*.stubs.yaml` fixtures.
+- `scripts/test-render-run.sh` already uses the section names `d3` (render-run node), `d4`
+  (test-plan) and `d5` (check-plan). The new model-key block is `d6`.
+- `<pack>/README.md`: the mod-devflow-tail includer sentence is now l.30 and still lists four
+  includers; "devflow-plan, step by step" is l.72 and step 1 (l.74) says "(large tier)".
+
+### As it was when the plan was written (line numbers may be stale; the section above wins)
 
 - `<pack>/devflow-plan/devflow-plan.yaml`: workflow `model: large` (l.14). The interview loop's
   `draft` (l.57-59) and `challenge` (l.69-73) nodes are `model: large`. `finalize` (l.115-130) is
@@ -78,12 +126,22 @@ All paths are relative to the repository root. `<pack>` is `packs/devflow`.
     whose validation never clears still completed and published.
 - Tests: `scripts/test-render-run.sh` (renderer, load-plan, publish-plan and load-published, with
   fixtures in `scripts/fixtures/render-run/`) and `scripts/test-devflow-pack.sh` (`archon validate
-  workflows` and every `<pack>/*/fixtures/*.stubs.yaml`; 36 fixtures pass today).
+  workflows` and every `<pack>/*/fixtures/*.stubs.yaml`; 35 fixtures today).
 - The profile (`.claude/toolkit.yaml`) has no `docs.adr_dir` and no `docs.changelog`. Its must-read
   docs are `README.md` and `<pack>/README.md`. `<pack>/README.md` l.72 says the interview runs on
   the "large tier", and l.27-29 list only four of mod-devflow-tail's six includers.
 
 ## Design
+
+### Refinement
+
+The requested change: "main moved since the plan. review and update if needed". Main moved from
+the plan's base to `e987eb9` (PRs #22-#24). Every file this plan touches was re-read against
+`e987eb9`; "What moved on main" under Current state lists what changed. The result: D1, D7, D7a
+and D8 now build on main's existing `plan-loop` (PR #22) instead of adding a loop, devflow-refine
+gets that loop (p5), and the one conflict with main (Q8 against PR #22's fail-and-publish-nothing)
+is settled by refinement Q2 = C (decision 5). Phase ids, the slug `devflow-model-tiers` and the
+branch `feat/devflow-model-tiers` are unchanged.
 
 ### Decisions of the user (interview.md)
 
@@ -96,74 +154,56 @@ All paths are relative to the repository root. `<pack>` is `packs/devflow`.
    phase is on large, or when the plan has **7 or more** phases. Otherwise it is medium.
 4. **Q7 = C:** nothing special is done for `devflow-run-<slug>` workflows rendered before this
    change: no fallback, no blocking path and no README note. See D9 for the effect.
-5. **Q8 = "a but put to the plan page top the highlight":** if blocking findings remain after the
-   last validation round, the plan is still published. The findings go into "Risks and open
-   questions", and a warning callout at the very top of plan.md points to them (D7). The same applies
-   to devflow-refine.
+5. **Q8 = "a but put to the plan page top the highlight", narrowed by refinement Q2 = C:** main
+   (PR #22) fails and publishes nothing when findings remain after round 3. Now: if only
+   `plan-review` findings remain after the last round, the plan is still published. They go into
+   `### Unresolved validation findings` under "Risks and open questions", and a `> [!WARNING]`
+   callout right under the plan's title points to them (D7a). If any `render` or
+   `validate_manifest` finding remains, the run fails and publishes nothing, as on main: such a plan
+   would fail at its first phase. The same applies to devflow-refine.
 6. **The request:** planning runs on medium, the final validation on large, and plan fixes on medium
    ("sonnet"). Phases default to small and escalate to medium or large only with a reason. plan.md
    has a phases/models overview. The final build review is medium or large by size and nature.
 
-### D1. Planning models (devflow-plan and devflow-refine)
+### D1. Planning models (devflow-plan and devflow-refine), on top of main's plan test loop
 
-In both `devflow-plan.yaml` and `devflow-refine.yaml`:
+Main already validates the plan on the large tier (`plan-review`, `review-plan.md`) and lets
+`finalize` fix it in up to two more rounds (see Current state). That is exactly the request's
+shape ("validation runs with large, and plan fixes with sonnet again") once `finalize` runs on
+medium. So no new validation loop is added: the existing one is reused.
+
+In `<pack>/devflow-plan/devflow-plan.yaml`:
 
 - workflow `model: large` → `model: medium`.
-- `draft`: `model: medium`. `challenge`: `model: medium`. `finalize`: `model: medium`.
-- After `finalize`, two new nodes: a loop `plan-check` and a node `settle-plan`. `render` now
-  depends on `settle-plan` instead of `finalize`, and keeps reading `$finalize.output.*`. Insert
-  exactly this before `render` (same indentation as the other top-level nodes):
+- `draft`, `challenge` and `finalize`: `model: large` → `model: medium`. `finalize` writes the plan
+  (round 1) and applies the validation's fixes (rounds 2-3) on medium.
+- `plan-review` stays `model: large`. It is the large-tier validation, and gets the model rules
+  (D7).
+- `render`, `plan-test`, `plan-check`, `plan-result` and `publish` are not restructured, and no
+  node is added. Only the last-round behaviour of `check-plan.ts` and the plan.md copy step of
+  `publish-plan.ts` change (D7a, decision 5).
 
-```yaml
-  # ---- 3. Large-tier validation of the plan, medium fixes, until no blocking finding is left --
-  - id: plan-check
-    depends_on: [finalize]
-    loop_group:
-      nodes:
-        - id: fix-plan
-          when: "$LOOP_PREV.validate-plan.output.blocking > 0"
-          command: fix-plan
-          model: medium
-          context: fresh
-        - id: validate-plan
-          depends_on: [fix-plan]
-          trigger_rule: all_done
-          command: validate-plan
-          model: large
-          context: fresh
-          output_format:
-            type: object
-            properties:
-              blocking: { type: integer }
-              non_blocking: { type: integer }
-            required: [blocking, non_blocking]
-      until_bash: 'b=$validate-plan.output.blocking; [ "$b" -eq 0 ]'
-      max_iterations: 3
+In `<pack>/devflow-refine/devflow-refine.yaml` (decision 2: refine gets the same validation):
 
-  # Fixes or declines the last review's non-blocking findings; records blocking ones that are left
-  # in "Risks and open questions" with a warning at the top of plan.md. The plan is published anyway.
-  - id: settle-plan
-    depends_on: [plan-check]
-    command: settle-plan
-    model: medium
-    context: fresh
-    output_format:
-      type: object
-      properties:
-        unresolved: { type: integer }
-      required: [unresolved]
-```
-
-and change `render`'s `depends_on: [finalize]` to `depends_on: [settle-plan]`. No gate follows
-`plan-check`. A plan with unresolved findings is published (decision 5).
+- workflow, `draft`, `challenge`, `finalize`: `model: medium`.
+- `finalize` and `render` move into a `plan-loop` identical to devflow-plan's (`finalize`,
+  `render` with `soft_errors: "true"`, `plan-test`, `plan-review` on large, `plan-check`), followed by
+  `plan-result`; `still-unstarted` depends on `plan-result` and `publish` reads
+  `$plan-result.output.*` for `title` and `workflow`. `render` keeps reading `$load.output.slug`
+  and `$load.output.branch`.
+- `test-plan.ts`, `check-plan.ts` and `plan-result.ts` move from `<pack>/devflow-plan/scripts/` to
+  `<pack>/.shared/` (their `../../.shared/util.ts` imports become `./util.ts`), and both workflows
+  get two-line thin entries for them, as PR #21 did for `publish-plan` and `render-run`. p4 does
+  the move and devflow-plan's thin entries (before its check-plan change); p5 adds devflow-refine's.
+  devflow-refine gets a byte-identical copy of `review-plan.md`, and devflow-refine's `finalize.md`
+  gets devflow-plan's `## Fix rounds` and `## Assumptions` sections.
 
 ### D2. The model rules (one canonical section)
 
 This exact section, from the `## Models: the smallest model for each phase` line to the end of
-rule 7, goes byte-identically into ten command files: devflow-plan's `draft.md`, `finalize.md`,
-`validate-plan.md`, `fix-plan.md` and `settle-plan.md`, and devflow-refine's five files of the same
-names. Put it directly before `## Output` in draft.md and finalize.md, and at the end of
-validate-plan.md, fix-plan.md and settle-plan.md (D7 says where).
+rule 7, goes byte-identically into six command files: devflow-plan's and devflow-refine's
+`draft.md`, `finalize.md` and `review-plan.md`. Put it directly before `## Output` in draft.md and
+finalize.md, and as the last section of review-plan.md (D7).
 
 ```markdown
 ## Models: the smallest model for each phase
@@ -323,7 +363,12 @@ inputs:
 ```
 
 - Add a first node, before `review-loop`, and give `review-loop` `depends_on: [review-tier]`. The
-  tier goes through a bash node because a literal include value in a `when:` fails the load:
+  tier goes through a bash node because a literal include value in a `when:` fails the load. If
+  p3's `default-review-tier` fixture shows that `$INPUTS.review_model` is not substituted when the
+  includer passes no `with:` (review-tier fails with `not ''` or `not '$INPUTS.review_model'`),
+  replace the line `m=$INPUTS.review_model` with `m="${INPUTS_REVIEW_MODEL-}"` (the environment
+  variable that Current state says included inputs reach bash nodes as). That is the only allowed
+  change to this node:
 
 ```yaml
   - id: review-tier
@@ -424,106 +469,96 @@ import "../../.shared/pick-one.ts";
 at `<pack>/mod-devflow-phase/scripts/pick-one.ts` (p2) and `<pack>/mod-devflow-tail/scripts/pick-one.ts`
 (p3).
 
-### D7. The validation commands: validate-plan, fix-plan, settle-plan
+### D7. The large validation: review-plan.md checks the model rules
 
-Three new command files in `<pack>/devflow-plan/commands/` (p4). devflow-refine gets byte-identical
-copies in `<pack>/devflow-refine/commands/` (p5). Neither text names the workflow, so the copies fit
-both. Each file starts with the role line given below and holds the content below, in this order.
+`<pack>/devflow-plan/commands/review-plan.md` (and its devflow-refine copy, byte-identical):
 
-**validate-plan.md** (large):
+- l.1-2: "You are the **executability reviewer** (Opus, a fresh session) for a plan that a Sonnet
+  worker will implement phase by phase." → "You are the **executability reviewer** (a fresh
+  session on the large tier) for a plan whose phases worker sessions implement on the model tier
+  the manifest gives each."
+- New check 8 after check 7: "Every model rule below holds. A `small` phase whose brief is not
+  mechanical enough for small (rule 2), a `medium` or `large` phase whose `model_reason` does not
+  meet rule 3 or 4, a `small` phase that would need rule 3 or 4, a `review_model` that breaks rule
+  6, and a `## Phases and models` table or final-review line that does not match the manifest
+  (rule 7) are each a `mechanical` finding."
+- The D2 section verbatim as the file's last section.
 
-1. Role: "You are the **plan validator** (a fresh session on the large tier). You change nothing
-   except your report: no edits to plan.md, no commits, no pushes."
-2. Read: `$ARTIFACTS_DIR/plan.md`, `prerequisites.md` and `after.md` when they exist,
-   `$ARTIFACTS_DIR/interview.md`, the profile `$ARTIFACTS_DIR/profile.json` and its must-read docs,
-   `$preflight.output.devflow_root/commands/make-plan.md` sections 2-4, and the code the plan
-   names. Run `python3 $preflight.output.devflow_root/scripts/validate_manifest.py
-   $ARTIFACTS_DIR/plan.md --profile .claude/toolkit.yaml`.
-3. Earlier rounds: "The last round's result was $LOOP_PREV.validate-plan.output. If it is not empty,
-   first confirm each earlier blocking finding is fixed or validly answered in
-   `$ARTIFACTS_DIR/plan-review-responses.md`."
-4. Check, and report as findings, everything make-plan section 4 lists: a phase that fails
-   "Sizing for Sonnet" (as amended by the model rules below), a decision left open in a brief, two
-   phases of one wave sharing a path in `touches`, a manual step in the middle or a dispatchable
-   step called manual, a contradiction of a must-read doc or the code as it is, and every
-   `validate_manifest.py` error. Also check:
-   - each interview answer is recorded in the Design;
-   - every model rule below. A `small` phase whose brief is not mechanical, a `medium` or `large`
-     phase whose `model_reason` does not meet rule 3 or 4, and a `review_model` that breaks rule 6
-     are all blocking;
-   - the `## Phases and models` table and the final-review line match the manifest exactly (rule 7);
-   - `feature_branch` matches `git.branch_pattern` with a type from `git.branch_types`, and
-     `max_parallel` is at most 3 (1 for a single-phase plan).
-5. A pointer: "The model rules are the last section of this file." (The D2 section itself goes
-   at the very end of the file, after step 8's text.)
-6. Severity: **blocking** is anything that would make a worker improvise, block or fail, would make
-   `validate_manifest.py` or the renderer reject the plan, or breaks a model rule. Wording and
-   clarity are **non-blocking**. Every finding cites the plan section or phase id and the evidence
-   (`path:line`, command output). Drop anything that rests on "might".
-7. Report: if `$ARTIFACTS_DIR/plan-review.md` exists, first move it to
-   `$ARTIFACTS_DIR/plan-review-<n>.md` (n = 1 + the number of `plan-review-*.md` files). Write
-   `plan-review.md`: the line `PLAN-REVIEW blocking=<b> non_blocking=<m>`, then the findings as
-   `<n>. blocking|non-blocking · <section or phase id> · what is wrong · the fix`, then the status of
-   each earlier finding.
-8. Output: return `blocking` and `non_blocking`, the counts in the report.
+The findings flow through main's existing `check-plan` → `test-findings.md` → `finalize` (medium)
+fix round. No `validate-plan`, `fix-plan` or `settle-plan` command is created.
 
-**fix-plan.md** (medium):
+### D7a. Findings left after the last round (decision 5)
 
-1. Role: "You fix the **blocking** findings of the plan validation (a fresh session on the medium
-   tier), and nothing else."
-2. Scope: the blocking findings in `$ARTIFACTS_DIR/plan-review.md`. Leave the non-blocking ones
-   (settle-plan handles them). Edit `$ARTIFACTS_DIR/plan.md`, and `prerequisites.md` or `after.md`
-   only to keep them consistent with the manifest. Follow make-plan sections 2-3, the profile, and
-   the model rules below (the D2 section, appended at the end of this file).
-3. Never change the plan's `# ` title line, `plan_slug` or `feature_branch`. Never create or delete
-   `prerequisites.md` or `after.md`. A finding that needs one of these is answered, not fixed.
-4. When a finding is wrong, or needs a decision only the user can make, do not change the plan for
-   it. Append the finding number and your evidence to `$ARTIFACTS_DIR/plan-review-responses.md`.
-5. Run `validate_manifest.py` (the command in validate-plan.md step 2) after your last edit and
-   fix every error it prints.
-6. No commits, no pushes. Reply with one line per finding: fixed (which section) or answered.
-7. Then the D2 section verbatim, as the file's last section.
+No AI step is added: two scripts change.
 
-**settle-plan.md** (medium):
+`<pack>/devflow-plan/scripts/check-plan.ts` (p4 moves it to `<pack>/.shared/check-plan.ts` first), the `round >= MAX_ROUNDS`
+branch only (rounds 1-2 and the clean path are unchanged, except that the clean path also removes
+a stale `unresolved.md` the way it removes `test-findings.md`):
 
-1. Role: "You settle the plan validation's last report (a fresh session on the medium tier)."
-2. Read `$ARTIFACTS_DIR/plan-review.md` (the last round's report), `plan-review-responses.md` if
-   it exists, and `plan.md`.
-3. Each **non-blocking** finding: fix it in plan.md when it is correct and inside the plan's scope.
-   Otherwise decline it with one line under `## Risks and open questions` saying why. The step 3
-   limits of fix-plan.md apply (never change the title line, `plan_slug` or `feature_branch`, and
-   never create or delete `prerequisites.md` or `after.md`). Follow the model rules below.
-4. Each **blocking** finding still open in the report (its count is in the report's first line): do
-   not fix it. It was not confirmed fixed by the large validation. Under `## Risks and open
-   questions`, add a subsection `### Unresolved validation findings` with one bullet per finding:
-   its text from plan-review.md and, if any, the answer from plan-review-responses.md.
-5. If that count N is above 0, insert this callout directly below plan.md's first line (the `# `
-   title), followed by a blank line. `<slug>` is the manifest's `plan_slug`:
+- If any finding has `source` other than `review` (that is `render` or `validate_manifest`), fail
+  as today. Keep the message's "after 2 fix rounds" and "nothing was published" wording; it lists
+  all findings.
+- Otherwise (only `review` findings): write `tested.json` exactly as the clean path does, plus an
+  `unresolved` key holding the number of findings. Keep `test-findings.md`. Write
+  `$ARTIFACTS_DIR/unresolved.md` with this content (one bullet per finding, the problem's first
+  line, the same as today's failure message lines):
 
-```markdown
-> [!WARNING]
-> **This plan has N unresolved validation findings.** The large-tier plan validation still found
-> N blocking problems after its last round. They are listed under
-> [Risks and open questions](#risks-and-open-questions). Read them before you start
-> `devflow-run-<slug>`.
-```
+  ```markdown
+  ### Unresolved validation findings
 
-   Use the number in place of N. If N is 0, add no callout, and remove any such callout already in
-   the file.
-6. Run `validate_manifest.py` and fix every error it prints. No commits, no pushes.
-7. Output: return `unresolved` = N.
-8. Then the D2 section verbatim, as the file's last section.
+  The large-tier review still reported these after its last round. The plan was published anyway.
+  The full findings are `test-findings.md` in the planning run's artifacts.
+
+  - F1 [review, mechanical] p1-x: <problem's first line>
+  ```
+
+  Print `{"done":true,"round":<round>,"findings":<n>}` and exit 0.
+
+`<pack>/.shared/publish-plan.ts`: before step 2 copies plan.md, if `$ARTIFACTS_DIR/unresolved.md`
+exists, rewrite `$ARTIFACTS_DIR/plan.md` in place (so the published copy and the artifact agree):
+
+- Directly after the first line that starts with `# ` (the title), insert a blank line and
+  ```markdown
+  > [!WARNING]
+  > This plan was published with <n> unresolved validation findings. Read "Unresolved validation
+  > findings" under "Risks and open questions" before you run it.
+  ```
+  where `<n>` is the number of `- F` bullets in unresolved.md.
+- Insert unresolved.md's content, preceded and followed by a blank line, at the end of the last
+  non-fenced `## Risks and open questions` section (right before the next `## ` heading). If the
+  plan has no such section, insert `## Risks and open questions`, a blank line and the content
+  directly before the last non-fenced `## Assumptions`, else before `## Implementation manifest`.
+- Do nothing if plan.md already contains the line `### Unresolved validation findings` (a re-run of
+  publish must not add it twice).
+- The output JSON gains `unresolved: <n>` (0 when the file does not exist).
+
+The manifest (`## Implementation manifest`) is never touched, so `load-plan` and the renderer read
+the same manifest that was validated.
 
 ### D8. Edits to the existing planning commands
+
+> Refinement: on main, devflow-plan's `finalize.md` already says to skip the section 4 review in a
+> fix round, and has `## Fix rounds` and `## Assumptions`. The `finalize.md` edits below still apply
+> to the first-pass text (l.1, l.13-16, override 2 at l.69, `## Output` l.97-101); "the next step
+> validates the plan on the large tier" refers to `plan-review`. The new override "Risks and open
+> questions, and the table" must keep `## Assumptions` right before `## Implementation manifest`:
+> the order is `## Risks and open questions`, `## Assumptions`, `## Implementation manifest`.
+> devflow-refine's `finalize.md` additionally gets devflow-plan's `## Fix rounds` and
+> `## Assumptions` sections (D1).
 
 Apply the same edits to devflow-plan's and devflow-refine's copies (p4 and p5):
 
 - `draft.md` l.1: "You are the **planner** for this change (Opus)." → "You are the **planner** for
   this change." In "Your authority", after "...section 3 (manual steps only at the very beginning
   and the very end)", add ", and the model rules below". Insert the D2 section before `## Output`.
-  devflow-refine's `draft.md` also gets one more bullet at the end of its step 3 list: "If
+  devflow-refine's `draft.md` step 3 (l.48-50) is prose with no list: add two `-` sub-bullets
+  indented three spaces directly after its last line ("...End the file with an `## Open questions`
+  list."). The first: "If
   `original/plan.md` has no `model` on a phase or no `review_model`, add them by the model rules
-  below. That is part of the refinement, not a question."
+  below. That is part of the refinement, not a question." The second: "If
+  `original/plan.md` has a `> [!WARNING]` callout about unresolved validation findings under its
+  title, or a `### Unresolved validation findings` subsection, drop both from the draft: this
+  run's validation decides again. Treat the listed findings as review input for the refinement."
 - `challenge.md` l.1: "You are the **challenger** (Opus, a fresh session)." → "You are the
   **challenger** (a fresh session)."
 - `finalize.md`:
@@ -533,12 +568,16 @@ Apply the same edits to devflow-plan's and devflow-refine's copies (p4 and p5):
     `validate_manifest.py`), with the overrides below." with "section 3 (manual steps only at the
     very beginning and the very end) and the model rules below, with the overrides below. Do not run
     section 4's `Plan` subagent: the next step validates the plan on the large tier and applies its
-    findings."
+    findings." Wrap the paragraph so that the phrase "the next step validates the plan on the
+    large tier" stays on one line (p4's acceptance greps it).
   - In override 2, delete the sentence "Run the section 4 `Plan` subagent review too."
+  - In `## Fix rounds` (devflow-plan l.47-48), delete the sentence "Skip the section 4 `Plan`
+    subagent review in a fix round: the plan test's reviewer replaces it." (no pass runs it now);
+    the bullet keeps "Keep `slug`, `branch` and `title` unchanged. Rerun `validate_manifest.py`."
   - After override 6 (devflow-plan) or override 7 (devflow-refine), add the next-numbered override:
     "**Risks and open questions, and the table.** Both scopes have a `## Risks and open questions`
-    section directly before `## Implementation manifest`, and the `## Phases and models` section of
-    model rule 7."
+    section directly before `## Assumptions` (which stays right before `## Implementation
+    manifest`), and the `## Phases and models` section of model rule 7."
   - Insert the D2 section before `## Output`.
   - In `## Output`, replace "Stop when `$ARTIFACTS_DIR/plan.md` exists, passes
     `validate_manifest.py`, and the reviewer's findings are fixed or answered in the plan's "Risks
@@ -559,27 +598,35 @@ about it.
 
 `<pack>/README.md`:
 
-- l.27-29: mod-devflow-tail's includers become "`devflow-quick`, `devflow-docs`, `devflow-config`,
+- l.30: mod-devflow-tail's includers become "`devflow-quick`, `devflow-docs`, `devflow-config`,
   `devflow-deps`, `mod-devflow-audit-fix` (which `devflow-audit` includes) and `mod-devflow-deliver`".
-- In "devflow-plan, step by step", replace step 1's "(large tier)" with "(medium tier)". Replace
-  step 2 with "**Plan** (medium tier): researches and writes `plan.md` with an implementation
-  manifest, validated by the toolkit's `validate_manifest.py`. Each phase gets the smallest model
-  tier that can do it (`small` by default, `medium` or `large` with a reason), and the plan gets a
-  final-review tier: `large` for security-related changes, for a plan with a `large` phase or with 7
-  or more phases, else `medium`. A **Phases and models** table in plan.md shows them all.
-  `manual_before` and `manual_after` steps become `prerequisites.md` and `after.md`." Insert a new
-  step 3, and renumber Render and Publish to 4 and 5: "**Validate** (large tier): a fresh validator
-  checks the plan against the toolkit's method and the model rules. A medium-tier session fixes its
-  blocking findings, for up to 3 rounds. Then a medium-tier session fixes or declines the
-  non-blocking ones. Blocking findings still left are recorded under the plan's \"Risks and open
-  questions\", with a warning at the top of plan.md, and the plan is published anyway.
-  `plan-review.md` in the run's artifacts holds the last report."
+- In "devflow-plan, step by step" (l.72-95; the steps are Interview, Plan, Render, Test,
+  Publish on main):
+  - Step 1: "(large tier)" → "(medium tier)".
+  - Step 2: "**Plan**:" → "**Plan** (medium tier):", and after "validated by the toolkit's
+    `validate_manifest.py`." insert "Each phase gets the smallest model tier that can do it
+    (`small` by default, `medium` or `large` with a reason), and the plan gets a final-review
+    tier: `large` for security-related changes, for a plan with a `large` phase or with 7 or more
+    phases, else `medium`. A **Phases and models** table in plan.md shows them all."
+  - Step 4, second bullet: "A fresh reviewer then walks" → "A fresh reviewer on the large tier then
+    walks", and append "It also checks each phase's model tier and the final-review tier against
+    the model rules."
+  - Step 4, third bullet: replace "Findings go back to the planner for up to two fix rounds. If
+    findings remain, the run fails and nothing is published (`test-findings.md` in the run's
+    artifacts)." with "Findings go back to the planner (medium tier) for up to two fix rounds. If
+    the renderer or the manifest validator still rejects the plan, the run fails and nothing is
+    published (`test-findings.md` in the run's artifacts). If only reviewer findings remain, the
+    plan is published anyway: they are listed under "Unresolved validation findings" in its
+    "Risks and open questions", with a warning under its title."
 - In the paragraph after the steps, replace "each as a `mod-devflow-phase` child run in its own
   worktree" with "each as a `mod-devflow-phase` child run in its own worktree on the phase's model
   tier". Replace "and the shared tail (review, fixes, ..." with "and the shared tail (review on the
   plan's final-review tier, fixes, ...".
 - In "devflow-refine, step by step", step 3, append: "It uses the same tiers and validation as
   `devflow-plan`, and adds phase and review tiers to an older plan that has none."
+
+Keep the README's wrapping at about 100 characters, but wrap so that "**Phases and models**" and
+"A fresh reviewer on the large tier" each stay on one line (p6's acceptance greps them).
 
 Root `README.md` is unchanged: it describes the pack only by link.
 
@@ -597,15 +644,30 @@ Root `README.md` is unchanged: it describes the pack only by link.
   downstream reference (`until_bash`, `review-gate`, `$LOOP_PREV.*`). The picker keeps the ids
   `implement` and `review`.
 
+### Refinement notes for the phases (folded into the briefs)
+
+- p1 (renderer): the new test block is `# d6. model keys are required`, after the `d5` block
+  (check-plan). A plan with a bad model key reaches `render-run` with `soft_errors`, so the error
+  becomes an `ok:false` finding that `finalize` can fix; no change to render-plan.ts is needed.
+  test-plan's dry run stubs the child workflows, so it is not affected by D4/D5.
+- p4 (devflow-plan): D1's model changes, review-plan.md (D7), D7a in check-plan.ts and
+  publish-plan.ts, draft/challenge/finalize (D8), and the `plan-test-never-clears` fixture split.
+  It touches `scripts/test-render-run.sh` like p1, so it depends on p1.
+- p4 moves test-plan/check-plan/plan-result to `.shared/` with devflow-plan's thin entries (step
+  0, before its check-plan change), so p5 stays within M.
+- p5 (devflow-refine): grows to the plan-loop of D1, devflow-refine's three thin entries, and refine fixtures that stub `render`'s new output shape and
+  the loop's nodes. `complexity: M`, `model: medium`.
+- p3 (review routing): 18 fixtures with a `review:` stub, not 17.
+
 ## Phases and models
 
 | Phase | Title | Complexity | Depends on | Model | Why this model |
 |---|---|---|---|---|---|
 | p1-manifest-models | Manifest model keys in the renderer and load-plan, and the pick-one script | S | — | small | default |
-| p4-plan-validation | devflow-plan: medium planning, large validation loop, the model rules | M | — | medium | writes three new prompt files and edits three more from a spec whose exact wording it must compose |
+| p4-plan-validation | devflow-plan: medium planning, the model rules in the large review, publish with unresolved review findings | M | p1-manifest-models | medium | moves three scripts to .shared/, edits four prompt files and two scripts, and must compose the model-rule text and the last-round behaviour exactly from the spec |
 | p2-phase-routing | mod-devflow-phase runs each phase on its manifest model | S | p1-manifest-models | small | default |
 | p3-review-routing | mod-devflow-tail and mod-devflow-deliver run the final review on the plan's review model | M | p1-manifest-models | small | default |
-| p5-refine-validation | devflow-refine gets the same models, validation loop and rules | S | p4-plan-validation | small | default |
+| p5-refine-validation | devflow-refine gets the same models, validation loop and rules | M | p4-plan-validation | medium | restructures devflow-refine.yaml into the plan loop and adapts devflow-plan's loop fixtures to devflow-refine's nodes |
 | p6-docs-retire | Document the model tiers and retire the plan | S | p1-manifest-models, p2-phase-routing, p3-review-routing, p4-plan-validation, p5-refine-validation | small | default |
 
 Final build review: **medium**. 6 phases (fewer than 7), none on large, and not security-related (it changes model tiers only)
@@ -621,7 +683,7 @@ not a step of this plan.
 - **From the interview, "Why no more questions":** the scope is devflow-plan, devflow-refine,
   mod-devflow-phase, mod-devflow-tail and mod-devflow-deliver with their includers' fixtures, the renderer and
   its tests, and the docs. Behaviour is settled by Q2 (picked once), Q6 (>= 7 phases), Q7 (C: no
-  handling of old rendered workflows) and Q8 (publish anyway, with a top callout). Names follow the
+  handling of old rendered workflows) and Q8 as narrowed by refinement Q2 = C (publish with a top callout when only review findings remain; fail on renderer or validator findings). Names follow the
   pack's conventions. No credentials, secrets or permissions change. There are no prerequisites
   and no after-merge steps. The profile has no ADR directory and no changelog, so there are no ADRs
   and no changelog line.
@@ -636,7 +698,7 @@ not a step of this plan.
 - **A routed fixture does not route:** if a fixture's `implement-<tier>` or `review-<tier>` stub is
   reported as an unused stub while another tier's node reports "Missing reachable stub", the `when:`
   routing is wrong. Stop with `status=blocked`. Do not change `when:` to make the fixture pass.
-- **p3's fixture edits:** the 17 fixtures that have a `review:` stub get a `review-large:` copy of
+- **p3's fixture edits:** the 18 fixtures that have a `review:` stub get a `review-large:` copy of
   it and a `<prefix>review-tier` stub. Included top-level nodes are renamed `tail__<id>`
   (`ship__tail__<id>` in devflow-audit), and loop-body nodes keep their ids. This exact rule was
   applied to a prototype, and every tail fixture passed, the red-path ones staying red in the same
@@ -648,9 +710,19 @@ not a step of this plan.
 - **Default taken:** "phases has 7 or more entries" counts every manifest phase, including the
   retirement phase. The user said "phases" without qualification, and a mechanical count is what
   the validator can check.
-- **Default taken:** settle-plan records blocking findings left after the last round and does not
-  try to fix them. A fix there would not be validated on the large tier, and the user asked for the
-  open findings to be visible (Q8).
+- **Default taken:** `unresolved.md` and the callout are written by scripts, not by a model, so
+  no finding is "fixed" after the last large-tier review. The listed findings are exactly the last
+  review's.
+- **Default taken:** a plan whose last round has review findings and also renderer or validator
+  findings fails as a whole: the review findings do not publish it on their own.
+- **Plan review (section 4) findings answered here:** the default includer path of
+  mod-devflow-tail's `review-tier` (no `with:`) was untested, so p3 adds the exec-code fixture
+  `devflow-quick/fixtures/default-review-tier` and D5 spells out the one fallback
+  (`m="${INPUTS_REVIEW_MODEL-}"`) if `$INPUTS.review_model` is not substituted. p5 was beyond M,
+  so the script move went into p4 (step 0). The publish-plan test resets plan.md to serial.md so
+  the Risks section lands before the manifest, and removes unresolved.md before section g.
+- **Default taken:** publish-plan creates `## Risks and open questions` if a plan lacks it, before
+  `## Assumptions` (else before `## Implementation manifest`).
 
 ## Implementation manifest
 
@@ -667,7 +739,7 @@ verify_after_merge:
   - scripts/test-devflow-pack.sh
 final_checks:
   - 'grep -rn "Opus" packs/devflow/devflow-plan/commands packs/devflow/devflow-refine/commands packs/devflow/mod-devflow-phase/commands/implement-phase.md packs/devflow/mod-devflow-tail/commands/review.md prints nothing, and grep -n "Sonnet" packs/devflow/mod-devflow-phase/commands/implement-phase.md packs/devflow/mod-devflow-tail/commands/review.md prints nothing'
-  - 'grep -c "model: large" packs/devflow/devflow-plan/devflow-plan.yaml packs/devflow/devflow-refine/devflow-refine.yaml prints 1 for each file (only validate-plan)'
+  - 'grep -c "model: large" packs/devflow/devflow-plan/devflow-plan.yaml packs/devflow/devflow-refine/devflow-refine.yaml prints 1 for each file (only plan-review)'
   - 'scripts/test-render-run.sh ends with "test-render-run: all ok" and scripts/test-devflow-pack.sh ends with "0 failed"'
 phases:
   - id: p1-manifest-models
@@ -705,8 +777,8 @@ phases:
            plan_slug `no-review-model`, feature_branch `feat/no-review-model`, and the two
            review_model lines removed.
       5. scripts/test-render-run.sh:
-         - After the "d2" block (after `echo "bad-id: ok"`), add a block "# d3. model keys are
-           required" that, in the same style as d2, renders each new fixture with
+         - After the "d5" block (after the closing `)` of the subshell that ends with
+           `echo "check-plan: ok"`), add a block "# d6. model keys are required" that, in the same style as d2, renders each new fixture with
            `--slug <name> --branch feat/<name> --title M --main main --pack test/devflow` and asserts
            it fails with, respectively: `phase 'p2': model must be small, medium or large (got "haiku")`,
            `phase 'p2': model medium needs a model_reason`,
@@ -731,46 +803,89 @@ phases:
       - 'grep -n "validateModels(manifest)" packs/devflow/.shared/load-plan.ts prints one line'
 
   - id: p4-plan-validation
-    title: "devflow-plan: medium planning, a large validation loop, and the model rules"
-    depends_on: []
+    title: "devflow-plan: medium planning, the model rules in the large review, publish with unresolved review findings"
+    depends_on: [p1-manifest-models]
     complexity: M
     model: medium
-    model_reason: writes three new prompt files and edits three more from a spec whose exact wording it must compose
+    model_reason: moves three scripts to .shared/, edits four prompt files and two scripts, and must compose the model-rule text and the last-round behaviour exactly from the spec
     touches:
       - packs/devflow/devflow-plan/devflow-plan.yaml
       - packs/devflow/devflow-plan/commands/**
+      - packs/devflow/devflow-plan/scripts/**
       - packs/devflow/devflow-plan/fixtures/**
+      - packs/devflow/.shared/publish-plan.ts
+      - packs/devflow/.shared/test-plan.ts
+      - packs/devflow/.shared/check-plan.ts
+      - packs/devflow/.shared/plan-result.ts
+      - scripts/test-render-run.sh
     brief: |
-      Read the plan's Design sections D1, D2, D7 and D8 first.
-      1. packs/devflow/devflow-plan/devflow-plan.yaml: the D1 edits (workflow model, draft, challenge,
-         finalize on medium; insert the plan-check loop and settle-plan node verbatim before render;
-         render depends_on [settle-plan]).
-      2. New packs/devflow/devflow-plan/commands/validate-plan.md, fix-plan.md and settle-plan.md with the
-         content D7 lists, in that order, each ending with the D2 section verbatim as its last section.
-         The commands must not name devflow-plan or devflow-refine (p5 copies them byte for byte). Use
-         `$ARTIFACTS_DIR` and `$preflight.output.devflow_root` the way finalize.md does.
-      3. Edit draft.md, challenge.md and finalize.md as D8 says (the devflow-plan items), including the D2
-         section verbatim before `## Output` in draft.md and finalize.md. The new finalize override is
-         number 7.
-      4. Fixtures in packs/devflow/devflow-plan/fixtures/:
-         - happy-path.stubs.yaml and interview-done.stubs.yaml: add stubs
-           `validate-plan: {blocking: 0, non_blocking: 1}` (as block YAML like the others),
-           `fix-plan: fixed` and `settle-plan: {unresolved: 0}`.
-         - New validation-unresolved.stubs.yaml: a copy of happy-path.stubs.yaml whose first comment line
-           is `# The large validation never clears: the plan is published anyway, with the findings recorded.`,
-           with `validate-plan: {blocking: 2, non_blocking: 0}` and `settle-plan: {unresolved: 2}`; it
-           keeps `expect: completed`.
-         - interview-user-stops.stubs.yaml: unchanged.
-      5. Run scripts/test-devflow-pack.sh and scripts/test-render-run.sh.
-      Stop with status=blocked if archon validate rejects the D1 YAML, or if validation-unresolved does
-      not complete: do not add a gate or change the loop to make it pass.
+      Read the plan's Design sections D1, D2, D7, D7a and D8 first.
+      0. Move the scripts first, with no logic change: git mv
+         packs/devflow/devflow-plan/scripts/{test-plan,check-plan,plan-result}.ts to
+         packs/devflow/.shared/, change their `../../.shared/util.ts` imports to `./util.ts`, and
+         create two-line thin entries with the same three names in packs/devflow/devflow-plan/scripts/,
+         in the pattern of packs/devflow/devflow-plan/scripts/publish-plan.ts (comment line naming
+         `.shared/<name>.ts`, then `import "../../.shared/<name>.ts";`). In scripts/test-render-run.sh
+         set `cp_script` to "$repo_root/packs/devflow/.shared/check-plan.ts" (`tp` stays on the thin
+         entry). Run scripts/test-render-run.sh: it must pass before step 1.
+      1. packs/devflow/devflow-plan/devflow-plan.yaml: workflow `model:`, `draft`, `challenge` and
+         `finalize` (inside plan-loop) go from large to medium. `plan-review` stays large. Change
+         nothing else in the file.
+      2. commands/review-plan.md: the D7 edits (l.1-2 wording, check 8, the D2 section verbatim as
+         the last section).
+      3. Edit draft.md, challenge.md and finalize.md as D8 says (the devflow-plan items), including
+         the D2 section verbatim before `## Output` in draft.md and finalize.md. The new finalize
+         override is number 7.
+      4. packs/devflow/.shared/check-plan.ts: the D7a last-round change, and the clean path also removes
+         unresolved.md. packs/devflow/.shared/publish-plan.ts: the D7a plan.md annotation before step
+         2, and `unresolved` in the output JSON.
+      5. scripts/test-render-run.sh:
+         - d5 (check-plan): replace the round-3 assertion (`if cp_run "$rev" 2 ...` and its grep) with
+           two cases: (a) `cp_run "$rev" 2` (review-only findings) exits 0, prints `"done":true`,
+           `$chk/tested.json` contains `"unresolved":1`, and `$chk/unresolved.md` contains
+           `### Unresolved validation findings` and `- F1 [review, mechanical] p1: p`; (b) with
+           test findings `{"ok":false,"findings":[{"id":"T1","source":"validate_manifest","kind":"mechanical","phase":"","problem":"bad","fix":"f"}]}`
+           and round 2 it exits non-zero and stderr contains `after 2 fix rounds`. cp_run reads `$tst`
+           when it is called, so pass the test findings as a temporary assignment:
+           `tst='<that JSON>' cp_run "" 2` (not as an INPUTS_TEST prefix, which cp_run overrides). Clear `$chk`
+           (`rm -f "$chk"/*`) before case (a). Then `cp_run "" ""` again and assert
+           `test ! -e "$chk/unresolved.md"`.
+         - f (publish-plan): after the existing publish3 assertions, reset the plan with
+           `cp "$fx/serial.md" "$pub_art/plan.md"` (serial.md has no Risks and no Assumptions section,
+           so D7a inserts a new `## Risks and open questions` right before `## Implementation
+           manifest`). Write `$pub_art/unresolved.md`
+           with the D7a heading, intro and one bullet `- F1 [review, mechanical] p1: x`, run
+           `publish` again, and assert: the output contains `"unresolved":1`;
+           `git -C "$porigin" show plans:plans/s/plan.md` contains `> [!WARNING]` on the third line
+           and exactly one `### Unresolved validation findings` line, which comes after a
+           `## Risks and open questions` line and before `## Implementation manifest`. Run
+           `publish` once more and assert the heading count is still 1. Then
+           `rm -f "$pub_art/unresolved.md"` (section g publishes again and must not get the
+           callout). End with `echo "publish-plan unresolved: ok"`.
+      6. Fixtures in packs/devflow/devflow-plan/fixtures/:
+         - plan-test-never-clears.stubs.yaml: first comment line becomes
+           `# The reviewer keeps finding a problem; after two fix rounds the plan is published anyway, with the findings recorded.`,
+           and `fixture:` becomes `expect: completed` with no `fail-node`. Nothing else changes.
+         - New plan-test-hard-never-clears.stubs.yaml: a copy of the original
+           plan-test-never-clears.stubs.yaml as it is on main (`expect: failed`,
+           `fail-node: plan-result`), whose first comment line is
+           `# RED: the manifest validator keeps rejecting the plan; after two fix rounds the run fails and nothing is published.`,
+           with `plan-test: {ok: false, findings: [{id: T1, source: validate_manifest, kind: mechanical, phase: "", problem: stub, fix: stub}]}`
+           (block YAML like the others) and no `plan-review` stub (it is skipped when plan-test is
+           not ok). If the simulation fails in another node than plan-result, stop with
+           status=blocked.
+         - happy-path, interview-done and interview-user-stops: unchanged.
+      7. Run scripts/test-render-run.sh and scripts/test-devflow-pack.sh.
+      Stop with status=blocked if plan-test-never-clears does not complete, or if
+      plan-test-hard-never-clears does not fail: do not change the loop or add a node to make it pass.
     acceptance:
-      - 'scripts/test-devflow-pack.sh ends with "0 failed" and lists devflow-plan/fixtures/validation-unresolved.stubs.yaml with "Simulation outcome: completed"'
-      - 'grep -n "model:" packs/devflow/devflow-plan/devflow-plan.yaml shows medium for the workflow, draft, challenge, finalize, fix-plan and settle-plan, and large only for validate-plan'
-      - 'for f in draft finalize validate-plan fix-plan settle-plan; do sed -n ''/^## Models: the smallest model for each phase$/,/^   then the line/p'' packs/devflow/devflow-plan/commands/$f.md | md5sum; done prints the same hash five times, and the extracted text is non-empty'
-      - 'grep -c "Plan. subagent" packs/devflow/devflow-plan/commands/finalize.md prints 1 (only the "Do not run section 4''s `Plan` subagent" sentence)'
+      - 'ls packs/devflow/.shared/test-plan.ts packs/devflow/.shared/check-plan.ts packs/devflow/.shared/plan-result.ts succeeds, and wc -l packs/devflow/devflow-plan/scripts/{test-plan,check-plan,plan-result}.ts prints 2 for each'
+      - 'scripts/test-devflow-pack.sh ends with "0 failed" and lists devflow-plan/fixtures/plan-test-never-clears.stubs.yaml with "Simulation outcome: completed" and plan-test-hard-never-clears.stubs.yaml with "Simulation outcome: failed"'
+      - 'scripts/test-render-run.sh prints "check-plan: ok" and "publish-plan unresolved: ok" and ends with "test-render-run: all ok"'
+      - 'grep -n "model:" packs/devflow/devflow-plan/devflow-plan.yaml shows medium for the workflow, draft, challenge and finalize, and large only for plan-review'
+      - 'for f in draft finalize review-plan; do sed -n ''/^## Models: the smallest model for each phase$/,/^   then the line/p'' packs/devflow/devflow-plan/commands/$f.md | md5sum; done prints the same hash three times, and the extracted text is non-empty'
+      - 'grep -c "subagent review too\|on Opus reviews\|reviewer.s findings are fixed" packs/devflow/devflow-plan/commands/finalize.md prints 0, and grep -c "the next step validates the plan on the large tier" packs/devflow/devflow-plan/commands/finalize.md prints 1 (D8 keeps that phrase on one line)'
       - 'grep -rn "Opus" packs/devflow/devflow-plan/commands prints nothing'
-      - 'grep -n "depends_on: \[settle-plan\]" packs/devflow/devflow-plan/devflow-plan.yaml prints the render node''s line'
 
   - id: p2-phase-routing
     title: mod-devflow-phase runs each phase on its manifest model
@@ -829,7 +944,7 @@ phases:
       4. packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml: load-plan's output_format gains
          `review_model`, and the `tail` include gains the `with:` of D5.
       5. Fixtures. Do not edit any workflow YAML other than mod-devflow-tail and mod-devflow-deliver.
-         - The 17 fixtures that have a top-level `review:` stub, listed by
+         - The 18 fixtures that have a top-level `review:` stub, listed by
            `grep -ln "^review:" packs/devflow/*/fixtures/*.yaml`, get two edits each:
            a. directly before the `review:` line, a `review-large:` stub whose body is a copy of
               the `review:` body (the same indented lines). Keep the `review:` stub: it now stubs
@@ -847,51 +962,79 @@ phases:
            set `review_model: medium` in the load-plan stub; rename the `review:` stub key to
            `review-medium:`; delete the `review-large:` and `tail__review-tier:` stubs (review-tier
            and the picker run for real, and review-large must not run).
+         - New packs/devflow/devflow-quick/fixtures/default-review-tier.stubs.yaml (an includer that
+           passes no `with:`): start from the edited devflow-quick happy-path.stubs.yaml; put
+           `exec-code: true` as its first key; make the first comment line
+           `# The includer passes no review_model: the default large review runs.`; delete the
+           `review:` and `tail__review-tier:` stubs and keep `review-large:` (review-tier and the
+           picker run for real).
       6. Run scripts/test-devflow-pack.sh; it must end with "0 failed". A red-path fixture
          (review-never-clears, dod-stays-red, fast-stays-red, ...) must still fail in the node it names
          today. Only stubs may change; never change a fixture's `expect` or `fail-node`.
+      If default-review-tier fails in `tail__review-tier`, apply D5's one allowed fallback
+      (`m="${INPUTS_REVIEW_MODEL-}"`) and rerun; stop with status=blocked if it or medium-review
+      still fails there.
       Stop with status=blocked if medium-review fails with "Missing reachable stub for node
       'review-large'" (the routing is wrong), or if any fixture still fails after these exact edits:
       do not invent other stub changes and never edit an includer's workflow YAML.
     acceptance:
-      - 'scripts/test-devflow-pack.sh ends with "0 failed" and shows mod-devflow-deliver/fixtures/medium-review.stubs.yaml with "Simulation outcome: completed"'
+      - 'scripts/test-devflow-pack.sh ends with "0 failed" and shows mod-devflow-deliver/fixtures/medium-review.stubs.yaml and devflow-quick/fixtures/default-review-tier.stubs.yaml with "Simulation outcome: completed"'
       - 'grep -n "default: large" packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml prints the review_model input'
       - 'grep -n ''review_model: "$load-plan.output.review_model"'' packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml prints one line'
-      - 'git diff --name-only <this phase''s base commit> HEAD -- ''packs/devflow/*/*.yaml'' lists only packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml and packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml'
+      - 'git diff --name-only "$(git merge-base origin/main HEAD)" HEAD -- '':(glob)packs/devflow/*/*.yaml'' lists only packs/devflow/mod-devflow-tail/mod-devflow-tail.yaml and packs/devflow/mod-devflow-deliver/mod-devflow-deliver.yaml'
       - 'grep -n "Opus" packs/devflow/mod-devflow-tail/commands/review.md prints nothing'
 
   - id: p5-refine-validation
     title: devflow-refine gets the same models, validation loop and rules
     depends_on: [p4-plan-validation]
-    complexity: S
-    model: small
+    complexity: M
+    model: medium
+    model_reason: restructures devflow-refine.yaml into the plan loop and adapts devflow-plan's loop fixtures to devflow-refine's nodes
     touches:
-      - packs/devflow/devflow-refine/devflow-refine.yaml
-      - packs/devflow/devflow-refine/commands/**
-      - packs/devflow/devflow-refine/fixtures/**
+      - packs/devflow/devflow-refine/**
     brief: |
-      Read the plan's Design sections D1, D2, D7 and D8 first, and look at what p4 did to
-      packs/devflow/devflow-plan/ (git log -- packs/devflow/devflow-plan).
-      1. packs/devflow/devflow-refine/devflow-refine.yaml: the D1 edits, the same as p4 made in
-         devflow-plan.yaml (workflow model, draft, challenge, finalize on medium; the plan-check loop
-         and settle-plan node verbatim, inserted before `render`; render depends_on [settle-plan]).
-         `still-unstarted` and `publish` stay as they are.
-      2. Copy packs/devflow/devflow-plan/commands/validate-plan.md, fix-plan.md and settle-plan.md to
-         packs/devflow/devflow-refine/commands/ unchanged (cp).
-      3. Edit devflow-refine's draft.md, challenge.md and finalize.md as D8 says, including the refine-only
-         bullet in draft.md step 3. The new finalize override is number 8. Copy the D2 section from
+      Read the plan's Design sections D1, D2, D7, D7a and D8 first, and look at what p4 did to
+      packs/devflow/devflow-plan/ (git log -p -- packs/devflow/devflow-plan packs/devflow/.shared).
+      1. p4 already moved test-plan, check-plan and plan-result to packs/devflow/.shared/. Copy
+         p4's three thin entries from packs/devflow/devflow-plan/scripts/{test-plan,check-plan,plan-result}.ts
+         to packs/devflow/devflow-refine/scripts/ unchanged (they import `../../.shared/<name>.ts`).
+         If packs/devflow/.shared/check-plan.ts does not exist, p4 did not do its step 0: stop with
+         status=blocked.
+      2. packs/devflow/devflow-refine/devflow-refine.yaml: workflow, draft and challenge on medium.
+         Replace the `finalize` and `render` nodes with a `plan-loop` and a `plan-result` node copied
+         from devflow-plan.yaml (finalize on medium, render with `soft_errors: "true"` and the
+         ok/error/workflow/file/waves output, plan-test, plan-review on large, plan-check). In the
+         copied render node keep devflow-refine's current `with:` values (`$load.output.slug`,
+         `$load.output.branch`, and the rest as they are in devflow-refine today), adding only
+         `soft_errors`. plan-loop keeps devflow-refine's current `depends_on`/`when:` of finalize.
+         `still-unstarted` depends on `plan-result` instead of `render`; `publish` reads `title` and
+         `workflow` from `$plan-result.output.*` and keeps `commit_verb: Refine`.
+      3. cp packs/devflow/devflow-plan/commands/review-plan.md to packs/devflow/devflow-refine/commands/.
+      4. Edit devflow-refine's draft.md, challenge.md and finalize.md as D8 says, including both
+         refine-only bullets in draft.md step 3, and copy devflow-plan's `## Fix rounds` and
+         `## Assumptions` sections into finalize.md at the same place as in devflow-plan (after
+         `## Inputs from the interview`, before `## Overrides`), and append devflow-plan's last
+         `## Output` line ("plan.md has an `## Assumptions` section (see Assumptions above).").
+         The new finalize override is number 8. Copy the D2 section from
          packs/devflow/devflow-plan/commands/draft.md so it is byte-identical.
-      4. Fixtures in packs/devflow/devflow-refine/fixtures/: happy-path.stubs.yaml gets the three stubs
-         p4 added to devflow-plan's happy-path. interview-user-stops and refuse-started are unchanged.
-      5. Run scripts/test-devflow-pack.sh.
-      Stop with status=blocked if a copied command file does not fit devflow-refine (it names
+      5. Fixtures in packs/devflow/devflow-refine/fixtures/: in happy-path.stubs.yaml, replace the
+         `render:` stub by devflow-plan happy-path's `render`, `plan-test`, `plan-review`,
+         `plan-check` and `plan-result` stubs. Add copies of devflow-plan's (p4-edited)
+         plan-test-never-clears and plan-test-hard-never-clears, each with devflow-refine
+         happy-path's `load:` and `still-unstarted:` stubs added after `setup:` and at the end,
+         and with the first comment line kept.
+         interview-user-stops and refuse-started are unchanged.
+      6. Run scripts/test-render-run.sh and scripts/test-devflow-pack.sh.
+      Stop with status=blocked if a copied command or node does not fit devflow-refine (it names
       devflow-plan, or reads a node devflow-refine does not have).
     acceptance:
-      - 'for f in validate-plan fix-plan settle-plan; do cmp packs/devflow/devflow-plan/commands/$f.md packs/devflow/devflow-refine/commands/$f.md; done prints nothing and exits 0'
-      - 'for f in devflow-plan/commands/draft devflow-refine/commands/draft devflow-refine/commands/finalize devflow-refine/commands/validate-plan devflow-refine/commands/fix-plan devflow-refine/commands/settle-plan; do sed -n ''/^## Models: the smallest model for each phase$/,/^   then the line/p'' packs/devflow/$f.md | md5sum; done prints the same hash six times, and the extracted text is non-empty'
-      - 'grep -n "model:" packs/devflow/devflow-refine/devflow-refine.yaml shows large only for validate-plan'
-      - 'grep -rn "Opus" packs/devflow/devflow-refine/commands prints nothing'
-      - 'scripts/test-devflow-pack.sh ends with "0 failed"'
+      - 'cmp packs/devflow/devflow-plan/commands/review-plan.md packs/devflow/devflow-refine/commands/review-plan.md exits 0'
+      - 'for f in devflow-plan/commands/draft devflow-refine/commands/draft devflow-refine/commands/finalize devflow-refine/commands/review-plan; do sed -n ''/^## Models: the smallest model for each phase$/,/^   then the line/p'' packs/devflow/$f.md | md5sum; done prints the same hash four times, and the extracted text is non-empty'
+      - 'grep -n "model:" packs/devflow/devflow-refine/devflow-refine.yaml shows large only for plan-review'
+      - 'ls packs/devflow/.shared/test-plan.ts packs/devflow/.shared/check-plan.ts packs/devflow/.shared/plan-result.ts succeeds, and wc -l on their thin entries in devflow-plan/scripts and devflow-refine/scripts prints 2 for each'
+      - 'grep -rn "Opus" packs/devflow/devflow-refine/commands prints nothing, and grep -c "subagent review too" packs/devflow/devflow-refine/commands/finalize.md prints 0'
+      - 'grep -n "^## " packs/devflow/devflow-refine/commands/finalize.md lists Your authority, Inputs from the interview, Fix rounds, Assumptions, Overrides, Files for the person, Models: the smallest model for each phase, Output in that order'
+      - 'scripts/test-render-run.sh ends with "test-render-run: all ok" and scripts/test-devflow-pack.sh ends with "0 failed" with devflow-refine''s plan-test-never-clears completed and plan-test-hard-never-clears failed'
 
   - id: p6-docs-retire
     title: Document the model tiers and retire the plan
@@ -903,8 +1046,10 @@ phases:
     brief: |
       Retirement phase. The profile has no ADR directory and no changelog, and the plan is not on this
       branch, so the only work is the reference doc.
-      1. packs/devflow/README.md: make exactly the D10 edits (the includer list, devflow-plan steps 1-5
-         with the new Validate step 3, the paragraph after the steps, devflow-refine step 3).
+      1. packs/devflow/README.md: make exactly the D10 edits, keeping "**Phases and models**" and
+         "A fresh reviewer on the large tier" each on one line (the includer list; devflow-plan steps 1, 2 and 4,
+         keeping the five steps Interview, Plan, Render, Test, Publish; the paragraph after the
+         steps; devflow-refine step 3).
       2. Check every statement the edits make against the merged code: tiers in
          devflow-plan.yaml/devflow-refine.yaml, the 3-round loop, mod-devflow-tail's default, and the
          includer list (grep -rn "include: mod-devflow-tail" packs/devflow).
@@ -912,7 +1057,7 @@ phases:
       Stop with status=blocked if the code contradicts a D10 sentence: report the difference and do
       not reword around it.
     acceptance:
-      - 'grep -n "large tier" packs/devflow/README.md shows only the Validate step'
+      - 'grep -n "large tier" packs/devflow/README.md prints exactly one line, the Test step''s "A fresh reviewer on the large tier" bullet, and grep -n "(medium tier)" packs/devflow/README.md shows the Interview step'
       - 'grep -n "Phases and models" packs/devflow/README.md prints one line'
       - 'grep -n "devflow-config" packs/devflow/README.md includes the mod-devflow-tail includer sentence'
       - 'scripts/test-render-run.sh and scripts/test-devflow-pack.sh both pass'
