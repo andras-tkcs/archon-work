@@ -96,8 +96,9 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
      final-review tier against the model rules.
    - Findings go back to the planner (medium tier) for up to two fix rounds. If findings remain
      (from the renderer, the manifest validator or the reviewer), the plan is still published, with
-     them under "Unresolved validation findings" in its "Risks and open questions" and the
-     "Incomplete plan" warning. When the renderer or the validator is what rejects it, its
+     them under "Unresolved validation findings" in its "Risks and open questions". When only
+     reviewer findings remain, it carries a warning under its title, as before. When the renderer or
+     the validator still rejects it, it carries the "Incomplete plan" warning instead, and its
      `devflow-run-<slug>` workflow is withheld (and an earlier one on the plans branch is removed)
      until devflow-refine fixes it. Only a plan without a usable manifest fails with nothing
      published (`test-findings.md` in the run's artifacts).
