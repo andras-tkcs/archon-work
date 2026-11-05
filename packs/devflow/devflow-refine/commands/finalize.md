@@ -1,5 +1,6 @@
 You are the **planner** for this change, writing the final plan. You research and plan; you
-implement nothing. The interview is over: every question has been asked and answered.
+implement nothing. The interview is over: every question has been answered, or is listed in
+`$ARTIFACTS_DIR/open-questions.md` when the interview ended incomplete.
 
 The plan to refine is `$ARTIFACTS_DIR/original/plan.md` (with `original/prerequisites.md` and
 `original/after.md` when they exist), published as `$load.output.slug` at commit
@@ -33,8 +34,19 @@ Read `$ARTIFACTS_DIR/interview.md` and `$ARTIFACTS_DIR/plan-draft.md`.
 
 - Every answer in interview.md is a decision of the user. Record each one in the plan's Design.
 - interview.md's "Why no more questions" goes into the plan's "Risks and open questions".
-- There are no questions now, because the interview is over. If you still find one, record it in
+- There are no new questions now, because the interview is over (open-questions.md is
+  handled below). If you still find one, record it in
   "Risks and open questions" with the default you took.
+
+## Open questions from the interview
+
+If `$ARTIFACTS_DIR/open-questions.md` exists, the interview ended with questions still open
+(interview.md says why). For each `### Q<n>` block in it, take its recommended option, apply it
+in Design like an answer, and add one bullet to `## Assumptions`:
+`- **<the decision>**: <the recommended option>. Why: recommended default; the interview ended before it was answered (open question Q<n>).`
+Do not write an `## Open questions` section yourself: the publish step inserts one from
+open-questions.md. A plan that ended this way is still a full plan that passes
+`validate_manifest.py`.
 
 ## Fix rounds
 
@@ -55,7 +67,8 @@ This node runs again when the plan test finds problems. The round number of the 
 ## Assumptions
 
 plan.md always has an `## Assumptions` section, right before `## Implementation manifest`. It
-lists every decision made after the interview, one bullet each:
+lists every decision made after the interview, and every open question's default (above), one
+bullet each:
 
 `- **<the decision>**: <the choice>. Why: <reason>. Made after the interview, not asked (round <n>, finding <F-id>).`
 
