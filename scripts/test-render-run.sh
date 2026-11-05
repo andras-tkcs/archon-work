@@ -191,6 +191,15 @@ cp_script="$repo_root/packs/devflow/.shared/check-plan.ts"
   vm='{"ok":false,"findings":[{"id":"T1","source":"validate_manifest","kind":"mechanical","phase":"","problem":"bad","fix":"f"}]}'
   if tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with a manifest finding did not fail" >&2; exit 1; fi
   grep -q 'after 2 fix rounds' "$scratch/cp.err"
+  cp "$fx/serial.md" "$chk/plan.md"
+  fin='{"scope":"large","slug":"serial","branch":"feat/serial","title":"S","prerequisites":false,"after":false}' tst="$vm" cp_run "" 2 | grep -q '"done":true'
+  grep -q '"withheld":true' "$chk/tested.json"
+  grep -q '"workflow":"devflow-run-serial"' "$chk/tested.json"
+  grep -q 'would break the generated' "$chk/unresolved.md"
+  sed 's/plan_slug: serial/plan_slug: other/' "$fx/serial.md" > "$chk/plan.md"
+  if fin='{"scope":"large","slug":"serial","branch":"feat/serial","title":"S","prerequisites":false,"after":false}' tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "a plan with a wrong plan_slug did not fail" >&2; exit 1; fi
+  grep -q 'no usable manifest' "$scratch/cp.err"
+  rm -f "$chk/plan.md"
   cp_run "" "" >/dev/null
   test ! -e "$chk/unresolved.md"
   echo "check-plan: ok"
@@ -369,6 +378,42 @@ publish >/dev/null
 test "$(git -C "$porigin" show plans:plans/s/plan.md | grep -c '^### Unresolved validation findings$')" -eq 1
 rm -f "$pub_art/unresolved.md"
 echo "publish-plan unresolved: ok"
+# incomplete: open interview questions, workflow published
+cp "$fx/serial.md" "$pub_art/plan.md"
+printf '### Q4 (asked by: planner)\n\n**Q?** a or b. **Recommendation: a).**\n\n### Q5 (asked by: challenger)\n\n**Q?** c or d. **Recommendation: c).**\n' > "$pub_art/open-questions.md"
+out="$(publish)"
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+test "$(echo "$pub_plan" | sed -n 3p)" = '> [!WARNING]'
+echo "$pub_plan" | grep -q '^> Incomplete plan: 2 interview questions are still open'
+echo "$pub_plan" | grep -qF 'Running `devflow-run-s` now accepts the recommended defaults'
+test "$(echo "$pub_plan" | grep -c '^## Open questions$')" -eq 1
+git -C "$porigin" cat-file -e plans:plans/workflows/devflow-run-s.yaml
+echo "$out" | grep -q 'incomplete: 2 open questions'
+echo "$pub_plan" > "$pub_art/plan.md"
+publish >/dev/null
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+test "$(echo "$pub_plan" | grep -c '^> Incomplete plan:')" -eq 1
+test "$(echo "$pub_plan" | grep -c '^## Open questions$')" -eq 1
+# withheld: the workflow is removed
+rm "$pub_art/open-questions.md"
+cp "$fx/serial.md" "$pub_art/plan.md"
+printf '### Unresolved validation findings\n\nThe plan test still reported these after its last fix round. They would break the generated\nworkflow, so it was not published.\n\n- F1 [validate_manifest, mechanical] plan: bad\n' > "$pub_art/unresolved.md"
+echo '{"withheld":true}' > "$pub_art/tested.json"
+out="$(publish)"
+if git -C "$porigin" cat-file -e plans:plans/workflows/devflow-run-s.yaml 2>/dev/null; then echo "withheld workflow was not removed" >&2; exit 1; fi
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+echo "$pub_plan" | grep -q '1 validation findings would break the generated workflow'
+echo "$pub_plan" | grep -q 'There is no runnable'
+if echo "$pub_plan" | grep -qF 'Running `devflow-run-s`'; then echo "withheld note promises a run" >&2; exit 1; fi
+if echo "$pub_plan" | grep -q 'This plan was published with'; then echo "withheld plan has the review warning" >&2; exit 1; fi
+grep -q 'was removed from the plans branch' "$pub_art/published.md"
+grep -q 'Continue with devflow-refine' "$pub_art/published.md"
+echo "$out" | grep -q '"workflow":""'
+# clean up: republish the complete plan (restores the workflow file)
+rm "$pub_art/unresolved.md" "$pub_art/tested.json"
+cp "$fx/serial.md" "$pub_art/plan.md"
+publish >/dev/null
+echo "publish-plan incomplete: ok"
 echo "publish-plan: ok"
 if ARTIFACTS_DIR="$scratch" bun "$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts" 2>"$scratch/rp.err"; then echo "render-run without inputs succeeded" >&2; exit 1; fi
 grep -q "input 'slug' is empty" "$scratch/rp.err"
