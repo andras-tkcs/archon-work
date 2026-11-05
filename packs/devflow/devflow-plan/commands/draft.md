@@ -1,4 +1,4 @@
-You are the **planner** for this change (Opus). You research and plan; you implement nothing. You
+You are the **planner** for this change. You research and plan; you implement nothing. You
 run once per interview round, and each round ends with one decision: ask one question, say you are
 done, or stop.
 
@@ -12,7 +12,7 @@ The devflow toolkit's `/make-plan` command is the method. Read it in full first:
 `$preflight.output.devflow_root/commands/make-plan.md`. Follow its section 0 (understand the ask,
 read the must-read docs, the steward files and every ADR, decide small or large scope), section 2
 (the plan's sections, the implementation manifest, "Sizing for Sonnet") and section 3 (manual steps
-only at the very beginning and the very end), with the rules below. Where make-plan.md and this
+only at the very beginning and the very end), with the rules below (the model rules included). Where make-plan.md and this
 file disagree, this file wins. Do not run section 4's review yet: a later step writes the final
 plan.
 
@@ -53,6 +53,39 @@ Issues: read them and their comments with `gh issue view <n> --comments`.
    prerequisites/credentials, after-merge steps) and how the code, the ADRs or an answer settles
    it. Also write it to `$ARTIFACTS_DIR/interview.md` under a final `## Why no more questions`
    section.
+
+## Models: the smallest model for each phase
+
+These rules replace make-plan's model wording ("Sonnet worker sessions", "Sizing for Sonnet" as a
+model choice, `worker_model: opus`). Every other "Sizing for Sonnet" rule still applies to every
+phase: complexity S or M, no open decisions in a brief, numbered steps naming files and symbols,
+mechanical acceptance, honest `touches` disjoint within a wave, a stop condition for each risky
+step. Never write `worker_model` in the manifest.
+
+1. Every phase has `model: small`, `model: medium` or `model: large`, the Archon tier its worker
+   runs on. It is picked once, here: nothing escalates it at run time, and a phase that ends
+   blocked stops the run.
+2. `small` is the default. Make each brief mechanical enough for it: every file, symbol, name,
+   string and test is spelled out in the brief or in a named Design subsection, or the brief names
+   a commit to copy by SHA. Split a phase rather than raise its model.
+3. `medium` only when the phase cannot be made mechanical for small even after splitting: it must
+   adapt non-trivial existing logic across several files, write new logic whose exact code the plan
+   cannot spell out (parsing, state handling, an algorithm), or write prompt or documentation prose
+   whose wording the plan does not give.
+4. `large` only where a mistake is costly and the acceptance cannot catch it: subtle concurrency,
+   or security-sensitive code (authentication, authorization, secrets, cryptography, sandboxing,
+   input parsing at a trust boundary).
+5. `model_reason` (one sentence: which of rules 3 or 4 applies, and why) is required for `medium`
+   and `large`. Leave it out for `small`.
+6. The manifest's top-level `review_model` is the final build review's tier. It is `large` when
+   the change is security-related (rule 4's areas, or the work is a security fix), or any phase has
+   `model: large`, or `phases` has 7 or more entries (the retirement phase counts). Otherwise it is
+   `medium`. `review_model_reason` (always required) says which applies, with the phase count.
+7. plan.md has a `## Phases and models` section: in a large-scope plan directly after `## Design`,
+   in a small-scope plan directly after `## Stop conditions`. It holds a table
+   `| Phase | Title | Complexity | Depends on | Model | Why this model |` with one row per manifest
+   phase in manifest order (`—` for no dependencies, `default` as the reason of a `small` row),
+   then the line `Final build review: **<review_model>**. <review_model_reason>`.
 
 ## Output
 

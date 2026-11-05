@@ -166,7 +166,7 @@ fs.writeFileSync(dst, Bun.YAML.stringify(d));
 )
 
 # d5. check-plan.ts
-cp_script="$repo_root/packs/devflow/devflow-plan/scripts/check-plan.ts"
+cp_script="$repo_root/packs/devflow/.shared/check-plan.ts"
 (
   chk="$scratch/chk"
   mkdir -p "$chk"
@@ -182,10 +182,31 @@ cp_script="$repo_root/packs/devflow/devflow-plan/scripts/check-plan.ts"
   echo "$out" | grep -q '"done":false'
   echo "$out" | grep -q '"round":1'
   grep -q '## F1. \[review, mechanical\]' "$chk/test-findings.md"
-  if cp_run "$rev" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with findings did not fail" >&2; exit 1; fi
+  rm -f "$chk"/*
+  out="$(cp_run "$rev" 2)"
+  echo "$out" | grep -q '"done":true'
+  grep -q '"unresolved":1' "$chk/tested.json"
+  grep -q '### Unresolved validation findings' "$chk/unresolved.md"
+  grep -qF -- '- F1 [review, mechanical] p1: p' "$chk/unresolved.md"
+  vm='{"ok":false,"findings":[{"id":"T1","source":"validate_manifest","kind":"mechanical","phase":"","problem":"bad","fix":"f"}]}'
+  if tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with a manifest finding did not fail" >&2; exit 1; fi
   grep -q 'after 2 fix rounds' "$scratch/cp.err"
+  cp_run "" "" >/dev/null
+  test ! -e "$chk/unresolved.md"
   echo "check-plan: ok"
 )
+
+# d6. model keys are required
+for spec in 'bad-model|phase '"'"'p2'"'"': model must be small, medium or large (got "haiku")' \
+            'no-reason|phase '"'"'p2'"'"': model medium needs a model_reason' \
+            'no-review-model|review_model must be medium or large (got nothing)'; do
+  name="${spec%%|*}"; want="${spec#*|}"
+  if bun "$render" "$fx/$name.md" --slug "$name" --branch "feat/$name" --title M --main main --pack test/devflow >/dev/null 2>"$scratch/$name.err"; then
+    echo "$name.md rendered without error" >&2; exit 1
+  fi
+  grep -qF "$want" "$scratch/$name.err" || { echo "$name: expected '$want', got:" >&2; cat "$scratch/$name.err" >&2; exit 1; }
+done
+echo "models: ok"
 
 # e. load-plan against a local bare origin
 origin="$scratch/origin.git"
@@ -214,6 +235,8 @@ lp() { INPUTS_PLAN_REF=plans INPUTS_PLAN_PATH=plans/s/plan.md INPUTS_DEVFLOW_ROO
 
 out="$(INPUTS_MODE=phase INPUTS_PHASE=p1 INPUTS_BASE="$main_sha" lp env)"
 echo "$out" | grep -q '"done":false'
+echo "$out" | grep -q '"model":"small"'
+echo "$out" | grep -q '"review_model":"medium"'
 test -f "$ARTIFACTS_DIR/plan.md" && test -f "$ARTIFACTS_DIR/context.json"
 echo "load-plan phase (not done): ok"
 
@@ -225,6 +248,7 @@ echo "load-plan phase (done): ok"
 
 git switch -q -c feat/serial
 INPUTS_MODE=deliver lp env >/dev/null
+INPUTS_MODE=deliver lp env | grep -q '"model":""'
 git switch -q -c feat/other
 if INPUTS_MODE=deliver lp env >/dev/null 2>&1; then echo "deliver on the wrong branch succeeded" >&2; exit 1; fi
 echo "load-plan deliver: ok"
@@ -276,6 +300,21 @@ INPUTS_COMMIT_VERB=Refine publish > "$scratch/publish3.json"
 test "$(git -C "$porigin" log -1 --format=%s plans)" = "Refine s: S"
 if INPUTS_COMMIT_VERB=Bad publish >/dev/null 2>"$scratch/verb.err"; then echo "bad commit_verb succeeded" >&2; exit 1; fi
 grep -q "invalid commit_verb" "$scratch/verb.err"
+cp "$fx/serial.md" "$pub_art/plan.md"
+printf '### Unresolved validation findings\n\nThe large-tier review still reported these after its last round.\n\n- F1 [review, mechanical] p1: x\n' > "$pub_art/unresolved.md"
+publish > "$scratch/publish4.json"
+grep -q '"unresolved":1' "$scratch/publish4.json"
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+test "$(echo "$pub_plan" | sed -n 3p)" = '> [!WARNING]'
+test "$(echo "$pub_plan" | grep -c '^### Unresolved validation findings$')" -eq 1
+risks_l="$(echo "$pub_plan" | grep -n '^## Risks and open questions$' | cut -d: -f1)"
+unres_l="$(echo "$pub_plan" | grep -n '^### Unresolved validation findings$' | cut -d: -f1)"
+man_l="$(echo "$pub_plan" | grep -n '^## Implementation manifest$' | cut -d: -f1)"
+test "$risks_l" -lt "$unres_l" && test "$unres_l" -lt "$man_l"
+publish >/dev/null
+test "$(git -C "$porigin" show plans:plans/s/plan.md | grep -c '^### Unresolved validation findings$')" -eq 1
+rm -f "$pub_art/unresolved.md"
+echo "publish-plan unresolved: ok"
 echo "publish-plan: ok"
 if ARTIFACTS_DIR="$scratch" bun "$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts" 2>"$scratch/rp.err"; then echo "render-run without inputs succeeded" >&2; exit 1; fi
 grep -q "input 'slug' is empty" "$scratch/rp.err"
@@ -332,4 +371,12 @@ echo "$out" | grep -q '"reason":"merged"'
 out="$(lp2 env GH_MERGED=0 INPUTS_CHECK_ONLY=true INPUTS_PLAN=three-wide USER_MESSAGE="add a phase")"
 test "$out" = '{"ok":true}'
 echo "load-published: ok"
+# h. pick-one
+pick="$repo_root/packs/devflow/.shared/pick-one.ts"
+test "$(INPUTS_MEDIUM='{"a":1}' bun "$pick")" = '{"a":1}'
+if bun "$pick" >/dev/null 2>"$scratch/pick.err"; then echo "pick-one with no input succeeded" >&2; exit 1; fi
+grep -qF 'got 0 (none)' "$scratch/pick.err"
+if INPUTS_SMALL=x INPUTS_LARGE=y bun "$pick" >/dev/null 2>"$scratch/pick.err"; then echo "pick-one with two inputs succeeded" >&2; exit 1; fi
+grep -qF 'got 2 (small, large)' "$scratch/pick.err"
+echo "pick-one: ok"
 echo "test-render-run: all ok"

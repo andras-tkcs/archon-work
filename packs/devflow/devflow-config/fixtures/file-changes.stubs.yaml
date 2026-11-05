@@ -53,6 +53,11 @@ check:
   unavailable: []
   report: /stub
 gate-build: '{"commits":1,"phases":0,"head":"abc"}'
+review-large:
+  verdict: approve
+  blocking: 0
+  non_blocking: 0
+  head: abc
 review:
   verdict: approve
   blocking: 0
@@ -79,3 +84,4 @@ tail__finish:
   merged: true
   state: MERGED
   url: https://github.com/example/project/pull/1100
+tail__review-tier: '{"model":"large"}'

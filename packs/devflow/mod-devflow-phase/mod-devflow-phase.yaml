@@ -59,24 +59,48 @@ nodes:
         branch: { type: string }
         title: { type: string }
         done: { type: boolean }
-      required: [slug, branch, title, done]
+        model: { type: string }
+      required: [slug, branch, title, done, model]
 
   - id: build
     depends_on: [load-plan]
     when: "$load-plan.output.done == false"
     loop_group:
       nodes:
-        - id: implement
+        - id: implement-small
+          when: "$load-plan.output.model == 'small'"
           command: implement-phase
-          model: medium
+          model: small
           context: fresh
-          output_format:
+          output_format: &implement_out
             type: object
             properties:
               status: { type: string, enum: [continue, complete, blocked] }
               phase: { type: string }
               summary: { type: string }
             required: [status, phase, summary]
+        - id: implement-medium
+          when: "$load-plan.output.model == 'medium'"
+          command: implement-phase
+          model: medium
+          context: fresh
+          output_format: *implement_out
+        - id: implement-large
+          when: "$load-plan.output.model == 'large'"
+          command: implement-phase
+          model: large
+          context: fresh
+          output_format: *implement_out
+        - id: implement
+          depends_on: [implement-small, implement-medium, implement-large]
+          trigger_rule: one_success
+          script: pick-one
+          runtime: bun
+          with:
+            small: { from: "$implement-small.output", if_skipped: "" }
+            medium: { from: "$implement-medium.output", if_skipped: "" }
+            large: { from: "$implement-large.output", if_skipped: "" }
+          output_format: *implement_out
         - id: check
           depends_on: [implement]
           script: verify

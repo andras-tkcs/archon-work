@@ -1,0 +1,25 @@
+# The plan gives this phase the large model: only implement-large runs, the picker runs for real.
+exec-code: true
+fixture:
+  expect: completed
+preflight:
+  devflow_root: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+load-plan:
+  slug: x
+  branch: feat/x
+  title: X
+  done: false
+  model: large
+implement-large:
+  status: complete
+  phase: p1-x
+  summary: stub
+check:
+  green: true
+  failed: []
+  unavailable: []
+  report: /stub/verify-fast.md
+gate: '{"head":"abc","phase":"p1-x","skipped":false}'

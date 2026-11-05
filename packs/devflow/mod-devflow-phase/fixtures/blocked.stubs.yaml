@@ -13,7 +13,8 @@ load-plan:
   branch: feat/x
   title: X
   done: false
-implement:
+  model: medium
+implement-medium:
   status: blocked
   phase: p1-x
   summary: stub

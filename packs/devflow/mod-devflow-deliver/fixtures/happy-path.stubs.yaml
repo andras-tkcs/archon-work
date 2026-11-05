@@ -11,6 +11,7 @@ load-plan:
   branch: feat/x
   title: X
   done: false
+  review_model: large
 check:
   green: true
   failed: []
@@ -18,6 +19,11 @@ check:
   report: /stub/verify-fast.md
 fix-fast: fixed
 gate-build: '{"commits":2,"phases":1,"head":"abc"}'
+review-large:
+  verdict: approve
+  blocking: 0
+  non_blocking: 1
+  head: abc
 review:
   verdict: approve
   blocking: 0
@@ -44,3 +50,4 @@ tail__finish:
   merged: true
   state: MERGED
   url: https://github.com/example/project/pull/1100
+tail__review-tier: '{"model":"large"}'

@@ -27,8 +27,8 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 **Renamed building blocks:** `devflow-phase`, `devflow-deliver`, `devflow-tail` and `devflow-audit-fix` are now `mod-devflow-phase`, `mod-devflow-deliver`, `mod-devflow-tail` and `mod-devflow-audit-fix`; the `mod-` prefix marks a workflow you never start yourself. The old names are gone, with no aliases. A `devflow-run-<slug>` published before the rename fails at its first phase, so run `devflow-plan` again for that plan, or edit its workflow file to the new names.
 
 `mod-devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch). It is
-included by `devflow-quick`, `devflow-docs`, `mod-devflow-audit-fix` (which `devflow-audit` includes) and
-`mod-devflow-deliver`, and is not run on its own. `mod-devflow-phase` and `mod-devflow-deliver` are building
+included by `devflow-quick`, `devflow-docs`, `devflow-config`, `devflow-deps`, `mod-devflow-audit-fix` (which
+`devflow-audit` includes) and `mod-devflow-deliver`, and is not run on its own. `mod-devflow-phase` and `mod-devflow-deliver` are building
 blocks too: a generated `devflow-run-<slug>` workflow starts them. No workflow merges.
 
 ## Run it
@@ -71,10 +71,13 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
 
 ## devflow-plan, step by step
 
-1. **Interview** (large tier): the planner asks the most decisive open question, one at a time,
+1. **Interview** (medium tier): the planner asks the most decisive open question, one at a time,
    through the attention queue; before it stops, a fresh reviewer tries to find one more.
-2. **Plan**: researches and writes `plan.md` with an implementation manifest, validated by the
-   toolkit's `validate_manifest.py`. `manual_before` and `manual_after` steps become
+2. **Plan** (medium tier): researches and writes `plan.md` with an implementation manifest, validated by the
+   toolkit's `validate_manifest.py`. Each phase gets the smallest model tier that can do it
+   (`small` by default, `medium` or `large` with a reason), and the plan gets a final-review
+   tier: `large` for security-related changes, for a plan with a `large` phase or with 7 or more
+   phases, else `medium`. A **Phases and models** table in plan.md shows them all. `manual_before` and `manual_after` steps become
    `prerequisites.md` and `after.md`.
 3. **Render**: a deterministic renderer turns the validated manifest into
    `devflow-run-<slug>.yaml`, checked with `archon validate`. It checks that the installed pack has
@@ -83,10 +86,14 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
 4. **Test**:
    - The manifest validator runs again, and the generated workflow is dry-run with stubbed
      children.
-   - A fresh reviewer then walks every phase against the code: paths, symbols, acceptance and
-     verify commands, open decisions.
-   - Findings go back to the planner for up to two fix rounds. If findings remain, the run fails
-     and nothing is published (`test-findings.md` in the run's artifacts).
+   - A fresh reviewer on the large tier then walks every phase against the code: paths, symbols,
+     acceptance and verify commands, open decisions. It also checks each phase's model tier and the
+     final-review tier against the model rules.
+   - Findings go back to the planner (medium tier) for up to two fix rounds. If the renderer or the
+     manifest validator still rejects the plan, the run fails and nothing is published
+     (`test-findings.md` in the run's artifacts). If only reviewer findings remain, the plan is
+     published anyway: they are listed under "Unresolved validation findings" in its "Risks and open
+     questions", with a warning under its title.
    - A decision the reviewer finds open is made by the planner and listed under `## Assumptions`
      in the plan and in `published.md`.
 5. **Publish**: the plan and the workflow are pushed to the `plans` branch (never forced) under
@@ -94,8 +101,8 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
    where and how to start the workflow. The run does not run `archon workflow sync`; you do.
 
 Then run `devflow-run-<slug>`. It implements the phases up to three at a time, each as a
-`mod-devflow-phase` child run in its own worktree, merged by SHA; then `mod-devflow-deliver` runs the
-fast-check fixes and the build gate, and the shared tail (review, fixes, definition of done, one PR,
+`mod-devflow-phase` child run in its own worktree on the phase's model tier, merged by SHA; then `mod-devflow-deliver` runs the
+fast-check fixes and the build gate, and the shared tail (review on the plan's final-review tier, fixes, definition of done, one PR,
 a watch every 10 minutes that hands conflicts, red checks and review threads to a steward session)
 follows. The run ends when a person merges or closes the PR. It never merges.
 
@@ -119,7 +126,8 @@ archon workflow run tkcs-lab/devflow:devflow-refine "refine plans/<slug>: <what 
    origin, the plan is merged into the main branch, or a pull request from it was merged.
    The check runs again right before publishing.
 3. **Interview**: it starts from the published plan and asks only what the change leaves open, one
-   question at a time, then revises the plan with the same method as `devflow-plan`.
+   question at a time, then revises the plan with the same method as `devflow-plan`. It uses the same tiers and validation as
+   `devflow-plan`, and adds phase and review tiers to an older plan that has none.
 4. **Publish**: the slug, the branch and the workflow name stay the same. The refined plan and
    `devflow-run-<slug>.yaml` are republished in place on the `plans` branch in a
    `Refine <slug>: <title>` commit (never forced).

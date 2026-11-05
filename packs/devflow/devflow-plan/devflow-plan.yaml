@@ -13,7 +13,7 @@ description: |
   when you are ready, "plan this issue with devflow".
   NOT for: confidential security work (devflow-audit keeps its plans off the plans branch), a
   quick edit (devflow-quick), or implementing a plan that already exists.
-model: large
+model: medium
 worktree:
   enabled: true
 inputs:
@@ -58,7 +58,7 @@ nodes:
       nodes:
         - id: draft
           command: draft
-          model: large
+          model: medium
           context: fresh
           output_format:
             type: object
@@ -72,7 +72,7 @@ nodes:
           depends_on: [draft]
           when: "$draft.output.status == 'done'"
           command: challenge
-          model: large
+          model: medium
           context: fresh
           output_format:
             type: object
@@ -123,7 +123,7 @@ nodes:
       nodes:
         - id: finalize
           command: finalize
-          model: large
+          model: medium
           context: fresh
           output_format:
             type: object
