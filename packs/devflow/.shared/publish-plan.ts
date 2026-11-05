@@ -58,8 +58,7 @@ let noteLines: string[] = [];
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].startsWith("```")) inFence = !inFence;
       else if (!inFence && lines[i] === "> [!WARNING]" && (lines[i + 1] ?? "").startsWith("> Incomplete plan:")) {
-        let end = i + 2;
-        while (end < lines.length && lines[end].startsWith("> ")) end++;
+        const end = Math.min(i + 3, lines.length); // exactly the three lines step 3 writes
         const from = i > 0 && lines[i - 1] === "" ? i - 1 : i;
         lines.splice(from, end - from);
         i = from - 1;
