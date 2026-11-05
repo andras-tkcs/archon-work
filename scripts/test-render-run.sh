@@ -81,7 +81,7 @@ rr="$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts"
   cat > "$scratch/rstub/archon" <<STUB
 #!/bin/sh
 if [ "\$1 \$2 \$3" = "workflow list --json" ]; then printf '%s\n' "\$STUB_LIST"; exit 0; fi
-if [ "\$1 \$2" = "workflow get" ]; then printf '%s\\n' "\$STUB_GET"; exit 0; fi
+if [ "\$1 \$2" = "workflow get" ]; then if [ -n "\${STUB_GET_FAIL-}" ]; then echo "boom" >&2; exit 1; fi; printf '%s\\n' "\$STUB_GET"; exit 0; fi
 exec "$real_archon" "\$@"
 STUB
   chmod +x "$scratch/rstub/archon"
@@ -91,7 +91,7 @@ STUB
   list_ok='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"}]}'
   list_bad='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"}]}'
   rr_run() {
-    PATH="$scratch/rstub:$PATH" STUB_LIST="$1" WORKFLOW_ID=wf-test STUB_GET="${STUB_GET-}" ARTIFACTS_DIR="$rart" INPUTS_SLUG="$2" INPUTS_BRANCH=feat/serial INPUTS_TITLE=S \
+    PATH="$scratch/rstub:$PATH" STUB_LIST="$1" WORKFLOW_ID="${RR_WORKFLOW_ID-wf-test}" STUB_GET="${STUB_GET-}" ARTIFACTS_DIR="$rart" INPUTS_SLUG="$2" INPUTS_BRANCH=feat/serial INPUTS_TITLE=S \
       INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' INPUTS_PLANS_REF=plans \
       INPUTS_PLANS_DIR=plans INPUTS_PACK="${3-test/devflow}" INPUTS_SOFT_ERRORS=true bun "$rr"
   }
@@ -122,6 +122,10 @@ STUB
   echo "$out" | grep -q '"ok":true'
   grep -q 'test/devflow:' "$rart/devflow-run-serial.yaml"
   if grep -q 'other/devflow:' "$rart/devflow-run-serial.yaml"; then echo "input did not win" >&2; exit 1; fi
+  if RR_WORKFLOW_ID= rr_run "$list_ok" serial "" >/dev/null 2>"$scratch/rr.err"; then echo "unset WORKFLOW_ID accepted" >&2; exit 1; fi
+  grep -q 'WORKFLOW_ID is not set' "$scratch/rr.err"
+  if STUB_GET_FAIL=1 rr_run "$list_ok" serial "" >/dev/null 2>"$scratch/rr.err"; then echo "failing workflow get accepted" >&2; exit 1; fi
+  grep -q 'workflow get wf-test --json` failed' "$scratch/rr.err"
   echo "render-run node: ok"
 )
 
