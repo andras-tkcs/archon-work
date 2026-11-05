@@ -1,4 +1,4 @@
-name: devflow-tail
+name: mod-devflow-tail
 description: |
   Building block, not a workflow to run alone. The delivery tail every devflow workflow shares:
   Opus review with fix rounds until no blocking finding is left, the non-blocking findings fixed

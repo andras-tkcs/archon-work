@@ -1,4 +1,4 @@
-name: devflow-audit-fix
+name: mod-devflow-audit-fix
 description: |
   Building block, included only by devflow-audit: plans and implements confidential fixes in
   one run, without publishing the plan. Not run on its own.
@@ -155,5 +155,5 @@ nodes:
 
   # ---- 3-6. review, fix, definition of done, PR, watch: the shared tail --------------------
   - id: tail
-    include: devflow-tail
+    include: mod-devflow-tail
     depends_on: [gate-build]

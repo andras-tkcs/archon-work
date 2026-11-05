@@ -1,4 +1,4 @@
-// Reads a published plan for devflow-phase (mode=phase) and devflow-deliver (mode=deliver): writes
+// Reads a published plan for mod-devflow-phase (mode=phase) and mod-devflow-deliver (mode=deliver): writes
 // $ARTIFACTS_DIR/plan.md and context.json, checks the worktree, and says whether the phase is done.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";

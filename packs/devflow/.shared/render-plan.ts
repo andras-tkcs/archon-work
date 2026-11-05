@@ -14,34 +14,52 @@ const branchRegex = input("branch_regex");
 const plansRef = input("plans_ref");
 const plansDir = input("plans_dir");
 
+// With soft_errors=true (devflow-plan's fix loop) a plan error is output, not a node failure:
+// finalize can fix it, so the loop must see it.
+const soft = input("soft_errors", false) === "true";
+function planError(msg: string): never {
+  if (!soft) fail(msg);
+  console.log(JSON.stringify({ ok: false, error: msg, workflow: "", file: "", waves: 0 }));
+  process.exit(0);
+}
+
 const planFile = join(art, "plan.md");
-if (!existsSync(planFile)) fail(`${planFile} does not exist: finalize did not write the plan`);
+if (!existsSync(planFile)) planError(`${planFile} does not exist: finalize did not write the plan`);
 let manifest;
 try {
   manifest = extractManifest(readFileSync(planFile, "utf8"));
 } catch (e) {
-  fail((e as Error).message);
+  planError((e as Error).message);
 }
-if (manifest.plan_slug !== slug) fail(`the manifest's plan_slug '${manifest.plan_slug}' differs from the slug '${slug}'`);
-if (manifest.feature_branch !== branch) fail(`the manifest's feature_branch '${manifest.feature_branch}' differs from the branch '${branch}'`);
-if (!new RegExp(branchRegex).test(branch)) fail(`the branch '${branch}' does not match ${branchRegex}`);
+if (manifest.plan_slug !== slug) planError(`the manifest's plan_slug '${manifest.plan_slug}' differs from the slug '${slug}'`);
+if (manifest.feature_branch !== branch) planError(`the manifest's feature_branch '${manifest.feature_branch}' differs from the branch '${branch}'`);
+if (!new RegExp(branchRegex).test(branch)) planError(`the branch '${branch}' does not match ${branchRegex}`);
+
+// The installed catalog, read once: for the pack auto-detect and for the building-block check.
+const list = run(["archon", "workflow", "list", "--json"]);
+if (list.code !== 0) fail(`\`archon workflow list --json\` failed:\n${tail(list.out + list.err, 20)}`);
+const names: string[] = [];
+try {
+  const j = JSON.parse(list.out);
+  for (const w of j.workflows ?? []) names.push(String(w.name ?? ""));
+} catch {
+  fail(`\`archon workflow list --json\` did not print JSON:\n${tail(list.out, 20)}`);
+}
 
 // Pack identity: the input, else the one installed pack that has devflow-plan.
 let pack = input("pack", false);
 if (!pack) {
-  const r = run(["archon", "workflow", "list", "--json"]);
-  const names: string[] = [];
-  if (r.code === 0) {
-    try {
-      const j = JSON.parse(r.out);
-      for (const w of j.workflows ?? []) names.push(String(w.name ?? ""));
-    } catch {}
-  }
   const found = [...new Set(names.map((n) => n.match(/^([^/]+\/[^:]+):devflow-plan$/)?.[1]).filter(Boolean))] as string[];
   if (found.length !== 1) {
     fail(`cannot tell which installed devflow pack to use (${found.join(", ") || "none found"}); start the workflow with --input pack=<owner>/devflow`);
   }
   pack = found[0];
+}
+const missing = ["mod-devflow-phase", "mod-devflow-deliver"].map((n) => `${pack}:${n}`).filter((n) => !names.includes(n));
+if (missing.length) {
+  fail(
+    `the installed pack ${pack} has no ${missing.join(" and ")} in \`archon workflow list\`; update the pack (bootstrap.sh, or archon plugin update <its plugin id>) or start the workflow with --input pack=<owner>/devflow`,
+  );
 }
 
 const read = (f: string) => (existsSync(join(art, f)) ? readFileSync(join(art, f), "utf8") : null);
@@ -62,7 +80,7 @@ try {
     sourceRun: process.env.WORKFLOW_ID ?? "",
   });
 } catch (e) {
-  fail((e as Error).message);
+  planError((e as Error).message);
 }
 const file = join(art, `${name}.yaml`);
 writeFileSync(file, yaml);
@@ -85,4 +103,4 @@ try {
   rmSync(tmp, { recursive: true, force: true });
 }
 
-console.log(JSON.stringify({ workflow: name, file, waves: waves(manifest).length }));
+console.log(JSON.stringify({ ok: true, error: "", workflow: name, file, waves: waves(manifest).length }));

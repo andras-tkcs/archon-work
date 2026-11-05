@@ -1,6 +1,6 @@
 # devflow pack for Archon
 
-Seven workflows (and the building blocks devflow-phase and devflow-deliver) built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
+Seven workflows (and the building blocks mod-devflow-phase and mod-devflow-deliver) built on the devflow toolkit ([andras-tkcs/claude-toolkit](https://github.com/andras-tkcs/claude-toolkit)),
 for any repository that has a devflow profile (`.claude/toolkit.yaml`). The pack holds no project
 facts: branch rules, checks, docs to read, changelog and CI come from the profile, and the project's
 environment comes from its own SessionStart hook.
@@ -24,9 +24,11 @@ keep one copy, remove the old one with `archon plugin` or set `DEVFLOW_PACK` to 
 | `devflow-config` | Review a repo's rulesets, Actions, access and security settings and workflow files; apply what you approve | Choosing which settings changes to apply (needs an admin token) |
 | `devflow-deps` | Repair and push Dependabot PRs; fix vulnerability alerts no PR covers | Never; PRs it cannot fix are handed to a person with the evidence |
 
-`devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch). It is
-included by `devflow-quick`, `devflow-docs`, `devflow-audit-fix` (which `devflow-audit` includes) and
-`devflow-deliver`, and is not run on its own. `devflow-phase` and `devflow-deliver` are building
+**Renamed building blocks:** `devflow-phase`, `devflow-deliver`, `devflow-tail` and `devflow-audit-fix` are now `mod-devflow-phase`, `mod-devflow-deliver`, `mod-devflow-tail` and `mod-devflow-audit-fix`; the `mod-` prefix marks a workflow you never start yourself. The old names are gone, with no aliases. A `devflow-run-<slug>` published before the rename fails at its first phase, so run `devflow-plan` again for that plan, or edit its workflow file to the new names.
+
+`mod-devflow-tail` is the shared building block (review, fixes, definition of done, PR, watch). It is
+included by `devflow-quick`, `devflow-docs`, `mod-devflow-audit-fix` (which `devflow-audit` includes) and
+`mod-devflow-deliver`, and is not run on its own. `mod-devflow-phase` and `mod-devflow-deliver` are building
 blocks too: a generated `devflow-run-<slug>` workflow starts them. No workflow merges.
 
 ## Run it
@@ -75,13 +77,23 @@ profile, `gh` authenticated, and `python3` with PyYAML for the toolkit's validat
    toolkit's `validate_manifest.py`. `manual_before` and `manual_after` steps become
    `prerequisites.md` and `after.md`.
 3. **Render**: a deterministic renderer turns the validated manifest into
-   `devflow-run-<slug>.yaml`, checked with `archon validate`.
-4. **Publish**: the plan and the workflow are pushed to the `plans` branch (never forced) under
+   `devflow-run-<slug>.yaml`, checked with `archon validate`. It checks that the installed pack has
+   `mod-devflow-phase` and `mod-devflow-deliver`.
+4. **Test**:
+   - The manifest validator runs again, and the generated workflow is dry-run with stubbed
+     children.
+   - A fresh reviewer then walks every phase against the code: paths, symbols, acceptance and
+     verify commands, open decisions.
+   - Findings go back to the planner for up to two fix rounds. If findings remain, the run fails
+     and nothing is published (`test-findings.md` in the run's artifacts).
+   - A decision the reviewer finds open is made by the planner and listed under `## Assumptions`
+     in the plan and in `published.md`.
+5. **Publish**: the plan and the workflow are pushed to the `plans` branch (never forced) under
    `plans/<slug>/` and `plans/workflows/`. `published.md` in the run's artifacts says what went
    where and how to start the workflow. The run does not run `archon workflow sync`; you do.
 
 Then run `devflow-run-<slug>`. It implements the phases up to three at a time, each as a
-`devflow-phase` child run in its own worktree, merged by SHA; then `devflow-deliver` runs the
+`mod-devflow-phase` child run in its own worktree, merged by SHA; then `mod-devflow-deliver` runs the
 fast-check fixes and the build gate, and the shared tail (review, fixes, definition of done, one PR,
 a watch every 10 minutes that hands conflicts, red checks and review threads to a steward session)
 follows. The run ends when a person merges or closes the PR. It never merges.
@@ -154,7 +166,7 @@ With two devflow packs installed, `render` needs `--input pack=<owner>/devflow`.
   there is one, documented commands, links, changelog coverage). The fixes become `work.md`; what is a
   product or wording decision goes to the PR's "Needs a person" section instead of into edits.
 - **devflow-audit** runs an auditor, then a fresh verifier that tries to disprove every finding and
-  decides fix, not doing or needs a decision, then includes `devflow-audit-fix`, a confidential
+  decides fix, not doing or needs a decision, then includes `mod-devflow-audit-fix`, a confidential
   one-run plan and implementation, with the surviving findings as the work. The findings never leave the run's artifacts: no issue, and the PR names the class of
   fix, not how to attack it.
 - **devflow-config** snapshots the repository's configuration through the GitHub API (read-only; each
@@ -181,6 +193,8 @@ It loads the pack as a project pack in a scratch repository, runs `archon valida
 replays every fixture with `archon workflow test`. Fixtures named for a red path
 (`review-never-clears`, `dod-stays-red`, `not-small`, `nothing-to-fix`, ...) must stay red; the ones
 that execute a gate set `exec-code: true`.
+
+`scripts/test-render-run.sh` also tests the plan test's scripts (`render-run.ts`, `test-plan.ts`, `check-plan.ts`) and `publish-plan.ts`.
 
 Adapted from the PrivacyFence pack ([privacyfence/privacyfence `.archon/`](https://github.com/privacyfence/privacyfence/tree/chore/archon-devflow-workflow/.archon)).
 Its `devflow-release` is not here: it drives that project's own release script and build workflows.
