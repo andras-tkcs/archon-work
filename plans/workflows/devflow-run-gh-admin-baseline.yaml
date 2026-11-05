@@ -1,5 +1,5 @@
 name: devflow-run-gh-admin-baseline
-description: "Implementation of the devflow plan gh-admin-baseline (\"Strip the admin path from devflow-config; bootstrap a sealed ghadmin user with the gh-baseline tool\") from run fae5987f-65e7-48ed-a961-7676bfbb0091.\nThe plan is plans/gh-admin-baseline/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then github-admin-2:devflow-deliver reviews, opens the PR and watches it."
+description: "Implementation of the devflow plan gh-admin-baseline (\"Strip the admin path from devflow-config; bootstrap a sealed ghadmin user with the gh-baseline tool\") from run fae5987f-65e7-48ed-a961-7676bfbb0091.\nThe plan is plans/gh-admin-baseline/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
 worktree:
   enabled: true
 returns: result
@@ -58,7 +58,7 @@ nodes:
         - head
         - plan_commit
   - id: phase-p2-merge-script
-    workflow: github-admin-2:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - start
@@ -80,7 +80,7 @@ nodes:
       required:
         - head
   - id: phase-p3-policy-file
-    workflow: github-admin-2:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-1
@@ -102,7 +102,7 @@ nodes:
       required:
         - head
   - id: phase-p1-slim-devflow-config
-    workflow: github-admin-2:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-2
@@ -124,7 +124,7 @@ nodes:
       required:
         - head
   - id: phase-p4-bootstrap-admin-user
-    workflow: github-admin-2:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-3
@@ -146,7 +146,7 @@ nodes:
       required:
         - head
   - id: phase-p5-docs-and-retire
-    workflow: github-admin-2:devflow-phase
+    workflow: tkcs-lab/devflow:mod-devflow-phase
     isolation: worktree
     depends_on:
       - merge-4
@@ -168,7 +168,7 @@ nodes:
       required:
         - head
   - id: deliver
-    workflow: github-admin-2:devflow-deliver
+    workflow: tkcs-lab/devflow:mod-devflow-deliver
     depends_on:
       - merge-5
       - after-steps
