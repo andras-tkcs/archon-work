@@ -123,6 +123,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
   }
   start.bash = [
     "set -euo pipefail",
+    "exec 3>&1 1>&2", // stdout must be the JSON only; git's own messages go to stderr
     `B='${o.branch}'; M='${o.mainBranch}'; PR='${o.plansRef}'`,
     'git fetch origin "$M"',
     'git fetch origin "$PR"',
@@ -132,7 +133,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
     '  if git rev-parse --verify --quiet "refs/heads/$B" >/dev/null; then git switch "$B"; git merge --ff-only "origin/$B"; else git switch -c "$B" --track "origin/$B"; fi',
     'elif git rev-parse --verify --quiet "refs/heads/$B" >/dev/null; then git switch "$B"',
     'else git switch -c "$B" "origin/$M"; fi',
-    `printf '{"head":"%s","plan_commit":"%s"}\\n' "$(git rev-parse HEAD)" "$PC"`,
+    `printf '{"head":"%s","plan_commit":"%s"}\\n' "$(git rev-parse HEAD)" "$PC" >&3`,
     "",
   ].join("\n");
   start.output_format = {
@@ -160,7 +161,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
         },
       });
     }
-    const lines = ["set -euo pipefail"];
+    const lines = ["set -euo pipefail", "exec 3>&1 1>&2"];
     wave.forEach((p, j) => {
       const h = `h${j + 1}`;
       const t = msgSafe(p.title ?? p.id);
@@ -171,7 +172,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
         "fi",
       );
     });
-    lines.push(`printf '{"head":"%s"}\\n' "$(git rev-parse HEAD)"`, "");
+    lines.push(`printf '{"head":"%s"}\\n' "$(git rev-parse HEAD)" >&3`, "");
     nodes.push({
       id: `merge-${k}`,
       depends_on: wave.map((p) => `phase-${p.id}`),
