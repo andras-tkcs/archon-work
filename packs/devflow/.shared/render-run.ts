@@ -216,7 +216,9 @@ export function renderRunWorkflow(o: RenderOpts): string {
   });
   nodes.push({
     id: "end",
-    depends_on: ["wrap-final"],
+    depends_on: ["wrap-final", "deliver"],
+    trigger_rule: "all_done",
+    when: started,
     bash: [
       "r=$wrap-final.output",
       "python3 - \"$r\" <<'PY'",

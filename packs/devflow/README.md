@@ -221,7 +221,8 @@ what the plan leaves open and records it.
    `Review and CI`, and `deviations.md` is committed and pushed again. wrap, deliver and wrap-final
    share the build's checkout, so they run one after another.
 8. **end** fails the run when the build is not complete (`build-issue-<n> is not complete: see
-   deviations.md (<url>)`), after wrap-final has committed and pushed.
+   deviations.md (<url>)`), after wrap-final has committed and pushed; like wrap-final it runs
+   whatever deliver did and reads only wrap-final's output.
 
 Guarantee: once `start` has created the branch, every ending passes through `wrap` and then
 `wrap-final`, so the branch carries `deviations.md`. Its limits: a refusal before `start` creates
