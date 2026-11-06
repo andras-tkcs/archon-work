@@ -1,309 +1,231 @@
 name: devflow-refine
 description: |
-  Refines a plan that devflow-plan already published, before its implementation starts. It loads
-  the plan from the plans branch, interviews you about what your request leaves open in up to 3
-  rounds of up to 5 questions (a clear request needs no questions; a plan published as incomplete
-  is continued from its slug alone), revises the plan with the same method, and republishes the
-  plan and its devflow-run-<slug> workflow in place.
+  Refines a GitHub issue into a published design.md: researches the issue and the code, asks at
+  most two question rounds per pass (round 1 up to 5 questions, round 2 up to 3 and only when an
+  answer opened a blocking question; each round is one pause), writes design.md from its template,
+  checks it with validate-docs and publishes it to the plans branch (plans/issue-<n>/design.md),
+  then updates the issue's one devflow comment. It ends with one pause: plan (run the plan block
+  now and publish build-issue-<n>), revise (another pass, your note is the change request) or
+  finish (the design stays published). Max 5 revisions per run.
 
-  Use when: "refine plans/<slug>: <what to change>", or a plan URL or slug and the change.
-  NOT for: a plan whose implementation has started (its branch is on origin) or is merged, a new
-  plan (devflow-plan), or a quick edit (devflow-quick).
+  Refuses a closed issue and an issue whose build has started. Reply stop to a round to cancel
+  without publishing.
+
+  Use when: an issue should get a design before it is planned, "refine issue 42 with devflow".
+  NOT for: planning a refined issue directly (devflow-plan), a quick edit (devflow-quick), or
+  confidential security work (devflow-audit).
 model: medium
 worktree:
   enabled: true
 inputs:
-  plan:
-    default: ""
-    description: The plan's slug, or its plan.md URL on the plans branch. Empty means the plan is named in the run's message.
   work:
     default: ""
-    description: What to change in the plan. Empty means the run's message.
+    description: The issue to refine (a number, #number or URL, a plan or design URL, or issue-<n>). Empty means the run's message.
   plans_ref:
-    default: plans
-    description: The branch the plan and the generated workflow are pushed to.
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
   plans_dir:
-    default: plans
-    description: The directory on that branch that holds plans/<slug>/ and workflows/.
+    default: ""
+    description: The directory on that branch holding plans/issue-<n>/ and workflows/; empty means the profile's plans.dir, else plans.
   pack:
     default: ""
-    description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means the pack this workflow was started from.
-returns: publish
+    description: The installed pack's qualified name, for example tkcs-lab/devflow. Empty means the pack this workflow was started from.
+returns: result
+outcome_field: designed
 
+# Six passes, unrolled: a revise answer to pass k starts pass k+1; the last pass offers no revise.
+# A block's skipped refusal nodes are among its sinks, so a node after a block needs
+# none_failed_min_one_success.
 nodes:
-  # ---- Setup: profile, toolkit, environment ----------------------------------------------
-  - id: preflight
-    script: preflight
-    runtime: bun
-    output_format:
-      type: object
-      properties:
-        shared_dir: { type: string }
-        main_branch: { type: string }
-        branch_regex: { type: string }
-      required: [shared_dir, main_branch, branch_regex]
-
-  - id: setup
-    depends_on: [preflight]
-    script: setup-env
-    runtime: bun
-    timeout: 1800000
-
-  - id: load
-    depends_on: [setup]
-    script: load-published
-    runtime: bun
+  - id: stage-1
+    include: mod-devflow-refine-block
     with:
-      plan: "$INPUTS.plan"
       work: "$INPUTS.work"
+      change: ""
       plans_ref: "$INPUTS.plans_ref"
       plans_dir: "$INPUTS.plans_dir"
-      main_branch: "$preflight.output.main_branch"
-    output_format:
-      type: object
-      properties:
-        slug: { type: string }
-        branch: { type: string }
-        title: { type: string }
-        plan_commit: { type: string }
-        started: { type: boolean }
-        reason: { type: string }
-        refusal: { type: string }
-        work: { type: string }
-      required: [slug, branch, title, plan_commit, started, reason, refusal, work]
+      pack: "$INPUTS.pack"
 
-  - id: refuse-started
-    depends_on: [load]
-    when: "$load.output.started == true"
-    cancel: "$load.output.refusal"
+  - id: attend-1
+    include: mod-devflow-attention
+    depends_on: [stage-1]
+    trigger_rule: none_failed_min_one_success
+    with:
+      stage: devflow-refine
+      outcome: "$stage-1.output"
+      last: "false"
 
-  # ---- 1. The interview: up to 5 questions a round, at most 3 rounds ----------------------
-  - id: interview
-    depends_on: [load]
-    when: "$load.output.started == false"
-    loop_group:
-      # next-question.ts ends the interview by the 4th iteration (3 asking rounds + 1 that records
-      # the last answers); 5 leaves one spare.
-      max_iterations: 5
-      nodes:
-        - id: draft
-          command: draft
-          model: medium
-          context: fresh
-          output_format:
-            type: object
-            properties:
-              status: { type: string, enum: [ask, done, stop, publish] }
-              questions: { type: array, items: { type: string } }
-              why_no_more: { type: string }
-            required: [status, questions, why_no_more]
+  - id: go-2
+    depends_on: [attend-1]
+    when: "$attend-1.output.choice == 'revise'"
+    bash: "true"
 
-        - id: challenge
-          depends_on: [draft]
-          when: "$draft.output.status == 'ask' || $draft.output.status == 'done'"
-          command: challenge
-          model: medium
-          context: fresh
-          output_format:
-            type: object
-            properties:
-              questions:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    question: { type: string }
-                    by: { type: string, enum: [planner, challenger] }
-                  required: [question, by]
-              reason: { type: string }
-            required: [questions, reason]
+  - id: stage-2
+    include: mod-devflow-refine-block
+    depends_on: [go-2, attend-1]
+    with:
+      work: "$INPUTS.work"
+      change: "$attend-1.output.brief"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
 
-        - id: next
-          depends_on: [draft, challenge]
-          trigger_rule: all_done
-          script: next-question
-          runtime: bun
-          with:
-            draft: "$draft.output"
-            challenge: { from: "$challenge.output", if_skipped: "" }
-          output_format:
-            type: object
-            properties:
-              done: { type: boolean }
-              stop: { type: boolean }
-              incomplete: { type: boolean }
-              question: { type: string }
-            required: [done, stop, incomplete, question]
+  - id: attend-2
+    include: mod-devflow-attention
+    depends_on: [stage-2]
+    trigger_rule: none_failed_min_one_success
+    with:
+      stage: devflow-refine
+      outcome: "$stage-2.output"
+      last: "false"
 
-        - id: ask
-          depends_on: [next]
-          when: "$next.output.done == false"
-          wait:
-            attention: "$next.output.question"
-            form: message
-            labels:
-              workflow: devflow-refine
-              stage: interview
-      until_bash: 'd=$next.output.done; [ "$d" = true ]'
+  - id: go-3
+    depends_on: [attend-2]
+    when: "$attend-2.output.choice == 'revise'"
+    bash: "true"
 
-  - id: stop-at-interview
-    depends_on: [interview]
-    when: "$interview.output.stop == true"
-    cancel: "Stopped while refining: you said stop, so the interview ended without a refined plan. The published plan is unchanged. The questions and answers are interview.md in the run artifacts."
+  - id: stage-3
+    include: mod-devflow-refine-block
+    depends_on: [go-3, attend-2]
+    with:
+      work: "$INPUTS.work"
+      change: "$attend-2.output.brief"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
 
-  # ---- 2. The final plan, the generated workflow, the publication ------------------------
-  - id: plan-loop
-    depends_on: [interview]
-    when: "$interview.output.stop == false"
-    loop_group:
-      max_iterations: 3
-      until_bash: 'd=$plan-check.output.done; [ "$d" = true ]'
-      nodes:
-        - id: finalize
-          command: finalize
-          model: medium
-          context: fresh
-          output_format:
-            type: object
-            properties:
-              scope: { type: string, enum: [small, large] }
-              slug: { type: string }
-              branch: { type: string }
-              title: { type: string }
-              prerequisites: { type: boolean }
-              after: { type: boolean }
-            required: [scope, slug, branch, title, prerequisites, after]
+  - id: attend-3
+    include: mod-devflow-attention
+    depends_on: [stage-3]
+    trigger_rule: none_failed_min_one_success
+    with:
+      stage: devflow-refine
+      outcome: "$stage-3.output"
+      last: "false"
 
-        - id: render
-          depends_on: [finalize]
-          script: render-run
-          runtime: bun
-          with:
-            slug: "$load.output.slug"
-            branch: "$load.output.branch"
-            title: "$finalize.output.title"
-            main_branch: "$preflight.output.main_branch"
-            branch_regex: "$preflight.output.branch_regex"
-            plans_ref: "$INPUTS.plans_ref"
-            plans_dir: "$INPUTS.plans_dir"
-            pack: "$INPUTS.pack"
-            soft_errors: "true"
-          output_format:
-            type: object
-            properties:
-              ok: { type: boolean }
-              error: { type: string }
-              workflow: { type: string }
-              file: { type: string }
-              waves: { type: integer }
-            required: [ok, error, workflow, file, waves]
+  - id: go-4
+    depends_on: [attend-3]
+    when: "$attend-3.output.choice == 'revise'"
+    bash: "true"
 
-        - id: plan-test
-          depends_on: [render]
-          script: test-plan
-          runtime: bun
-          timeout: 600000
-          with:
-            render: "$render.output"
-            shared_dir: "$preflight.output.shared_dir"
-          output_format:
-            type: object
-            properties:
-              ok: { type: boolean }
-              findings: { type: array, items: { type: object } }
-            required: [ok, findings]
+  - id: stage-4
+    include: mod-devflow-refine-block
+    depends_on: [go-4, attend-3]
+    with:
+      work: "$INPUTS.work"
+      change: "$attend-3.output.brief"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
 
-        - id: plan-review
-          depends_on: [plan-test]
-          when: "$plan-test.output.ok == true"
-          command: review-plan
-          model: large
-          context: fresh
-          denied_tools: [Write, Edit, NotebookEdit]
-          output_format:
-            type: object
-            properties:
-              clean: { type: boolean }
-              summary: { type: string }
-              findings:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: string }
-                    source: { type: string, enum: [review] }
-                    kind: { type: string, enum: [mechanical, open-decision] }
-                    phase: { type: string }
-                    problem: { type: string }
-                    fix: { type: string }
-                  required: [id, source, kind, phase, problem, fix]
-            required: [clean, summary, findings]
+  - id: attend-4
+    include: mod-devflow-attention
+    depends_on: [stage-4]
+    trigger_rule: none_failed_min_one_success
+    with:
+      stage: devflow-refine
+      outcome: "$stage-4.output"
+      last: "false"
 
-        - id: plan-check
-          depends_on: [plan-test, plan-review]
-          trigger_rule: all_done
-          script: check-plan
-          runtime: bun
-          with:
-            test: "$plan-test.output"
-            review: { from: "$plan-review.output", if_skipped: "" }
-            round: "$LOOP_PREV.plan-check.output.round"
-            finalize: "$finalize.output"
-            render: "$render.output"
-          output_format:
-            type: object
-            properties:
-              done: { type: boolean }
-              round: { type: integer }
-              findings: { type: integer }
-            required: [done, round, findings]
+  - id: go-5
+    depends_on: [attend-4]
+    when: "$attend-4.output.choice == 'revise'"
+    bash: "true"
 
-  - id: plan-result
-    depends_on: [plan-loop]
-    script: plan-result
-    runtime: bun
-    output_format:
-      type: object
-      properties:
-        slug: { type: string }
-        branch: { type: string }
-        title: { type: string }
-        workflow: { type: string }
-      required: [slug, branch, title, workflow]
+  - id: stage-5
+    include: mod-devflow-refine-block
+    depends_on: [go-5, attend-4]
+    with:
+      work: "$INPUTS.work"
+      change: "$attend-4.output.brief"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
 
-  - id: still-unstarted
-    depends_on: [plan-result]
-    script: load-published
+  - id: attend-5
+    include: mod-devflow-attention
+    depends_on: [stage-5]
+    trigger_rule: none_failed_min_one_success
+    with:
+      stage: devflow-refine
+      outcome: "$stage-5.output"
+      last: "false"
+
+  - id: go-6
+    depends_on: [attend-5]
+    when: "$attend-5.output.choice == 'revise'"
+    bash: "true"
+
+  - id: stage-6
+    include: mod-devflow-refine-block
+    depends_on: [go-6, attend-5]
+    with:
+      work: "$INPUTS.work"
+      change: "$attend-5.output.brief"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
+
+  - id: attend-6
+    include: mod-devflow-attention
+    depends_on: [stage-6]
+    trigger_rule: none_failed_min_one_success
+    with:
+      stage: devflow-refine
+      outcome: "$stage-6.output"
+      last: "true"
+
+  - id: choice
+    depends_on: [attend-1, attend-2, attend-3, attend-4, attend-5, attend-6]
+    trigger_rule: all_done
+    script: refine-result
     runtime: bun
     with:
-      plan: "$load.output.slug"
-      work: "$load.output.work"
-      plans_ref: "$INPUTS.plans_ref"
-      plans_dir: "$INPUTS.plans_dir"
-      main_branch: "$preflight.output.main_branch"
-      check_only: "true"
+      mode: choice
+      attend_1: { from: "$attend-1.output", if_skipped: "" }
+      attend_2: { from: "$attend-2.output", if_skipped: "" }
+      attend_3: { from: "$attend-3.output", if_skipped: "" }
+      attend_4: { from: "$attend-4.output", if_skipped: "" }
+      attend_5: { from: "$attend-5.output", if_skipped: "" }
+      attend_6: { from: "$attend-6.output", if_skipped: "" }
     output_format:
       type: object
       properties:
-        ok: { type: boolean }
-      required: [ok]
+        choice: { type: string }
+        issue: { type: integer }
+        outcome: { type: object }
+      required: [choice, issue, outcome]
 
-  - id: publish
-    depends_on: [still-unstarted]
-    script: publish-plan
+  - id: go-plan
+    depends_on: [choice]
+    when: "$choice.output.choice == 'plan'"
+    bash: "true"
+
+  - id: plan
+    include: mod-devflow-plan-block
+    depends_on: [go-plan, choice]
+    with:
+      work: "#$choice.output.issue"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      pack: "$INPUTS.pack"
+
+  - id: result
+    depends_on: [choice, plan]
+    trigger_rule: all_done
+    script: refine-result
     runtime: bun
     with:
-      slug: "$load.output.slug"
-      title: "$plan-result.output.title"
-      commit_verb: Refine
-      workflow: "$plan-result.output.workflow"
-      plans_ref: "$INPUTS.plans_ref"
-      plans_dir: "$INPUTS.plans_dir"
-      main_branch: "$preflight.output.main_branch"
+      mode: result
+      choice: "$choice.output"
+      plan: { from: "$plan.output", if_skipped: "" }
     output_format:
       type: object
       properties:
-        commit: { type: string }
-        workflow: { type: string }
-        message: { type: string }
-      required: [commit, workflow, message]
+        designed: { type: boolean }
+        issue: { type: integer }
+        revision: { type: integer }
+        design_url: { type: string }
+        planned: { type: boolean }
+        needs_refine: { type: boolean }
+      required: [designed, issue, revision, design_url, planned, needs_refine]

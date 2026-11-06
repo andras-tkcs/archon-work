@@ -1,0 +1,82 @@
+# Research settles everything: no round, the design is published, the person finishes.
+fixture:
+  expect: completed
+  reached: [stage-1__publish, attend-1__answer, result]
+stage-1__preflight:
+  shared_dir: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feat|fix|docs|chore)/[a-z0-9]+(-[a-z0-9]+)*$"
+stage-1__resolve:
+  issue: 7
+  slug: issue-7
+  folder: plans/plans/issue-7
+  title: Export reports as CSV
+  body: Reports can only be viewed in the browser.
+  comments: ""
+  url: https://github.com/o/r/issues/7
+  state: open
+  design_revision: 0
+  plan_revision: 0
+  design_present: false
+  plan_present: false
+  existing_branch: ""
+  plans_commit: ""
+  change: ""
+  started: false
+  refusal: ""
+stage-1__research:
+  questions: []
+  assumptions: [{ title: File name, choice: "report-<id>.csv", why: it matches the page URL }]
+  related: []
+  summary: A CSV download for reports.
+  question_count: 0
+stage-1__write-design: { title: Export reports as CSV, scope_note: the CSV download only }
+stage-1__check: { ok: true, revision: 1 }
+stage-1__still-unstarted:
+  issue: 7
+  slug: issue-7
+  folder: plans/plans/issue-7
+  title: Export reports as CSV
+  body: ""
+  comments: ""
+  url: https://github.com/o/r/issues/7
+  state: open
+  design_revision: 0
+  plan_revision: 0
+  design_present: false
+  plan_present: false
+  existing_branch: ""
+  plans_commit: ""
+  change: ""
+  started: false
+  refusal: ""
+stage-1__publish:
+  commit: 0123456789abcdef0123456789abcdef01234567
+  revision: 1
+  design_url: https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md
+  comment_url: https://github.com/o/r/issues/7#issuecomment-101
+stage-1__result:
+  designed: true
+  issue: 7
+  revision: 1
+  design_url: https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md
+  questions_asked: 1
+  assumptions: 1
+  assumption_lines: ["- **File name**: report-<id>.csv."]
+attend-1__settle:
+  done: false
+  choice: ""
+  outcome: { designed: true, issue: 7, revision: 1, design_url: "https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md", questions_asked: 1, assumptions: 1, assumption_lines: [] }
+  message: "Design for issue #7 is ready: revision 1"
+  options: [{ id: plan, label: Plan it }, { id: revise, label: "Revise (add a note)" }, { id: finish, label: Finish }]
+  brief: ""
+attend-1__ask: { decision: finish, text: "" }
+attend-1__answer:
+  done: true
+  choice: finish
+  outcome: { designed: true, issue: 7, revision: 1, design_url: "https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md", questions_asked: 1, assumptions: 1, assumption_lines: [] }
+  message: ""
+  options: []
+  brief: ""
+choice: { choice: finish, issue: 7, outcome: { designed: true, issue: 7, revision: 1, design_url: "https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md", questions_asked: 1, assumptions: 1, assumption_lines: [] } }
+result: { designed: true, issue: 7, revision: 1, design_url: "https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md", planned: false, needs_refine: false }

@@ -1,0 +1,26 @@
+# The build of the issue has started: resolve refuses and the run is cancelled before any research.
+fixture:
+  expect: cancelled
+  reached: [stage-1__refuse]
+stage-1__preflight:
+  shared_dir: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feat|fix|docs|chore)/[a-z0-9]+(-[a-z0-9]+)*$"
+stage-1__resolve:
+  issue: 7
+  slug: issue-7
+  folder: plans/plans/issue-7
+  title: Export reports as CSV
+  body: Reports can only be viewed in the browser.
+  comments: ""
+  url: https://github.com/o/r/issues/7
+  state: open
+  design_revision: 1
+  plan_revision: 0
+  design_present: true
+  plan_present: false
+  existing_branch: "feat/issue-7-csv-export"
+  plans_commit: ""
+  change: ""
+  started: true
+  refusal: "Not changed: the build of issue #7 has started (branch feat/issue-7-csv-export exists on origin). devflow-refine and devflow-plan only change issues whose build has not started."

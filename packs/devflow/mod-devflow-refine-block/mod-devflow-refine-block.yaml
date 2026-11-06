@@ -1,0 +1,337 @@
+name: mod-devflow-refine-block
+description: |
+  Building block, not a workflow to run alone. Use when: devflow-refine turns an issue into a
+  published design.md and decides itself what happens next. NOT for: starting it directly, or
+  planning (mod-devflow-plan-block).
+
+  Resolves the issue (refusing a closed issue or one whose build has started), researches it
+  (a question is asked only when no document, ruling or code settles it), asks round 1 (up to 5
+  questions) and, only if an answer opened a blocking question, round 2 (up to 3), each round one
+  pause. Then it writes design.md from its template, checks it with validate-docs, checks again
+  that the build has not started, publishes it to the plans branch and updates the issue
+  comment. The cap of two rounds is the graph. It never pauses at its end and writes nothing but
+  the plans branch and the issue comment.
+model: medium
+worktree:
+  enabled: true
+inputs:
+  work:
+    description: The issue to refine (a number, #number or URL, or a plan/design URL or file name).
+  change:
+    default: ""
+    description: The change request of a revise answer; empty on the first pass.
+  plans_ref:
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
+  plans_dir:
+    default: ""
+    description: The directory on that branch holding plans/issue-<n>/ and workflows/; empty means the profile's plans.dir, else plans.
+  pack:
+    default: ""
+    description: The installed pack's qualified name, for the commands the messages name; empty means tkcs-lab/devflow.
+returns: result
+outcome_field: designed
+
+nodes:
+  - id: preflight
+    script: preflight
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        shared_dir: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+      required: [shared_dir, main_branch, branch_regex]
+
+  - id: resolve
+    depends_on: [preflight]
+    script: resolve-input
+    runtime: bun
+    with:
+      work: "$INPUTS.work"
+      change: "$INPUTS.change"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+      pack: "$INPUTS.pack"
+      mode: refine
+    output_format: &resolve_out
+      type: object
+      properties:
+        issue: { type: integer }
+        slug: { type: string }
+        folder: { type: string }
+        title: { type: string }
+        body: { type: string }
+        comments: { type: string }
+        url: { type: string }
+        state: { type: string }
+        design_revision: { type: integer }
+        plan_revision: { type: integer }
+        design_present: { type: boolean }
+        plan_present: { type: boolean }
+        existing_branch: { type: string }
+        plans_commit: { type: string }
+        change: { type: string }
+        started: { type: boolean }
+        refusal: { type: string }
+      required: [issue, slug, folder, title, body, comments, url, state, design_revision, plan_revision, design_present, plan_present, existing_branch, plans_commit, change, started, refusal]
+
+  - id: refuse
+    depends_on: [resolve]
+    when: "$resolve.output.refusal != ''"
+    cancel: "$resolve.output.refusal"
+
+  # ---- Round 1 -----------------------------------------------------------------------------
+  - id: research
+    depends_on: [resolve]
+    when: "$resolve.output.refusal == ''"
+    command: research
+    model: ['@devflow-planner', large]
+    context: fresh
+    mutates_checkout: false
+    output_format:
+      type: object
+      properties:
+        questions:
+          type: array
+          maxItems: 5
+          items: &question
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              context: { type: string }
+              options:
+                type: array
+                minItems: 2
+                maxItems: 4
+                items:
+                  type: object
+                  properties:
+                    key: { type: string }
+                    text: { type: string }
+                  required: [key, text]
+              recommendation:
+                type: object
+                properties:
+                  key: { type: string }
+                  why: { type: string }
+                required: [key, why]
+              why_a_person:
+                type: string
+                enum: [no_doc_settles_it, docs_disagree, changes_shipped_contract, plan_would_deliver_less]
+            required: [id, title, context, options, recommendation, why_a_person]
+        assumptions:
+          type: array
+          items: &assumption
+            type: object
+            properties:
+              title: { type: string }
+              choice: { type: string }
+              why: { type: string }
+            required: [title, choice, why]
+        related:
+          type: array
+          items:
+            type: object
+            properties:
+              url: { type: string }
+              relation: { type: string }
+            required: [url, relation]
+        summary: { type: string }
+        question_count: { type: integer }
+      required: [questions, assumptions, related, summary, question_count]
+
+  - id: format-1
+    depends_on: [resolve, research]
+    when: "$research.output.question_count > '0'"
+    script: format-round
+    runtime: bun
+    with:
+      round: "1"
+      issue: "$resolve.output.issue"
+      title: "$resolve.output.title"
+      questions: "$research.output.questions"
+    output_format: &message
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+
+  - id: ask-1
+    depends_on: [format-1]
+    wait:
+      attention: "$format-1.output.message"
+      form: message
+      labels:
+        workflow: devflow-refine
+        stage: round-1
+
+  - id: record-1
+    depends_on: [research, ask-1]
+    script: record-answers
+    runtime: bun
+    with:
+      round: "1"
+      questions: "$research.output.questions"
+      answer: "$ask-1.output.text"
+    output_format: &stop
+      type: object
+      properties:
+        stop: { type: boolean }
+      required: [stop]
+
+  - id: stop-1
+    depends_on: [resolve, record-1]
+    when: "$record-1.output.stop == true"
+    cancel: "Stopped while refining issue #$resolve.output.issue: the answer said to stop. Nothing was published. The questions and answers are interview.md in the run artifacts."
+
+  # ---- Round 2: only when an answer made a blocking question appear ------------------------
+  - id: research-2
+    depends_on: [record-1]
+    when: "$record-1.output.stop == false"
+    command: research-2
+    model: ['@devflow-planner', large]
+    context: fresh
+    mutates_checkout: false
+    output_format:
+      type: object
+      properties:
+        followups:
+          type: array
+          maxItems: 3
+          items: *question
+        assumptions:
+          type: array
+          items: *assumption
+        followup_count: { type: integer }
+      required: [followups, assumptions, followup_count]
+
+  - id: format-2
+    depends_on: [resolve, research-2]
+    when: "$research-2.output.followup_count > '0'"
+    script: format-round
+    runtime: bun
+    with:
+      round: "2"
+      issue: "$resolve.output.issue"
+      title: "$resolve.output.title"
+      questions: "$research-2.output.followups"
+    output_format: *message
+
+  - id: ask-2
+    depends_on: [format-2]
+    wait:
+      attention: "$format-2.output.message"
+      form: message
+      labels:
+        workflow: devflow-refine
+        stage: round-2
+
+  - id: record-2
+    depends_on: [research-2, ask-2]
+    script: record-answers
+    runtime: bun
+    with:
+      round: "2"
+      questions: "$research-2.output.followups"
+      answer: "$ask-2.output.text"
+    output_format: *stop
+
+  - id: stop-2
+    depends_on: [resolve, record-2]
+    when: "$record-2.output.stop == true"
+    cancel: "Stopped while refining issue #$resolve.output.issue: the answer said to stop. Nothing was published. The questions and answers are interview.md in the run artifacts."
+
+  # ---- Write, check, publish ---------------------------------------------------------------
+  - id: write-design
+    depends_on: [research, record-1, research-2, record-2]
+    trigger_rule: none_failed_min_one_success
+    command: write-design
+    model: ['@devflow-planner', medium]
+    context: fresh
+    output_format:
+      type: object
+      properties:
+        title: { type: string }
+        scope_note: { type: string }
+      required: [title, scope_note]
+
+  - id: check
+    depends_on: [resolve, write-design]
+    script: check-design
+    runtime: bun
+    with:
+      issue: "$resolve.output.issue"
+      title: "$write-design.output.title"
+      revision_base: "$resolve.output.design_revision"
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+        revision: { type: integer }
+      required: [ok, revision]
+
+  # The build may have started while the person answered: check again right before publishing.
+  - id: still-unstarted
+    depends_on: [preflight, check]
+    script: resolve-input
+    runtime: bun
+    with:
+      work: "$INPUTS.work"
+      change: "$INPUTS.change"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+      pack: "$INPUTS.pack"
+      mode: refine
+    output_format: *resolve_out
+
+  - id: refuse-late
+    depends_on: [still-unstarted]
+    when: "$still-unstarted.output.refusal != ''"
+    cancel: "$still-unstarted.output.refusal"
+
+  - id: publish
+    depends_on: [resolve, write-design, check, still-unstarted]
+    when: "$still-unstarted.output.refusal == ''"
+    script: publish-design
+    runtime: bun
+    with:
+      issue: "$resolve.output.issue"
+      title: "$write-design.output.title"
+      revision: "$check.output.revision"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+    output_format:
+      type: object
+      properties:
+        commit: { type: string }
+        revision: { type: integer }
+        design_url: { type: string }
+        comment_url: { type: string }
+      required: [commit, revision, design_url, comment_url]
+
+  - id: result
+    depends_on: [resolve, publish]
+    script: refine-block-result
+    runtime: bun
+    with:
+      issue: "$resolve.output.issue"
+      revision: "$publish.output.revision"
+      design_url: "$publish.output.design_url"
+    output_format:
+      type: object
+      properties:
+        designed: { type: boolean }
+        issue: { type: integer }
+        revision: { type: integer }
+        design_url: { type: string }
+        questions_asked: { type: integer }
+        assumptions: { type: integer }
+        assumption_lines:
+          type: array
+          items: { type: string }
+      required: [designed, issue, revision, design_url, questions_asked, assumptions, assumption_lines]
