@@ -117,7 +117,7 @@ STUB
 }
 
 # gh_calls <pattern>: number of recorded gh calls matching the extended regex.
-gh_calls() { grep -cE "$1" "$GH_STUB_DIR/calls.log" 2>/dev/null || true; }
+gh_calls() { if [ -f "$GH_STUB_DIR/calls.log" ]; then grep -cE "$1" "$GH_STUB_DIR/calls.log" || true; else echo 0; fi; }
 
 ok() { echo "ok: $1"; }
 _fail() { echo "FAIL: $1" >&2; _FAILED=1; }

@@ -1,0 +1,49 @@
+name: mod-devflow-trace
+description: |
+  Building block, not a workflow to run alone. Use when: a build reaches a state worth showing on
+  its issue (building, PR open, finished). NOT for: starting it directly.
+
+  Updates the one devflow comment on the issue with the build's state (building with the run
+  and branch, PR open, merged or closed). Does nothing when issue is empty. A failed comment
+  write never fails the build: it leaves trace-error.md in the run artifacts and returns ok false.
+model: medium
+worktree:
+  enabled: true
+inputs:
+  issue:
+    default: ""
+    description: The issue number; empty when the build has no issue.
+  event:
+    description: building, pr_open or finished.
+  branch:
+    default: ""
+    description: The feature branch (event building).
+  pr_number:
+    default: ""
+    description: The PR number (events pr_open and finished).
+  pr_url:
+    default: ""
+    description: The PR URL (events pr_open and finished).
+  state:
+    default: ""
+    description: The PR's final state (event finished); MERGED is merged, anything else closed.
+returns: trace
+
+nodes:
+  - id: trace
+    script: trace
+    runtime: bun
+    with:
+      issue: "$INPUTS.issue"
+      event: "$INPUTS.event"
+      branch: "$INPUTS.branch"
+      pr_number: "$INPUTS.pr_number"
+      pr_url: "$INPUTS.pr_url"
+      state: "$INPUTS.state"
+    output_format:
+      type: object
+      properties:
+        skipped: { type: boolean }
+        ok: { type: boolean }
+        url: { type: string }
+      required: [ok, skipped, url]

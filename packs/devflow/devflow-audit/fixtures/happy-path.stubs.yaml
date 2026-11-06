@@ -73,3 +73,5 @@ ship__tail__finish:
   state: MERGED
   url: https://github.com/example/project/pull/1100
 ship__tail__review-tier: '{"model":"large"}'
+ship__tail__trace-pr__trace: { ok: true, skipped: true, url: "" }
+ship__tail__trace-finish__trace: { ok: true, skipped: true, url: "" }

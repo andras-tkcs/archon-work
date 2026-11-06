@@ -76,3 +76,5 @@ decide:
   text: 1. yes, drop it
 save-decisions: '{"path":"x"}'
 ship__tail__review-tier: '{"model":"large"}'
+ship__tail__trace-pr__trace: { ok: true, skipped: true, url: "" }
+ship__tail__trace-finish__trace: { ok: true, skipped: true, url: "" }

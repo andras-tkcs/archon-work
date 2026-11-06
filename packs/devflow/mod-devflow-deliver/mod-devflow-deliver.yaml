@@ -30,6 +30,9 @@ inputs:
   head:
     default: ""
     description: The commit the feature branch must be at.
+  issue:
+    default: ""
+    description: The issue the build belongs to, for its devflow comment; empty for plans without an issue.
 returns: tail
 outcome_field: merged
 
@@ -112,3 +115,4 @@ nodes:
     depends_on: [gate-build]
     with:
       review_model: "$load-plan.output.review_model"
+      issue: "$INPUTS.issue"

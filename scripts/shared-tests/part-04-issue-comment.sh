@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # issue-comment.ts: deterministic render, state merge, the Next line of every state, and upsert
 # (created once, edited afterwards, a duplicate fails). settle.ts: every row of the attention table.
+# trace.ts: each build event's patch, an empty issue, and a failed write that never fails the build.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 fx="$REPO_ROOT/scripts/fixtures/issue-comment"
@@ -80,4 +81,25 @@ r="$(st INPUTS_PREVIOUS="$first" INPUTS_ANSWER='{"decision":"revise","text":"use
 eq "$(jf "$r" done)|$(jf "$r" choice)|$(jf "$r" brief)" "false|revise|use a semicolon" "answer revise: not done, the note is the brief"
 r="$(st INPUTS_PREVIOUS="$empty" INPUTS_ANSWER='')"
 eq "$r" "$empty" "no pause asked: the answer is the first call's result"
+# trace.ts: the build's events on the comment.
+use_stub_gh
+tart="$(mk_tmp)"
+tr() { env ARTIFACTS_DIR="$tart" WORKFLOW_ID=build-run INPUTS_ISSUE=42 "$@" bun "$SHARED/trace.ts" 2>&1; }
+state() { bun -e "const b=JSON.parse(require('fs').readFileSync('$GH_STUB_DIR/comments-42.json','utf8'))[0].body; console.log(JSON.stringify(JSON.parse(b.match(/devflow-state: (.*) -->/)[1]).build))"; }
+eq "$(env ARTIFACTS_DIR="$tart" INPUTS_ISSUE= INPUTS_EVENT=building bun "$SHARED/trace.ts")" '{"ok":true,"skipped":true,"url":""}' "no issue: nothing to do"
+eq "$(gh_calls .)" "0" "no issue: no gh call"
+tr INPUTS_EVENT=building INPUTS_BRANCH=feat/issue-42-x >/dev/null
+eq "$(state)" '{"state":"building","run":"build-run","branch":"feat/issue-42-x"}' "building: run and branch (pr null is no key)"
+tr INPUTS_EVENT=pr_open INPUTS_PR_NUMBER=57 INPUTS_PR_URL=https://github.com/o/r/pull/57 >/dev/null
+eq "$(state)" '{"state":"pr_open","run":"build-run","branch":"feat/issue-42-x","pr":{"number":57,"url":"https://github.com/o/r/pull/57"}}' "pr_open: the PR"
+tr INPUTS_EVENT=finished INPUTS_PR_NUMBER=57 INPUTS_PR_URL=https://github.com/o/r/pull/57 INPUTS_STATE=MERGED >/dev/null
+contains "$(state)" '"state":"merged"' "finished MERGED: merged"
+tr INPUTS_EVENT=finished INPUTS_PR_NUMBER=57 INPUTS_PR_URL=https://github.com/o/r/pull/57 INPUTS_STATE=CLOSED >/dev/null
+contains "$(state)" '"state":"closed"' "finished otherwise: closed"
+eq "$(gh_calls '^POST ')" "1" "the build edits the one comment"
+touch "$GH_STUB_DIR/fail-api"
+out="$(tr INPUTS_EVENT=building)"; code=$?
+eq "$code" "0" "a failed comment write never fails the build"
+contains "$out" '{"ok":false,"skipped":false,"url":""}' "it reports ok false"
+contains "$(cat "$tart/trace-error.md")" "The devflow comment of issue #42 was not updated" "trace-error.md says why"
 finish

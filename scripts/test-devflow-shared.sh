@@ -21,6 +21,6 @@ fi
 failed=0
 for part in "${parts[@]}"; do
   name="$(basename "$part" .sh)"
-  if bash "$part"; then echo "PASS $name"; else echo "FAIL $name"; failed=1; fi
+  if out="$(bash "$part" 2>&1)"; then echo "PASS $name"; else printf '%s\n' "$out"; echo "FAIL $name"; failed=1; fi
 done
 exit "$failed"

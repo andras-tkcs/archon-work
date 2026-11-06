@@ -62,3 +62,5 @@ tail__finish:
   state: MERGED
   url: https://github.com/example/project/pull/1100
 tail__review-tier: '{"model":"large"}'
+tail__trace-pr__trace: { ok: true, skipped: true, url: "" }
+tail__trace-finish__trace: { ok: true, skipped: true, url: "" }

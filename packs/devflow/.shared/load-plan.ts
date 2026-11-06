@@ -1,7 +1,10 @@
 // Reads a published plan for mod-devflow-phase (mode=phase) and mod-devflow-deliver (mode=deliver): writes
 // $ARTIFACTS_DIR/plan.md and context.json, checks the worktree, and says whether the phase is done.
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { parse } from "./frontmatter.ts";
+import { repoSlug } from "./gh.ts";
+import { SLUG_RE } from "./layout.ts";
 import { extractManifest, validateModels } from "./render-run.ts";
 import { artifactsDir, fail, input, must, profile, run } from "./util.ts";
 
@@ -55,6 +58,25 @@ if (mode === "phase") {
   if (head && must(["git", "rev-parse", "HEAD"]) !== head) fail(`HEAD is not ${head}, the merged head of the phases`);
 }
 
+// Traceability facts for the PR body. A plan from before issue folders has none; that is not an error.
+const issue = SLUG_RE.exec(slug)?.[1] ?? "";
+let designRevision = "";
+let planRevision = "";
+try {
+  const { fm } = parse(planText);
+  designRevision = String(fm.design_revision ?? "");
+  planRevision = String(fm.revision ?? "");
+} catch {}
+let designUrl = "";
+let planUrl = "";
+if (issue) {
+  try {
+    const base = `https://github.com/${repoSlug()}/blob/${planRef}`;
+    planUrl = `${base}/${planPath}`;
+    designUrl = `${base}/${dirname(planPath)}/design.md`;
+  } catch {}
+}
+
 writeFileSync(
   join(dir, "context.json"),
   JSON.stringify({
@@ -66,6 +88,12 @@ writeFileSync(
     title,
     main_branch: profile().git.main_branch,
     shared_dir: input("shared_dir", false),
+    issue,
+    design_url: designUrl,
+    plan_url: planUrl,
+    design_revision: designRevision,
+    plan_revision: planRevision,
+    plans_ref: planRef,
   }),
 );
 console.log(JSON.stringify({ slug, branch, title, done, model, review_model: manifest.review_model }));
