@@ -17,9 +17,9 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `bootstrap.sh` | Installer **and** updater, run as root. Baseline: a fresh Ubuntu 24.04 machine. Re-run it any time. |
 | `slack-app-manifest.yml` | Paste into Slack to create the Archon app in one step. |
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
-| `packs/devflow/` | The devflow workflow pack for Archon (refine → plan → build: `devflow-refine` writes an issue's design, `devflow-plan` publishes its plan and a parallel build workflow, the build implements, reviews and opens one PR; for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
+| `packs/devflow/` | The devflow workflow pack for Archon (refine → plan → build: `devflow-refine` writes an issue's design, `devflow-plan` publishes its plan and a parallel build workflow, the build runs unattended, records its decisions in `deviations.md` and opens one PR; `devflow-follow-up` continues or corrects a build, `devflow-init` creates the profile; for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
-| `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer, its plan test scripts and its git scripts (needs `archon` and `bun`). |
+| `scripts/test-render-run.sh` | Tests the devflow pack's build workflow renderer (`build-issue-<n>`), the plan block's render, test-plan and check-plan scripts, and `load-plan.ts` (needs `archon` and `bun`). |
 | `scripts/test-devflow-validators.sh` | Tests the devflow pack's profile and manifest validators (needs `python3` with PyYAML). |
 | `scripts/test-devflow-shared.sh` | Tests the devflow pack's shared scripts against scratch repositories and a stub `gh` (needs `bun`, and `archon` for part 7). |
 | `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
@@ -197,9 +197,11 @@ here.
   (🔄 → ✅/❌, a live status message, buttons for approval gates). Runs started from the web
   UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
   Slack (`/archon …` or `/archon-workflow run …`).
-- **devflow:** in a repository with a devflow profile (`.devflow/devflow.yaml`), run
-  `tkcs-lab/devflow:devflow-refine` with the issue, then `devflow-plan` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`
-  with the change); see [packs/devflow](packs/devflow/README.md). `-config` reviews settings and fixes files by PR;
+- **devflow:** run `tkcs-lab/devflow:devflow-init` once in a repository to create its devflow
+  profile (`.devflow/devflow.yaml`, by PR; re-run it when a detail changes). Then run
+  `devflow-refine` with the issue, `devflow-plan`, and the generated `build-issue-<n>`; continue or
+  correct a finished build with `devflow-follow-up <pr|issue> "<task>"` (or use `-quick`, `-docs`,
+  `-audit`, `-config`, `-deps` with the change); see [packs/devflow](packs/devflow/README.md). `-config` reviews settings and fixes files by PR;
   settings changes are for the admin user's `gh-baseline` (see §3 Admin GitHub identity).
 - **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
   runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
