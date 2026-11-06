@@ -1,0 +1,128 @@
+name: mod-devflow-dod
+description: |
+  Building block, not a workflow to run alone. Use when: a delivery tail (or devflow-follow-up on
+  an open PR) checks the definition of done. NOT for: starting it directly.
+
+  Runs verify.dod with up to two dod-fix sessions, then the repository's own CI jobs locally
+  (ci-local.ts, no AI, no credentials in the environment): a red result gets at most two ci-fix
+  sessions and a final run, so the last status is always a real run. Never asks anyone and never
+  fails on local CI: its output says ok (the definition of done is green) and ci_status (green,
+  red or skipped); a red local CI makes the PR a draft. Results are in outcomes/dod.json,
+  outcomes/ci-local.json and outcomes/ci-fix-<n>.json in the run artifacts.
+model: medium
+inputs:
+  run_key:
+    default: ""
+    description: The build's run key from mod-devflow-start, so the results also reach the build's shared outcomes; empty outside a build.
+returns: result
+outcome_field: ok
+
+nodes:
+  # ---- Definition of done: verify.dod, with fix sessions until it is green -----------------
+  - id: dod-loop
+    loop_group:
+      nodes:
+        - id: dod-fix
+          when: "$LOOP_PREV.dod.output.green == false"
+          command: dod-fix
+          model: medium
+          context: fresh
+        - id: dod
+          depends_on: [dod-fix]
+          trigger_rule: all_done
+          script: verify
+          runtime: bun
+          timeout: 3600000
+          with:
+            mode: dod
+          output_format:
+            type: object
+            properties:
+              green: { type: boolean }
+              failed: { type: array, items: { type: string } }
+              unavailable: { type: array, items: { type: string } }
+              report: { type: string }
+            required: [green, failed, unavailable, report]
+      until_bash: 'g=$dod.output.green; [ "$g" = true ]'
+      max_iterations: 3
+
+  # ---- Local CI: run, fix (at most twice), run again ----------------------------------------
+  - id: ci-cycle
+    depends_on: [dod-loop]
+    trigger_rule: all_done
+    loop_group:
+      nodes:
+        - id: ci-local
+          script: ci-local
+          runtime: bun
+          timeout: 7200000
+          output_format: &ci_out
+            type: object
+            properties:
+              status: { type: string, enum: [green, red, skipped] }
+              reason: { type: string }
+              ran: { type: array }
+              failed: { type: array }
+              skipped: { type: array }
+              dirty: { type: array, items: { type: string } }
+            required: [status, reason, ran, failed, skipped, dirty]
+        - id: ci-fix
+          depends_on: [ci-local]
+          when: "$ci-local.output.status == 'red'"
+          command: ci-fix
+          model: medium
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              fixed: { type: boolean }
+              summary: { type: string }
+              decisions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    kind: { type: string, enum: [decision, deviation] }
+                    title: { type: string }
+                    choice: { type: string }
+                    why: { type: string }
+                    alternatives: { type: string }
+                  required: [kind, title, choice, why, alternatives]
+            required: [fixed, summary, decisions]
+        - id: record-fix
+          depends_on: [ci-fix]
+          trigger_rule: all_done
+          script: record-ci-fix
+          runtime: bun
+          with:
+            fix: { from: "$ci-fix.output", if_skipped: "" }
+          output_format:
+            type: object
+            properties:
+              rounds: { type: integer }
+            required: [rounds]
+      # Leaves after a green or skipped run, or after the second fix session.
+      until_bash: 's=$ci-local.output.status; r=$record-fix.output.rounds; [ "$s" != red ] || [ "$r" -ge 2 ]'
+      max_iterations: 2
+
+  - id: ci-local-final
+    depends_on: [ci-cycle]
+    trigger_rule: all_done
+    script: ci-local
+    runtime: bun
+    timeout: 7200000
+    output_format: *ci_out
+
+  - id: result
+    depends_on: [dod-loop, ci-local-final]
+    trigger_rule: all_done
+    script: dod-result
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+        dod: { type: object }
+        ci_local: { type: object }
+        ci_status: { type: string }
+      required: [ok, dod, ci_local, ci_status]

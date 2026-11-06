@@ -1,0 +1,19 @@
+# Local CI is red, ci-fix fixes it, and the final run is green. (Stubs cannot vary per loop
+# iteration, so the stubbed round count ends the loop after this round.)
+fixture:
+  expect: completed
+  reached: [ci-fix, ci-local-final]
+dod:
+  green: true
+  failed: []
+  unavailable: []
+  report: /stub/verify-dod.md
+ci-local: { status: red, reason: "", ran: [], failed: [{ workflow: ci.yml, job: test, status: fail, reason: "", steps: [] }], skipped: [], dirty: [] }
+ci-fix: { fixed: true, summary: "the date parser rejected ISO weeks", decisions: [] }
+record-fix: { rounds: 2 }
+ci-local-final: { status: green, reason: "", ran: [], failed: [], skipped: [], dirty: [] }
+result:
+  ok: true
+  dod: { green: true, failed: [], unavailable: [] }
+  ci_local: { status: green, rounds: 1, ran: [], failed: [], skipped: [] }
+  ci_status: green

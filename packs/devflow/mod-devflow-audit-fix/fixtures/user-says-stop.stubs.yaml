@@ -71,3 +71,12 @@ tail__finish:
   state: MERGED
   url: https://github.com/example/project/pull/1100
 tail__review-tier: '{"model":"large"}'
+# Local CI (mod-devflow-dod): no runnable job in this fixture.
+ci-local: { status: skipped, reason: no job could run locally, ran: [], failed: [], skipped: [], dirty: [] }
+record-fix: { rounds: 0 }
+tail__dod-ci__ci-local-final: { status: skipped, reason: no job could run locally, ran: [], failed: [], skipped: [], dirty: [] }
+tail__dod-ci__result:
+  ok: true
+  dod: { green: true, failed: [], unavailable: [] }
+  ci_local: { status: skipped, rounds: 0, ran: [], failed: [], skipped: [] }
+  ci_status: skipped

@@ -1,0 +1,19 @@
+# Local CI stays red after two ci-fix sessions: the block still completes, with ci_status red, so
+# the tail opens the PR as a draft.
+fixture:
+  expect: completed
+  reached: [ci-fix, ci-local-final, result]
+dod:
+  green: true
+  failed: []
+  unavailable: []
+  report: /stub/verify-dod.md
+ci-local: { status: red, reason: "", ran: [], failed: [{ workflow: ci.yml, job: test, status: fail, reason: "", steps: [] }], skipped: [], dirty: [] }
+ci-fix: { fixed: false, summary: "the job needs a database this host does not have", decisions: [] }
+record-fix: { rounds: 2 }
+ci-local-final: { status: red, reason: "", ran: [], failed: [{ workflow: ci.yml, job: test, status: fail, reason: "", steps: [] }], skipped: [], dirty: [] }
+result:
+  ok: true
+  dod: { green: true, failed: [], unavailable: [] }
+  ci_local: { status: red, rounds: 2, ran: [], failed: [], skipped: [] }
+  ci_status: red
