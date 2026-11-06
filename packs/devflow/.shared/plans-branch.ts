@@ -9,7 +9,9 @@ const ident = ["-c", "user.name=devflow", "-c", "user.email=devflow@example.inva
 
 // Fetches origin/<ref> and returns its commit, or "" when the branch does not exist on origin.
 export function fetchPlans(ref: string): string {
-  if (run(["git", "ls-remote", "--exit-code", "--heads", "origin", ref]).code !== 0) return "";
+  const ls = run(["git", "ls-remote", "--exit-code", "--heads", "origin", `refs/heads/${ref}`]);
+  if (ls.code === 2) return "";
+  if (ls.code !== 0) fail(`cannot read the branch '${ref}' on origin: git ls-remote failed\n${tail(ls.err + ls.out, 20)}`);
   must(["git", "fetch", "-q", "origin", `+refs/heads/${ref}:refs/remotes/origin/${ref}`]);
   return must(["git", "rev-parse", `refs/remotes/origin/${ref}`]);
 }
