@@ -1,5 +1,5 @@
-// Adds the front matter to the design write-design drafted ($ARTIFACTS_DIR/design.md, body only),
-// writes $ARTIFACTS_DIR/final/design.md and checks it with validate-docs. Fails listing every error.
+// Adds the front matter to the design write-design drafted ($ARTIFACTS_DIR/design.md, body only) and
+// writes $ARTIFACTS_DIR/final/design.md; its one structure check is validate-docs. Fails listing every error.
 // Env: INPUTS_ISSUE, INPUTS_TITLE, INPUTS_REVISION_BASE (the published revision, 0 when none).
 // Output: { ok, revision }.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
