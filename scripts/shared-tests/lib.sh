@@ -37,6 +37,7 @@ mk_clone() {
 # (served to `gh issue view <n>` and `gh api …/issues/<n>`), pr-<n>.json (`gh pr view <n>`; it also
 # makes `gh api …/issues/<n>` answer as a PR), prs.json (`gh pr list`), comments-<n>.json (the
 # issue's comments, changed by POST and PATCH), review-comments-<n>.json (`gh api …/pulls/<n>/comments`),
+# `gh pr create` prints https://github.com/o/r/pull/900 and keeps its body in pr-body.md,
 # fail-<word> (makes every `gh <word> …` call fail).
 # Every call is appended to calls.log as one line: `<METHOD> <endpoint>` for `gh api`, else the
 # arguments.
@@ -123,6 +124,12 @@ if (args[0] === "pr" && args[1] === "view") {
   const f = `${d}/pr-${args[2]}.json`;
   if (!existsSync(f)) die(`GraphQL: Could not resolve to a PullRequest with the number of ${args[2]}.`);
   console.log(readFileSync(f, "utf8"));
+  process.exit(0);
+}
+if (args[0] === "pr" && args[1] === "create") {
+  const i = args.indexOf("--body-file");
+  if (i > 0) writeFileSync(`${d}/pr-body.md`, readFileSync(args[i + 1], "utf8"));
+  console.log("https://github.com/o/r/pull/900");
   process.exit(0);
 }
 if (args[0] === "pr" && args[1] === "list") { console.log(read(`${d}/prs.json`, "[]")); process.exit(0); }

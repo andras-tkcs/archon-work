@@ -84,10 +84,11 @@ export function projectEnv(): Record<string, string> {
 }
 
 export const PROFILE_PATH = ".devflow/devflow.yaml";
+export const MISSING_PROFILE = `${PROFILE_PATH} not found: run devflow-init first`;
 
 // The raw profile; preflight has already validated it with validate-profile.py.
 export function profile(): any {
-  if (!existsSync(PROFILE_PATH)) fail(`${PROFILE_PATH} not found: see the README section "Profile"`);
+  if (!existsSync(PROFILE_PATH)) fail(MISSING_PROFILE);
   return Bun.YAML.parse(readFileSync(PROFILE_PATH, "utf8"));
 }
 

@@ -1,9 +1,11 @@
 // Fails the run before any model spend unless a valid profile and gh are both usable. Writes the
 // resolved profile to $ARTIFACTS_DIR/profile.json for every later node, and copies the pack's
 // knowledge files, templates and model rules into $ARTIFACTS_DIR, where the prompts read them.
+// INPUTS_PROFILE=optional (devflow-init): a missing or invalid profile is not an error; the main
+// branch then comes from GitHub. Prints has_profile and has_legacy (.claude/toolkit.yaml) as well.
 import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PROFILE_PATH, artifactsDir, fail, must, run } from "./util.ts";
+import { MISSING_PROFILE, PROFILE_PATH, artifactsDir, fail, input, must, run } from "./util.ts";
 
 function branchRegex(pattern: string, types: string[] | undefined): string {
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -16,14 +18,22 @@ function branchRegex(pattern: string, types: string[] | undefined): string {
 
 const shared = import.meta.dir;
 const art = artifactsDir();
-if (!existsSync(PROFILE_PATH)) fail(`${PROFILE_PATH} not found: see the README section "Profile"`);
-const v = run(["python3", join(shared, "validate-profile.py"), PROFILE_PATH, "--resolved"]);
-if (v.code !== 0) fail(`the profile does not validate:\n${v.err}`);
-if (v.err.trim()) console.error(v.err.trim());
-const resolved = JSON.parse(v.out);
-writeFileSync(join(art, "profile.json"), JSON.stringify(resolved, null, 2));
+const optional = input("profile", false) === "optional";
+const hasProfile = existsSync(PROFILE_PATH);
+const hasLegacy = existsSync(".claude/toolkit.yaml");
+let resolved: any = null;
+if (!hasProfile && !optional) fail(MISSING_PROFILE);
+if (hasProfile) {
+  const v = run(["python3", join(shared, "validate-profile.py"), PROFILE_PATH, "--resolved"]);
+  if (v.code === 0) {
+    if (v.err.trim()) console.error(v.err.trim());
+    resolved = JSON.parse(v.out);
+    writeFileSync(join(art, "profile.json"), JSON.stringify(resolved, null, 2));
+  } else if (!optional) fail(`the profile does not validate:\n${v.err}`);
+  else console.error(`devflow: the profile does not validate (devflow-init rewrites it):\n${v.err.trim()}`);
+}
 
-const stacks: string[] = resolved.stacks ?? [];
+const stacks: string[] = resolved?.stacks ?? [];
 const knowledge = join(shared, "knowledge");
 if (existsSync(knowledge)) {
   mkdirSync(join(art, "knowledge"), { recursive: true });
@@ -39,10 +49,17 @@ if (existsSync(join(shared, "model-rules.md"))) cpSync(join(shared, "model-rules
 if (run(["gh", "auth", "status"]).code !== 0) fail("gh is not authenticated: the PR steps need it");
 must(["git", "remote", "get-url", "origin"]);
 
+function defaultBranch(): string {
+  const r = run(["gh", "repo", "view", "--json", "defaultBranchRef", "-q", ".defaultBranchRef.name"]);
+  return (r.code === 0 && r.out.trim()) || "main";
+}
+
 console.log(
   JSON.stringify({
     shared_dir: shared,
-    main_branch: resolved.git.main_branch,
-    branch_regex: branchRegex(resolved.git.branch_pattern ?? "<type>/<kebab-case>", resolved.git.branch_types),
+    main_branch: resolved ? resolved.git.main_branch : defaultBranch(),
+    branch_regex: resolved ? branchRegex(resolved.git.branch_pattern ?? "<type>/<kebab-case>", resolved.git.branch_types) : "",
+    has_profile: hasProfile,
+    has_legacy: hasLegacy,
   }),
 );
