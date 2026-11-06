@@ -1,0 +1,15 @@
+# The documents validate and the branch is new: the stub deviations.md is pushed and the block completes.
+fixture:
+  expect: completed
+  reached: [start]
+  inputs:
+    branch: feat/issue-7-csv-export
+    main_branch: main
+    issue: "7"
+start:
+  ok: true
+  refusal: ""
+  branch: feat/issue-7-csv-export
+  head: "1111111111111111111111111111111111111111"
+  plan_commit: 0123456789abcdef0123456789abcdef01234567
+  run_key: issue-7-111111111111

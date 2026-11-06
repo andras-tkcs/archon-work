@@ -1,0 +1,14 @@
+# The second phase conflicts: the merge is aborted and recorded, and the block still completes.
+fixture:
+  expect: completed
+  reached: [merge]
+  inputs:
+    slug: issue-7
+    phases: p1-export,p2-page
+    run_key: issue-7-111111111111
+merge:
+  ok: true
+  head: "2222222222222222222222222222222222222222"
+  merged: [p1-export]
+  conflicts: [p2-page]
+  not_done: []

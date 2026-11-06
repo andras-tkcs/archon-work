@@ -1,0 +1,15 @@
+# The documents on the plans branch do not validate: the block cancels before any branch is created.
+fixture:
+  expect: cancelled
+  reached: [refuse]
+  inputs:
+    branch: feat/issue-7-csv-export
+    main_branch: main
+    issue: "7"
+start:
+  ok: false
+  refusal: "Not started: the documents of issue #7 do not validate at 0123456:\nplans/plans/issue-7/design.md:12 [V4] '## Risks' is missing"
+  branch: feat/issue-7-csv-export
+  head: ""
+  plan_commit: ""
+  run_key: ""
