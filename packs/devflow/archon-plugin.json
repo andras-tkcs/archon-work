@@ -9,6 +9,7 @@
   "entrypoints": {
     "devflow-refine": "devflow-refine/devflow-refine.yaml",
     "devflow-plan": "devflow-plan/devflow-plan.yaml",
+    "devflow-follow-up": "devflow-follow-up/devflow-follow-up.yaml",
     "mod-devflow-refine-block": "mod-devflow-refine-block/mod-devflow-refine-block.yaml",
     "mod-devflow-plan-block": "mod-devflow-plan-block/mod-devflow-plan-block.yaml",
     "mod-devflow-attention": "mod-devflow-attention/mod-devflow-attention.yaml",

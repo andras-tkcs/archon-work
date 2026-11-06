@@ -1,0 +1,28 @@
+# The issue has a plan but its branch was never pushed: nothing to follow up, the run cancels.
+fixture:
+  expect: cancelled
+preflight:
+  shared_dir: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: '{"hooks":[],"env_file":"project-env.sh"}'
+resolve:
+  issue: 42
+  slug: issue-42
+  plans_ref: plans
+  plans_dir: plans
+  plan_path: ""
+  title: ""
+  branch: ""
+  branch_on_origin: false
+  pr: null
+  pr_number: ""
+  pr_open: false
+  plan_commit: ""
+  deviations_present: false
+  mode: ""
+  task: rename the flag
+  fk: ""
+  review_comments: ""
+  doc_errors: []
+  refusal: "No build to follow up for issue #42. Run: archon workflow run build-issue-42"

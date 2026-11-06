@@ -1,0 +1,241 @@
+name: devflow-follow-up
+description: |
+  Continues or corrects an issue's build after it ended (stopped, PR open or merged), on a task in
+  words, unattended: no question, no pause. Accepts a PR number or URL, an issue number or URL, or
+  the URL of a deviations.md, plus the task (the input task, else the text after the reference).
+
+  On an open PR, or a stopped build without one, it continues the build's branch: one task phase
+  (f<k>) commits there; with a PR, the definition of done and local CI run again (a local-CI draft
+  is marked ready once local CI is green), the PR is updated and its follow-up comment edited;
+  without one, a done phase is delivered as a new PR. After a merged or closed PR it starts
+  followup/issue-<n>-<k> from the default branch and opens a new PR. Every ending appends the
+  ### F<k> entry to deviations.md, commits and pushes it; a stuck task ends the run red after that.
+  Never merges and never force-pushes.
+
+  Use when: "follow up PR 57: rename the flag", a stopped build should be finished, local CI on a
+  draft PR is red ("fix local CI: <job>"). NOT for: an issue that was never built (run
+  build-issue-<n>), a new feature (devflow-refine), or a quick edit outside a build (devflow-quick).
+model: medium
+worktree:
+  enabled: true
+inputs:
+  work:
+    default: ""
+    description: The build to follow up (a PR number or URL, an issue number or URL, or a deviations.md URL), optionally followed by the task. Empty means the run's message.
+  task:
+    default: ""
+    description: What to do, in words; empty means the text after the reference in work.
+  plans_ref:
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
+  plans_dir:
+    default: ""
+    description: The plans directory on it; empty means the profile's plans.dir, else plans.
+returns: end
+outcome_field: done
+
+nodes:
+  - id: preflight
+    script: preflight
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        shared_dir: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+      required: [shared_dir, main_branch, branch_regex]
+
+  - id: setup
+    depends_on: [preflight]
+    script: setup-env
+    runtime: bun
+    timeout: 1800000
+
+  - id: resolve
+    depends_on: [setup]
+    script: resolve-followup
+    runtime: bun
+    with:
+      work: "$INPUTS.work"
+      task: "$INPUTS.task"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+    output_format:
+      type: object
+      properties:
+        issue: { type: integer }
+        slug: { type: string }
+        plans_ref: { type: string }
+        plans_dir: { type: string }
+        plan_path: { type: string }
+        title: { type: string }
+        branch: { type: string }
+        branch_on_origin: { type: boolean }
+        pr:
+          type: [object, "null"]
+        pr_number: { type: string }
+        pr_open: { type: boolean }
+        plan_commit: { type: string }
+        deviations_present: { type: boolean }
+        mode: { type: string }
+        task: { type: string }
+        fk: { type: string }
+        review_comments: { type: string }
+        doc_errors: { type: array, items: { type: string } }
+        refusal: { type: string }
+      required: [issue, slug, plans_ref, plans_dir, plan_path, title, branch, branch_on_origin, pr, pr_number, pr_open, plan_commit, deviations_present, mode, task, fk, review_comments, doc_errors, refusal]
+
+  - id: refuse
+    depends_on: [resolve]
+    when: "$resolve.output.refusal != ''"
+    cancel: "$resolve.output.refusal"
+
+  - id: start
+    include: mod-devflow-start
+    depends_on: [resolve]
+    when: "$resolve.output.refusal == ''"
+    with:
+      main_branch: "$preflight.output.main_branch"
+      plans_ref: "$resolve.output.plans_ref"
+      plans_dir: "$resolve.output.plans_dir"
+      issue: "$resolve.output.issue"
+      mode: follow-up
+      task_branch: "$resolve.output.branch"
+      followup_mode: "$resolve.output.mode"
+
+  # The block's sink is its refusal node, skipped when it starts: resolve is the successful dependency.
+  - id: trace-start
+    include: mod-devflow-trace
+    depends_on: [resolve, start]
+    trigger_rule: none_failed_min_one_success
+    with:
+      issue: "$resolve.output.issue"
+      event: building
+      branch: "$resolve.output.branch"
+
+  - id: brief
+    depends_on: [trace-start]
+    script: followup-brief
+    runtime: bun
+    with:
+      task: "$resolve.output.task"
+      issue: "$resolve.output.issue"
+      fk: "$resolve.output.fk"
+      branch: "$resolve.output.branch"
+      plans_ref: "$resolve.output.plans_ref"
+      plans_dir: "$resolve.output.plans_dir"
+      plan_commit: "$resolve.output.plan_commit"
+      review_comments: "$resolve.output.review_comments"
+      doc_errors: "$resolve.output.doc_errors"
+      run_key: "$start.output.run_key"
+    output_format:
+      type: object
+      properties:
+        task_file: { type: string }
+      required: [task_file]
+
+  # The task phase runs in this checkout (an include), so its commits land on the branch itself.
+  - id: work
+    include: mod-devflow-phase
+    depends_on: [brief]
+    with:
+      plan_ref: "$resolve.output.plans_ref"
+      plan_path: "$resolve.output.plan_path"
+      plan_commit: "$resolve.output.plan_commit"
+      phase: "f$resolve.output.fk"
+      base: "$start.output.head"
+      depends_on: ""
+      run_key: "$start.output.run_key"
+      task: "$brief.output.task_file"
+
+  # With an open PR the definition of done and local CI run here; without one, deliver runs them.
+  - id: dod-ci
+    include: mod-devflow-dod
+    depends_on: [work]
+    when: "$resolve.output.pr_open == true && $work.output.status == 'done'"
+    with:
+      run_key: "$start.output.run_key"
+
+  - id: wrap
+    include: mod-devflow-wrap
+    depends_on: [work, dod-ci]
+    trigger_rule: all_done
+    when: "$start.output.ok == true"
+    with:
+      stage: first
+      mode: follow-up
+      issue: "$resolve.output.issue"
+      branch: "$resolve.output.branch"
+      plans_ref: "$resolve.output.plans_ref"
+      plans_dir: "$resolve.output.plans_dir"
+      plan_commit: "$resolve.output.plan_commit"
+      main_branch: "$preflight.output.main_branch"
+      run_key: "$start.output.run_key"
+      task: "$resolve.output.task"
+      fk: "$resolve.output.fk"
+      pr_number: "$resolve.output.pr_number"
+
+  # all_done: wrap's last node (trace-end) only runs in its final stage.
+  - id: deliver
+    include: mod-devflow-deliver
+    depends_on: [wrap]
+    trigger_rule: all_done
+    when: "$wrap.output.deliverable == true"
+    with:
+      plan_ref: "$resolve.output.plans_ref"
+      plan_path: "$resolve.output.plan_path"
+      plan_commit: "$resolve.output.plan_commit"
+      slug: "$resolve.output.slug"
+      branch: "$resolve.output.branch"
+      title: "$resolve.output.title"
+      head: "$wrap.output.head"
+      issue: "$resolve.output.issue"
+      run_key: "$start.output.run_key"
+      phases: none
+
+  - id: wrap-final
+    include: mod-devflow-wrap
+    depends_on: [wrap, deliver]
+    trigger_rule: all_done
+    when: "$start.output.ok == true"
+    with:
+      stage: final
+      mode: follow-up
+      issue: "$resolve.output.issue"
+      branch: "$resolve.output.branch"
+      plans_ref: "$resolve.output.plans_ref"
+      plans_dir: "$resolve.output.plans_dir"
+      plan_commit: "$resolve.output.plan_commit"
+      main_branch: "$preflight.output.main_branch"
+      run_key: "$start.output.run_key"
+      task: "$resolve.output.task"
+      fk: "$resolve.output.fk"
+      pr_number: "$resolve.output.pr_number"
+
+  # The block's last node (trace-end) is skipped unless the follow-up stopped, hence all_done.
+  - id: end
+    depends_on: [wrap-final]
+    trigger_rule: all_done
+    bash: |
+      r=$wrap-final.output
+      n=$resolve.output.issue
+      python3 - "$r" "$n" <<'PY'
+      import json, sys
+      r = json.loads(sys.argv[1])
+      out = {"done": r.get("complete") is True, "issue": int(sys.argv[2]), "branch": r.get("branch", ""), "pr_url": r.get("pr_url", ""), "deviations_url": r.get("deviations_url", "")}
+      print(json.dumps(out))
+      if not out["done"]:
+          print(f"devflow: devflow-follow-up for issue #{out['issue']} is not complete: see deviations.md ({out['deviations_url']})", file=sys.stderr)
+          sys.exit(1)
+      PY
+    output_format:
+      type: object
+      properties:
+        done: { type: boolean }
+        issue: { type: integer }
+        branch: { type: string }
+        pr_url: { type: string }
+        deviations_url: { type: string }
+      required: [done, issue, branch, pr_url, deviations_url]

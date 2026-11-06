@@ -34,8 +34,10 @@ mk_clone() {
 }
 
 # use_stub_gh: installs a stub gh first on PATH. Its state is in $GH_STUB_DIR: issue-<n>.json
-# (served to `gh issue view <n>`), prs.json (`gh pr list`), comments-<n>.json (the issue's
-# comments, changed by POST and PATCH), fail-<word> (makes every `gh <word> …` call fail).
+# (served to `gh issue view <n>` and `gh api …/issues/<n>`), pr-<n>.json (`gh pr view <n>`; it also
+# makes `gh api …/issues/<n>` answer as a PR), prs.json (`gh pr list`), comments-<n>.json (the
+# issue's comments, changed by POST and PATCH), review-comments-<n>.json (`gh api …/pulls/<n>/comments`),
+# fail-<word> (makes every `gh <word> …` call fail).
 # Every call is appended to calls.log as one line: `<METHOD> <endpoint>` for `gh api`, else the
 # arguments.
 use_stub_gh() {
@@ -85,6 +87,14 @@ if (args[0] === "api") {
       process.exit(0);
     }
   }
+  m = /^issues\/(\d+)$/.exec(ep);
+  if (m && method === "GET") {
+    if (existsSync(`${d}/pr-${m[1]}.json`)) { console.log(JSON.stringify({ number: Number(m[1]), pull_request: { url: "stub" } })); process.exit(0); }
+    if (existsSync(`${d}/issue-${m[1]}.json`)) { console.log(readFileSync(`${d}/issue-${m[1]}.json`, "utf8")); process.exit(0); }
+    die("gh: Not Found (HTTP 404)");
+  }
+  m = /^pulls\/(\d+)\/comments$/.exec(ep);
+  if (m && method === "GET") { console.log(read(`${d}/review-comments-${m[1]}.json`, "[]")); process.exit(0); }
   m = /^issues\/comments\/(\d+)$/.exec(ep);
   if (m && method === "PATCH") {
     for (const f of new Bun.Glob(`${d}/comments-*.json`).scanSync()) {
@@ -106,6 +116,12 @@ if (args[0] === "auth") process.exit(0);
 if (args[0] === "issue" && args[1] === "view") {
   const f = `${d}/issue-${args[2]}.json`;
   if (!existsSync(f)) die(`GraphQL: Could not resolve to an issue or pull request with the number of ${args[2]}.`);
+  console.log(readFileSync(f, "utf8"));
+  process.exit(0);
+}
+if (args[0] === "pr" && args[1] === "view") {
+  const f = `${d}/pr-${args[2]}.json`;
+  if (!existsSync(f)) die(`GraphQL: Could not resolve to a PullRequest with the number of ${args[2]}.`);
   console.log(readFileSync(f, "utf8"));
   process.exit(0);
 }

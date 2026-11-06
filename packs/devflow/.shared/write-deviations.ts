@@ -403,10 +403,11 @@ export function writeFinalWrap(n: number, runKey: string, prNumber: string) {
 
 // ---- follow-up mode -----------------------------------------------------------------------------
 
-export function followUpEntry(k: number, task: string, outcome: any, runId: string, date = today()): string {
+export function followUpEntry(k: number, task: string, outcome: any, runId: string, date = today(), docErrors: string[] = []): string {
   const status = outcome?.status === "done" ? "done" : "stuck";
   const lines = [`### F${k} (${date}, run ${runId}): ${clean(task)} → ${status}`];
   lines.push(status === "done" ? `- Summary: ${clean(outcome?.summary)}` : `- Stuck: ${clean(outcome?.stuck_reason || "the follow-up did not finish")}`);
+  for (const e of docErrors) lines.push(`- Deviation: the issue's documents do not validate. Done: worked from them as they are. Why: ${clean(e)}.`);
   for (const d of (outcome?.decisions ?? []) as Decision[]) {
     lines.push(d.kind === "deviation" ? `- Deviation: ${clean(d.title)}. Done: ${clean(d.choice)}. Why: ${clean(d.why)}.` : `- Decision: ${clean(d.title)}. Choice: ${clean(d.choice)}. Why: ${clean(d.why)}.`);
   }
@@ -438,8 +439,9 @@ export function writeFollowUp(o: FollowUpOpts) {
   }
   const text = readFileSync(file, "utf8");
   const { fm, body } = parse(text);
-  const outcome = readOutcomes(o.runKey)[`f${o.fk}`] ?? null;
-  const entry = followUpEntry(o.fk, o.task, outcome, o.run);
+  const all = readOutcomes(o.runKey);
+  const outcome = all[`f${o.fk}`] ?? null;
+  const entry = followUpEntry(o.fk, o.task, outcome, o.run, today(), all["doc-errors"]?.errors ?? []);
   const current = sectionText(body, "Follow-ups");
   const done = outcome?.status === "done";
   const nfm = { ...fm, revision: (Number(fm.revision) || 0) + 1, build_outcome: done ? fm.build_outcome : "stopped", branch: o.branch, run: o.run, updated: today() };
