@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listJobs } from "./ci-local.ts";
 import { ARCHON_CONFIG } from "./scaffold-repo.ts";
-import { PROFILE_PATH, type Run, isEntry, isNotFound, plansConfig, run } from "./util.ts";
+import { PROFILE_PATH, type Run, isEntry, isNotFound, plansConfig, rawProfile, run } from "./util.ts";
 
 export type Status = "ok" | "warn" | "fail";
 export interface Check {
@@ -24,10 +24,13 @@ export function firstWord(cmd: unknown): string {
   return words.find((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) ?? "";
 }
 
+// Without python3 the profile is read unvalidated, so a list field may hold anything.
+const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
+
 export function commandChecks(profile: any, root = "."): Check[] {
   const out: Check[] = [];
   for (const key of ["fast", "dod"]) {
-    for (const cmd of profile?.verify?.[key] ?? []) {
+    for (const cmd of list(profile?.verify?.[key])) {
       const w = firstWord(cmd);
       const cwd = typeof cmd === "object" && cmd?.cwd ? String(cmd.cwd) : ".";
       if (!w || w === "cd") continue;
@@ -36,14 +39,6 @@ export function commandChecks(profile: any, root = "."): Check[] {
     }
   }
   return out;
-}
-
-function rawProfile(root: string): any {
-  try {
-    return Bun.YAML.parse(readFileSync(join(root, PROFILE_PATH), "utf8"));
-  } catch {
-    return null;
-  }
 }
 
 export function doctor(root = "."): Check[] {
@@ -69,7 +64,7 @@ export function doctor(root = "."): Check[] {
   // Without python3 the profile cannot be validated; its commands are still worth checking.
   else if (v && isNotFound(v)) profile = rawProfile(root);
   checks.push(...commandChecks(profile, root));
-  for (const d of profile?.ci?.dispatchable ?? []) {
+  for (const d of list(profile?.ci?.dispatchable)) {
     const f = String(d?.workflow ?? "");
     const path = f.includes("/") ? f : `.github/workflows/${f}`;
     add(`ci.dispatchable: ${f}`, existsSync(join(root, path)), path, `add ${path} or remove the entry`);

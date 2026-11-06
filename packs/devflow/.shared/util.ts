@@ -100,9 +100,19 @@ export function profile(): any {
   return Bun.YAML.parse(readFileSync(PROFILE_PATH, "utf8"));
 }
 
+// The profile as written, or null when it is missing or not YAML. For the doctor, which runs on a
+// profile nobody has validated; everything else reads profile() after preflight.
+export function rawProfile(root = "."): any {
+  try {
+    return Bun.YAML.parse(readFileSync(join(root, PROFILE_PATH), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 // Where this project's plans branch is: the run's input, else the profile's `plans`, else `plans`.
 export function plansConfig(): { ref: string; dir: string } {
-  const p = existsSync(PROFILE_PATH) ? (profile().plans ?? {}) : {};
+  const p = rawProfile()?.plans ?? {};
   return {
     ref: input("plans_ref", false) || p.ref || "plans",
     dir: input("plans_dir", false) || p.dir || "plans",

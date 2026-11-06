@@ -121,4 +121,17 @@ eq "$code" "0" "doctor without archon: never fails"
 contains "$(js "$out" 'r.table')" "| devflow pack installed | warn | archon workflow list | install archon |" "doctor without archon: a warn row"
 contains "$(js "$out" 'r.table')" "| python3 with PyYAML | warn |" "doctor without python3: a warn row"
 contains "$(js "$out" 'r.table')" "| verify.fast: devflow-no-such-tool | fail |" "doctor without archon: missing command still reported"
+# Without python3 the profile is read unvalidated: mis-shaped lists are ignored, not a crash.
+printf 'version: 1\nverify: { fast: { a: b }, dod: "make test", ci_local: { skip_jobs: x, env: [a] } }\nci: { dispatchable: { x: y } }\n' > .devflow/devflow.yaml
+out="$(PATH="$bare" "$bare/bun" "$SHARED/doctor.ts" 2>/dev/null)"
+code=$?
+eq "$code" "0" "doctor without python3, mis-shaped profile: never fails"
+eq "$(js "$out" 'r.checks.filter((c) => /^(verify|ci)\./.test(c.name)).length')" "0" "doctor without python3, mis-shaped profile: no command rows"
+for broken in 'verify: { fast: [x' ''; do
+  printf '%s\n' "$broken" > .devflow/devflow.yaml
+  out="$(bun "$SHARED/doctor.ts" 2>/dev/null)"
+  code=$?
+  eq "$code" "0" "doctor, profile '$broken' not a mapping: never fails"
+  contains "$(js "$out" 'r.table')" "| profile valid | fail |" "doctor, profile '$broken' not a mapping: reported"
+done
 finish

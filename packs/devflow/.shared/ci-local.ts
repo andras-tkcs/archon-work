@@ -11,7 +11,7 @@
 // status: red when a job failed, skipped when no job was runnable, else green.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { PROFILE_PATH, artifactsDir, isEntry, projectEnv, run, tail } from "./util.ts";
+import { artifactsDir, isEntry, projectEnv, rawProfile, run, tail } from "./util.ts";
 import { writeOutcome } from "./outcomes.ts";
 
 export interface StepResult {
@@ -49,16 +49,18 @@ interface Config {
 }
 
 export function config(root = "."): Config {
-  const file = join(root, PROFILE_PATH);
-  const p: any = existsSync(file) ? Bun.YAML.parse(readFileSync(file, "utf8")) : {};
-  const c = p?.verify?.ci_local ?? {};
+  const p = rawProfile(root);
+  // The doctor reads this from a profile that may not have been validated: take only well-shaped values.
+  const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
+  const map = (v: unknown): Record<string, any> => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+  const c = map(p?.verify?.ci_local);
   return {
     enabled: c.enabled !== false,
     jobs: Array.isArray(c.jobs) ? c.jobs.map(String) : "auto",
-    skip: (c.skip_jobs ?? []).map(String),
+    skip: list(c.skip_jobs).map(String),
     timeoutMs: (Number(c.timeout_minutes) || 20) * 60_000,
-    env: Object.fromEntries(Object.entries(c.env ?? {}).map(([k, v]) => [k, String(v)])),
-    dispatchable: (p?.ci?.dispatchable ?? []).map((d: any) => basename(String(d?.workflow ?? ""))),
+    env: Object.fromEntries(Object.entries(map(c.env)).map(([k, v]) => [k, String(v)])),
+    dispatchable: list(p?.ci?.dispatchable).map((d) => basename(String(d?.workflow ?? ""))),
   };
 }
 
