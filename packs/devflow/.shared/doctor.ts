@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listJobs } from "./ci-local.ts";
 import { ARCHON_CONFIG } from "./scaffold-repo.ts";
-import { PROFILE_PATH, type Run, isEntry, isNotFound, plansConfig, rawProfile, run } from "./util.ts";
+import { PROFILE_PATH, type Run, isEntry, isNotFound, list, plansConfig, rawProfile, run } from "./util.ts";
 
 export type Status = "ok" | "warn" | "fail";
 export interface Check {
@@ -23,9 +23,6 @@ export function firstWord(cmd: unknown): string {
   const words = text.trim().replace(/^\(\s*/, "").split(/\s+/);
   return words.find((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) ?? "";
 }
-
-// Without python3 the profile is read unvalidated, so a list field may hold anything.
-const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
 
 export function commandChecks(profile: any, root = "."): Check[] {
   const out: Check[] = [];

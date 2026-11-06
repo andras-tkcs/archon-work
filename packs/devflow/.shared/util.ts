@@ -110,6 +110,9 @@ export function rawProfile(root = "."): any {
   }
 }
 
+// A list field of a profile read by rawProfile(): the array, or nothing when it holds anything else.
+export const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
+
 // Where this project's plans branch is: the run's input, else the profile's `plans`, else `plans`.
 export function plansConfig(): { ref: string; dir: string } {
   const p = rawProfile()?.plans ?? {};

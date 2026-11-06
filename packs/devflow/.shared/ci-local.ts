@@ -11,7 +11,7 @@
 // status: red when a job failed, skipped when no job was runnable, else green.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { artifactsDir, isEntry, projectEnv, rawProfile, run, tail } from "./util.ts";
+import { artifactsDir, isEntry, list, projectEnv, rawProfile, run, tail } from "./util.ts";
 import { writeOutcome } from "./outcomes.ts";
 
 export interface StepResult {
@@ -51,7 +51,6 @@ interface Config {
 export function config(root = "."): Config {
   const p = rawProfile(root);
   // The doctor reads this from a profile that may not have been validated: take only well-shaped values.
-  const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
   const map = (v: unknown): Record<string, any> => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
   const c = map(p?.verify?.ci_local);
   return {
