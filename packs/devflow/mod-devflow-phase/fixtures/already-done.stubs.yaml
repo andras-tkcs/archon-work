@@ -1,6 +1,7 @@
 # The phase already has its Plan-Phase commit on the base: build is skipped.
 fixture:
   expect: completed
+deps-check: { ready: true }
 preflight:
   shared_dir: /stub/devflow
   main_branch: main
@@ -12,4 +13,5 @@ load-plan:
   title: X
   done: true
   model: medium
-gate: '{"head":"abc","phase":"p1-x","skipped":true}'
+gate: { head: abc, phase: p1-x, skipped: true, status: done, stuck_reason: "", partial_head: "" }
+record-outcome: { phase: p1-x, status: done, head: abc, summary: stub, stuck_reason: "", decisions: [], cases: [], partial_head: "", skipped: true }

@@ -1,0 +1,6 @@
+# A phase it depends on is stuck: deps-check records this phase as skipped and nothing else runs.
+fixture:
+  expect: completed
+  reached: [deps-check, record-outcome]
+deps-check: { ready: false }
+record-outcome: { phase: p2-x, status: skipped, head: abc, summary: "", stuck_reason: "dependency p1-x is stuck", decisions: [], cases: [], partial_head: "", skipped: true }

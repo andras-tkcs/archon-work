@@ -2,10 +2,13 @@ name: mod-devflow-phase
 description: |
   Internal building block (mod-), started by a build-issue-<n> workflow; never start it yourself.
 
-  Implements one phase of a published plan in its own worktree: it reads the plan, resets the
-  worktree to the base the parent hands over, implements the phase with fast checks after each
-  step, and reports the commit it ended on. The parent merges that commit with the
-  Plan-Phase trailer.
+  Implements one phase of a published plan in its own worktree, unattended: it runs only when
+  every phase it depends on is done (else it records itself as skipped), reads the plan and the
+  test plan, resets the worktree to the base the parent hands over, implements the phase with
+  fast checks after each step, and records a typed outcome (done or stuck, with the decisions it
+  took and the test cases it ran) for the build's merge and wrap. A phase that cannot finish is
+  stuck, never a failed run. The parent merges a done phase's commit with the Plan-Phase
+  trailer. devflow-follow-up includes it with a task file instead of a manifest phase.
 model: medium
 worktree:
   enabled: true
@@ -25,10 +28,35 @@ inputs:
   base:
     default: ""
     description: The commit the worktree starts from, the parent's head before this wave.
-returns: gate
+  depends_on:
+    default: ""
+    description: The manifest phases this one depends on, comma-separated; each must be done, else this phase is skipped.
+  run_key:
+    default: ""
+    description: The build's run key from mod-devflow-start; names the shared outcomes.
+  task:
+    default: ""
+    description: A task file that replaces the manifest phase's brief (devflow-follow-up's f<k> phases).
+returns: record-outcome
 
 nodes:
+  - id: deps-check
+    script: deps-check
+    runtime: bun
+    with:
+      phase: "$INPUTS.phase"
+      depends_on: "$INPUTS.depends_on"
+      run_key: "$INPUTS.run_key"
+      base: "$INPUTS.base"
+    output_format:
+      type: object
+      properties:
+        ready: { type: boolean }
+      required: [ready]
+
   - id: preflight
+    depends_on: [deps-check]
+    when: "$deps-check.output.ready == true"
     script: preflight
     runtime: bun
     output_format:
@@ -52,6 +80,8 @@ nodes:
     with:
       mode: phase
       shared_dir: "$preflight.output.shared_dir"
+      task: "$INPUTS.task"
+      run_key: "$INPUTS.run_key"
     output_format:
       type: object
       properties:
@@ -119,20 +149,47 @@ nodes:
       until_bash: 's=$implement.output.status; g=$check.output.green; [ "$s" = blocked ] || { [ "$s" = complete ] && [ "$g" = true ]; }'
       max_iterations: 6
 
+  # Runs after a failed or exhausted build loop too, so a red phase is reported as stuck.
   - id: gate
     depends_on: [load-plan, build]
-    trigger_rule: none_failed_min_one_success
+    trigger_rule: all_done
+    when: "$deps-check.output.ready == true"
     script: gate-phase
     runtime: bun
     with:
       base: "$INPUTS.base"
       phase: "$INPUTS.phase"
       done: "$load-plan.output.done"
-      green: { from: "$build.output.green", if_skipped: "true" }
     output_format:
       type: object
       properties:
         head: { type: string }
         phase: { type: string }
         skipped: { type: boolean }
-      required: [head, phase, skipped]
+        status: { type: string, enum: [done, stuck] }
+        stuck_reason: { type: string }
+        partial_head: { type: string }
+      required: [head, phase, skipped, status, stuck_reason, partial_head]
+
+  - id: record-outcome
+    depends_on: [deps-check, gate]
+    trigger_rule: all_done
+    script: record-outcome
+    runtime: bun
+    with:
+      phase: "$INPUTS.phase"
+      base: "$INPUTS.base"
+      run_key: "$INPUTS.run_key"
+    output_format:
+      type: object
+      properties:
+        phase: { type: string }
+        status: { type: string, enum: [done, stuck, failed, skipped] }
+        head: { type: string }
+        summary: { type: string }
+        stuck_reason: { type: string }
+        decisions: { type: array }
+        cases: { type: array }
+        partial_head: { type: string }
+        skipped: { type: boolean }
+      required: [phase, status, head, summary, stuck_reason, decisions, cases, partial_head, skipped]
