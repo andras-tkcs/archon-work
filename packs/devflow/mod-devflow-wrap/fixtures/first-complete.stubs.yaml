@@ -1,0 +1,15 @@
+# Stage first of a build whose phases are all done: pushed and deliverable, so the caller delivers.
+fixture:
+  expect: completed
+  reached: [deviations, stage, push, result]
+  inputs:
+    stage: first
+    issue: "7"
+    branch: feat/issue-7-csv-export
+    plan_commit: 0123456789abcdef0123456789abcdef01234567
+    run_key: issue-7-111111111111
+probe: { stage: first, pr_number: "" }
+deviations: { complete: true, changed: true, stuck_phases: [], deviations_url: "https://github.com/o/r/blob/feat/issue-7-csv-export/plans/issue-7/deviations.md", problems: [], skipped: false }
+stage: { committed: true, head: "3333333333333333333333333333333333333333" }
+push: { ok: true, pushed: [feat/issue-7-csv-export], head: "3333333333333333333333333333333333333333", problems: [] }
+result: { complete: true, deliverable: true, stuck_phases: [], branch: feat/issue-7-csv-export, head: "3333333333333333333333333333333333333333", pr_url: "", deviations_url: "https://github.com/o/r/blob/feat/issue-7-csv-export/plans/issue-7/deviations.md", pushed: [feat/issue-7-csv-export] }

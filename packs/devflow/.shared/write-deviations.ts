@@ -14,7 +14,7 @@ import { fileOf, mainFolderOf, slugOf } from "./layout.ts";
 import { readOutcomes, readOwnOutcome, writeOutcome } from "./outcomes.ts";
 import { render } from "./render-template.ts";
 import { extractManifest, type Manifest } from "./render-run.ts";
-import { artifactsDir, input, isEntry, run } from "./util.ts";
+import { artifactsDir, fact, input, isEntry, run } from "./util.ts";
 import { validateDocs } from "./validate-docs.ts";
 
 export interface Ident {
@@ -371,6 +371,8 @@ function reviewFromTail(art: string, prUrl: string): { text: string; fixes: Deci
 const decisionBlock = (d: Decision) => [clean(d.title), `- Phase: ${clean(d.phase)}`, `- Choice: ${clean(d.choice)}`, `- Alternatives: ${clean(d.alternatives)}`, `- Why: ${clean(d.why)}`];
 
 export function writeFinalTail(n: number, prUrl: string) {
+  // A build rendered before deviations.md existed delivers through the same tail: nothing to patch.
+  if (!existsSync(deviationsPath(n))) return { complete: true, changed: false, problems: [] as string[] };
   const { fm, body } = readFile(n);
   const r = reviewFromTail(artifactsDir(), prUrl);
   let next = withOutcome(body, "completed", prUrl);
@@ -447,32 +449,32 @@ export function writeFollowUp(o: FollowUpOpts) {
 
 // ---- CLI ----------------------------------------------------------------------------------------
 
-function context(): Record<string, any> {
-  const f = join(artifactsDir(), "context.json");
-  return existsSync(f) ? (readJson(f) ?? {}) : {};
-}
-
 if (isEntry(import.meta)) {
-  const ctx = context();
-  const val = (k: string) => input(k, false) || String(ctx[k] ?? "");
   const mode = input("mode");
-  const n = Number(val("issue"));
-  const branch = val("branch");
-  const runKey = val("run_key");
+  const where = fact("where");
+  const issueText = fact("issue");
+  const branch = fact("branch");
+  const runKey = fact("run_key");
   const runId = process.env.WORKFLOW_ID || "run";
+  // Work without an issue (devflow-quick and the other tail includers) has no deviations.md.
+  if (issueText === "") {
+    console.log(JSON.stringify({ complete: false, changed: false, stuck_phases: [], deviations_url: "", problems: [], skipped: true }));
+    process.exit(0);
+  }
+  const n = Number(issueText);
   let result: { complete: boolean; changed?: boolean; stuck_phases?: string[]; problems: string[] };
   try {
-    if (!Number.isInteger(n) || n < 1) throw new Error(`issue '${val("issue")}' is not an issue number`);
-    if (mode === "build") result = writeBuild({ issue: n, branch, plansDir: val("plans_dir") || "plans", planCommit: val("plan_commit"), runKey, run: runId });
+    if (!Number.isInteger(n) || n < 1) throw new Error(`issue '${issueText}' is not an issue number`);
+    if (mode === "build") result = writeBuild({ issue: n, branch, plansDir: fact("plans_dir") || "plans", planCommit: fact("plan_commit"), runKey, run: runId });
     else if (mode === "follow-up") {
-      result = writeFollowUp({ issue: n, branch, mainBranch: val("main_branch") || "main", plansDir: val("plans_dir") || "plans", planCommit: val("plan_commit"), runKey, run: runId, task: val("task"), fk: Number(val("fk")) || 1 });
-    } else if (mode === "final" && val("where") === "tail") result = writeFinalTail(n, val("pr_url"));
-    else if (mode === "final") result = writeFinalWrap(n, runKey, val("deliverable") === "true");
+      result = writeFollowUp({ issue: n, branch, mainBranch: fact("main_branch") || "main", plansDir: fact("plans_dir") || "plans", planCommit: fact("plan_commit"), runKey, run: runId, task: fact("task"), fk: Number(fact("fk")) || 1 });
+    } else if (mode === "final" && where === "tail") result = writeFinalTail(n, fact("pr_url"));
+    else if (mode === "final") result = writeFinalWrap(n, runKey, fact("deliverable") === "true");
     else throw new Error(`mode must be build, follow-up or final, not '${mode}'`);
   } catch (e) {
     // The file must exist whatever failed: keep what is there, else write the stub.
     const file = deviationsPath(n);
-    if (Number.isInteger(n) && n > 0 && !existsSync(file)) {
+    if (mode !== "final" && Number.isInteger(n) && n > 0 && !existsSync(file)) {
       mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, renderStub({ issue: n, title: slugOf(n), branch: branch || "unknown", planRevision: 1, run: runId }));
     }
@@ -483,7 +485,8 @@ if (isEntry(import.meta)) {
   try {
     url = `https://github.com/${repoSlug()}/blob/${branch}/${deviationsPath(n)}`;
   } catch {}
-  const out = { complete: result.complete, changed: result.changed ?? true, stuck_phases: result.stuck_phases ?? [], deviations_url: url, problems: result.problems };
-  if (mode !== "final") writeOutcome("deviations", out, runKey);
+  const out = { complete: result.complete, changed: result.changed ?? true, stuck_phases: result.stuck_phases ?? [], deviations_url: url, problems: result.problems, skipped: false };
+  // wrap's final pass only patches the file; the tail's pass (the PR is open) is the build's last word.
+  if (mode !== "final" || where === "tail") writeOutcome("deviations", out, runKey);
   console.log(JSON.stringify(out));
 }

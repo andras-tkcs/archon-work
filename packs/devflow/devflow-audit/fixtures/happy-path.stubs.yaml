@@ -84,3 +84,8 @@ ship__tail__dod-ci__result:
   dod: { green: true, failed: [], unavailable: [] }
   ci_local: { status: skipped, rounds: 0, ran: [], failed: [], skipped: [] }
   ci_status: skipped
+# The final deviations pass: no issue in this fixture, so nothing to write.
+ship__tail__deviations-final: { complete: false, changed: false, stuck_phases: [], deviations_url: "", problems: [], skipped: true }
+ship__tail__stage-final: { committed: false, head: abc }
+ship__tail__push-final: { ok: true, pushed: [], head: abc, problems: [] }
+ship__tail__record-pr: { number: 1100, url: "https://github.com/example/project/pull/1100" }

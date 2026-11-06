@@ -52,6 +52,20 @@ export function input(name: string, required = true): string {
   return v;
 }
 
+// A run fact: the input, else the value load-plan (or prepare-branch) wrote to $ARTIFACTS_DIR/context.json,
+// so a script in the delivery tail reads the build's issue, branch and plan without new inputs.
+export function fact(name: string): string {
+  const v = input(name, false);
+  if (v !== "") return v;
+  const file = join(artifactsDir(), "context.json");
+  if (!existsSync(file)) return "";
+  try {
+    return String(JSON.parse(readFileSync(file, "utf8"))[name] ?? "");
+  } catch {
+    return "";
+  }
+}
+
 // An optional JSON input: null when empty (its producer did not run); fails the node when malformed.
 export function jsonInput(name: string): any {
   const raw = input(name, false).trim();

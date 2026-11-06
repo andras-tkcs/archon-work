@@ -122,9 +122,78 @@ nodes:
         url: { type: string }
       required: [number, url]
 
+  # ---- A build's final deviations.md reaches the PR before the watch (no-ops without an issue) --
+  - id: deviations-final
+    depends_on: [open-pr]
+    script: write-deviations
+    runtime: bun
+    with:
+      mode: final
+      where: tail
+      issue: "$INPUTS.issue"
+      run_key: "$INPUTS.run_key"
+      pr_url: "$open-pr.output.url"
+    output_format:
+      type: object
+      properties:
+        complete: { type: boolean }
+        changed: { type: boolean }
+        stuck_phases: { type: array, items: { type: string } }
+        deviations_url: { type: string }
+        problems: { type: array, items: { type: string } }
+        skipped: { type: boolean }
+      required: [complete, changed, stuck_phases, deviations_url, problems, skipped]
+
+  - id: stage-final
+    depends_on: [deviations-final]
+    script: stage-docs
+    runtime: bun
+    with:
+      issue: "$INPUTS.issue"
+      mode: final
+      changed: "$deviations-final.output.changed"
+    output_format:
+      type: object
+      properties:
+        committed: { type: boolean }
+        head: { type: string }
+      required: [committed, head]
+
+  - id: push-final
+    depends_on: [stage-final]
+    script: push-all
+    runtime: bun
+    with:
+      final: "true"
+      run_key: "$INPUTS.run_key"
+      changed: "$stage-final.output.committed"
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+        pushed: { type: array, items: { type: string } }
+        head: { type: string }
+        problems: { type: array, items: { type: string } }
+      required: [ok, pushed, head, problems]
+
+  - id: record-pr
+    depends_on: [push-final]
+    script: record-pr
+    runtime: bun
+    with:
+      number: "$open-pr.output.number"
+      url: "$open-pr.output.url"
+      run_key: "$INPUTS.run_key"
+    output_format:
+      type: object
+      properties:
+        number: { type: integer }
+        url: { type: string }
+      required: [number, url]
+
   - id: trace-pr
     include: mod-devflow-trace
-    depends_on: [open-pr]
+    depends_on: [open-pr, record-pr]
     with:
       issue: "$INPUTS.issue"
       event: pr_open
@@ -133,7 +202,8 @@ nodes:
 
   # ---- 6. watch the PR until it merges: conflicts, red CI, review threads ------------------
   - id: watch
-    depends_on: [open-pr]
+    depends_on: [open-pr, record-pr]
+    trigger_rule: none_failed_min_one_success
     loop_group:
       nodes:
         - id: pr-state

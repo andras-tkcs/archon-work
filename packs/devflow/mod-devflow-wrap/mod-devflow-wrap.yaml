@@ -1,0 +1,217 @@
+name: mod-devflow-wrap
+description: |
+  Building block, not a workflow to run alone. Use when: a build-issue-<n> or devflow-follow-up
+  run ends, however its phases went. NOT for: starting it directly.
+
+  Guarantee G: stage first writes deviations.md from the phases' outcomes (deterministic, from
+  templates/deviations.md, validated), commits this issue's folder plans/issue-<n>/ and nothing
+  else, and pushes the branch (never forced; a rejected push goes to <branch>-stopped-<run>) and
+  the partial work of stuck phases as <branch>-partial-<id>. Its output says whether the build is
+  deliverable (every phase done, the push went through, no PR yet); the caller then runs
+  mod-devflow-deliver. Stage final, after deliver, records a deliver that opened no PR, edits a
+  follow-up's PR comment (and marks a local-CI draft ready once local CI is green), and shows a
+  stopped build on the issue. Never waits for anyone; each step degrades instead of failing.
+model: medium
+inputs:
+  stage:
+    default: first
+    description: first (before deliver) or final (after it).
+  mode:
+    default: build
+    description: build (the whole deviations.md) or follow-up (one F<k> entry appended).
+  issue:
+    description: The issue number.
+  branch:
+    description: The branch the parent has checked out.
+  plans_ref:
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
+  plans_dir:
+    default: ""
+    description: The plans directory; empty means the profile's plans.dir, else plans.
+  plan_commit:
+    description: The commit of the plans branch the build started from.
+  main_branch:
+    default: main
+    description: The default branch (a follow-up on a new branch reads deviations.md from it).
+  run_key:
+    description: The build's run key from mod-devflow-start; names the shared outcomes.
+  task:
+    default: ""
+    description: Follow-up mode, the task in words.
+  fk:
+    default: ""
+    description: Follow-up mode, the number of the F<k> entry.
+  pr_number:
+    default: ""
+    description: Follow-up mode, the open PR the follow-up continues; empty when there is none.
+  deliverable:
+    default: ""
+    description: Stage final, the first stage's deliverable (true when deliver ran).
+returns: result
+outcome_field: complete
+
+nodes:
+  - id: probe
+    bash: 'printf ''{"stage":"%s","pr_number":"%s"}\n'' "$INPUTS_STAGE" "$INPUTS_PR_NUMBER"'
+    output_format:
+      type: object
+      properties:
+        stage: { type: string, enum: [first, final] }
+        pr_number: { type: string }
+      required: [stage, pr_number]
+
+  # ---- stage first: deviations.md, the issue's folder, the push ----------------------------
+  - id: deviations
+    depends_on: [probe]
+    when: "$probe.output.stage == 'first'"
+    script: write-deviations
+    runtime: bun
+    with:
+      mode: "$INPUTS.mode"
+      issue: "$INPUTS.issue"
+      branch: "$INPUTS.branch"
+      plans_dir: "$INPUTS.plans_dir"
+      plan_commit: "$INPUTS.plan_commit"
+      main_branch: "$INPUTS.main_branch"
+      run_key: "$INPUTS.run_key"
+      task: "$INPUTS.task"
+      fk: "$INPUTS.fk"
+    output_format: &dev_out
+      type: object
+      properties:
+        complete: { type: boolean }
+        changed: { type: boolean }
+        stuck_phases: { type: array, items: { type: string } }
+        deviations_url: { type: string }
+        problems: { type: array, items: { type: string } }
+        skipped: { type: boolean }
+      required: [complete, changed, stuck_phases, deviations_url, problems, skipped]
+
+  - id: stage
+    depends_on: [deviations]
+    trigger_rule: all_done
+    when: "$probe.output.stage == 'first'"
+    script: stage-docs
+    runtime: bun
+    with:
+      issue: "$INPUTS.issue"
+      mode: "$INPUTS.mode"
+      plans_dir: "$INPUTS.plans_dir"
+      plan_commit: "$INPUTS.plan_commit"
+    output_format: &stage_out
+      type: object
+      properties:
+        committed: { type: boolean }
+        head: { type: string }
+      required: [committed, head]
+
+  - id: push
+    depends_on: [stage]
+    trigger_rule: all_done
+    when: "$probe.output.stage == 'first'"
+    script: push-all
+    runtime: bun
+    with:
+      branch: "$INPUTS.branch"
+      run_key: "$INPUTS.run_key"
+    output_format: &push_out
+      type: object
+      properties:
+        ok: { type: boolean }
+        pushed: { type: array, items: { type: string } }
+        head: { type: string }
+        problems: { type: array, items: { type: string } }
+      required: [ok, pushed, head, problems]
+
+  # ---- stage final: after deliver -----------------------------------------------------------
+  - id: deviations-final
+    depends_on: [probe]
+    when: "$probe.output.stage == 'final'"
+    script: write-deviations
+    runtime: bun
+    with:
+      mode: final
+      where: wrap
+      issue: "$INPUTS.issue"
+      branch: "$INPUTS.branch"
+      run_key: "$INPUTS.run_key"
+      deliverable: "$INPUTS.deliverable"
+    output_format: *dev_out
+
+  - id: stage-final
+    depends_on: [deviations-final]
+    trigger_rule: all_done
+    when: "$probe.output.stage == 'final'"
+    script: stage-docs
+    runtime: bun
+    with:
+      issue: "$INPUTS.issue"
+      mode: final
+      changed: "$deviations-final.output.changed"
+    output_format: *stage_out
+
+  - id: push-final
+    depends_on: [stage-final]
+    trigger_rule: all_done
+    when: "$probe.output.stage == 'final'"
+    script: push-all
+    runtime: bun
+    with:
+      branch: "$INPUTS.branch"
+      run_key: "$INPUTS.run_key"
+      final: "true"
+      changed: "$stage-final.output.committed"
+    output_format: *push_out
+
+  - id: followup-pr
+    depends_on: [push-final]
+    trigger_rule: all_done
+    when: "$probe.output.stage == 'final' && $probe.output.pr_number != ''"
+    script: followup-pr
+    runtime: bun
+    with:
+      pr_number: "$INPUTS.pr_number"
+      issue: "$INPUTS.issue"
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+        comment_url: { type: string }
+        ready: { type: boolean }
+        problems: { type: array, items: { type: string } }
+      required: [ok, comment_url, ready, problems]
+
+  - id: result
+    depends_on: [deviations, stage, push, deviations-final, stage-final, push-final, followup-pr]
+    trigger_rule: all_done
+    script: wrap-result
+    runtime: bun
+    with:
+      stage: "$INPUTS.stage"
+      mode: "$INPUTS.mode"
+      run_key: "$INPUTS.run_key"
+      branch: "$INPUTS.branch"
+      pr_number: "$INPUTS.pr_number"
+    output_format:
+      type: object
+      properties:
+        complete: { type: boolean }
+        deliverable: { type: boolean }
+        stuck_phases: { type: array, items: { type: string } }
+        branch: { type: string }
+        head: { type: string }
+        pr_url: { type: string }
+        deviations_url: { type: string }
+        pushed: { type: array, items: { type: string } }
+      required: [complete, deliverable, stuck_phases, branch, head, pr_url, deviations_url, pushed]
+
+  - id: trace-end
+    include: mod-devflow-trace
+    depends_on: [result]
+    when: "$probe.output.stage == 'final' && $result.output.complete == false"
+    with:
+      issue: "$INPUTS.issue"
+      event: stopped
+      branch: "$INPUTS.branch"
+      deviations_url: "$result.output.deviations_url"
