@@ -216,13 +216,18 @@ what the plan leaves open and records it.
    section (design and plan with their revisions) and a Deviations section, the final
    `deviations.md` committed into the PR, then a watch every 10 minutes that hands conflicts, red
    checks and review threads to a steward session until a person merges or closes the PR.
-7. **end** fails the run when the build is not complete (`build-issue-<n> is not complete: see
-   deviations.md (<url>)`), after wrap has committed and pushed.
+7. **wrap-final** (`mod-devflow-wrap`, stage final) runs whatever deliver did: a deliver that
+   failed or opened no PR (a red review, a red definition of done, a `gh` error) is recorded under
+   `Review and CI`, and `deviations.md` is committed and pushed again. wrap, deliver and wrap-final
+   share the build's checkout, so they run one after another.
+8. **end** fails the run when the build is not complete (`build-issue-<n> is not complete: see
+   deviations.md (<url>)`), after wrap-final has committed and pushed; like wrap-final it runs
+   whatever deliver did and reads only wrap-final's output.
 
-Guarantee: once `start` has created the branch, every ending passes through `wrap`, so the branch
-carries `deviations.md`. Its limits: a refusal before `start` creates the branch leaves nothing (and
-changes nothing), and a killed run (host crash, `archon workflow cancel`, a timeout of the whole
-run) cannot run `wrap`; the stub `deviations.md` committed by `start` is then on the branch, and
+Guarantee: once `start` has created the branch, every ending passes through `wrap` and then
+`wrap-final`, so the branch carries `deviations.md`. Its limits: a refusal before `start` creates
+the branch leaves nothing (and changes nothing), and a killed run (host crash, `archon workflow
+cancel`, a timeout of the whole run) cannot run `wrap`; the stub `deviations.md` committed by `start` is then on the branch, and
 `devflow-follow-up` finishes the job.
 
 The issue comment moves from building to PR open to merged or closed, or to stopped.
@@ -295,7 +300,8 @@ error; rerun with a hint), `scaffold-repo` creates only what is missing
 `.archon/config.yaml`, `.archon/worktrees/` in `.gitignore`) and removes the legacy profile,
 `doctor` checks `gh`, `origin`, `python3` with PyYAML, `bun`, the profile, the first word of every
 check command, the dispatchable workflow files, the plans branch, the Archon config, the installed
-pack and the local CI jobs, and `publish-init` creates the plans branch when origin lacks it and
+pack and the local CI jobs (a missing `archon`, `gh`, `python3`, `git` or `bun` is a warn row that
+says to install it; the doctor never fails the run), and `publish-init` creates the plans branch when origin lacks it and
 opens one PR on `chore/devflow-init` (the profile with its sources, the doctor table, a checklist
 of the retired plugin's hook leftovers to remove by hand, the next commands). Nothing changed: no branch, no PR.
 
@@ -425,7 +431,9 @@ scripts/test-devflow-shared.sh            # or only some parts: scripts/test-dev
 - `test-devflow-pack.sh` loads the pack as a project pack in a scratch repository, runs `archon
   validate workflows` and replays every fixture with `archon workflow test`. Fixtures named for a
   red path (`review-never-clears`, `dod-stays-red`, `plan-test-never-clears`, `not-small`, ...)
-  must stay red; the ones that execute a script set `exec-code: true`.
+  must stay red; the ones that execute a script set `exec-code: true`. It then runs
+  `scripts/check-no-toolkit.sh`, which fails when the retired toolkit's names appear outside the
+  migration's allow-list (the names and the allow-list are in the script).
 - `test-render-run.sh` tests the build renderer (`render-run.ts`), the plan block's `render-run`,
   `test-plan` and `check-plan` scripts, and `load-plan.ts`.
 - `test-devflow-validators.sh` runs `validate-profile.py` and `validate-manifest.py` on the

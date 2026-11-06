@@ -18,7 +18,8 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `slack-app-manifest.yml` | Paste into Slack to create the Archon app in one step. |
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
 | `packs/devflow/` | The devflow workflow pack for Archon (refine → plan → build: `devflow-refine` writes an issue's design, `devflow-plan` publishes its plan and a parallel build workflow, the build runs unattended, records its decisions in `deviations.md` and opens one PR; `devflow-follow-up` continues or corrects a build, `devflow-init` creates the profile; for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
-| `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
+| `scripts/test-devflow-pack.sh` | Validates the pack, replays its fixtures (needs `archon`) and runs `scripts/check-no-toolkit.sh`. |
+| `scripts/check-no-toolkit.sh` | Fails when the devflow pack or `bootstrap.sh` still names the retired claude-toolkit outside the migration allow-list. |
 | `scripts/test-render-run.sh` | Tests the devflow pack's build workflow renderer (`build-issue-<n>`), the plan block's render, test-plan and check-plan scripts, and `load-plan.ts` (needs `archon` and `bun`). |
 | `scripts/test-devflow-validators.sh` | Tests the devflow pack's profile and manifest validators (needs `python3` with PyYAML). |
 | `scripts/test-devflow-shared.sh` | Tests the devflow pack's shared scripts against scratch repositories and a stub `gh` (needs `bun`, and `archon` for part 7). |

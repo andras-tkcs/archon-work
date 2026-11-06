@@ -13,10 +13,16 @@ export interface Run {
   err: string;
 }
 
+// A missing executable is exit 127 with "<cmd>: not found", as a shell reports it, not a throw.
+const notFound = (cmd: string): Run => ({ code: 127, out: "", err: `${cmd}: not found` });
+export const isNotFound = (r: Run) => r.code === 127 && r.out === "" && /^\S+: not found$/.test(r.err);
+
 export function run(cmd: string[], opts: { cwd?: string; env?: Record<string, string>; timeoutMs?: number } = {}): Run {
+  const env = { ...process.env, ...(opts.env ?? {}) };
+  if (!Bun.which(cmd[0], { PATH: env.PATH ?? "", cwd: opts.cwd })) return notFound(cmd[0]);
   const r = Bun.spawnSync(cmd, {
     cwd: opts.cwd,
-    env: { ...process.env, ...(opts.env ?? {}) },
+    env,
     stdout: "pipe",
     stderr: "pipe",
     timeout: opts.timeoutMs,
@@ -94,9 +100,22 @@ export function profile(): any {
   return Bun.YAML.parse(readFileSync(PROFILE_PATH, "utf8"));
 }
 
+// The profile as written, or null when it is missing or not YAML. For the doctor, which runs on a
+// profile nobody has validated; everything else reads profile() after preflight.
+export function rawProfile(root = "."): any {
+  try {
+    return Bun.YAML.parse(readFileSync(join(root, PROFILE_PATH), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// A list field of a profile read by rawProfile(): the array, or nothing when it holds anything else.
+export const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
+
 // Where this project's plans branch is: the run's input, else the profile's `plans`, else `plans`.
 export function plansConfig(): { ref: string; dir: string } {
-  const p = existsSync(PROFILE_PATH) ? (profile().plans ?? {}) : {};
+  const p = rawProfile()?.plans ?? {};
   return {
     ref: input("plans_ref", false) || p.ref || "plans",
     dir: input("plans_dir", false) || p.dir || "plans",

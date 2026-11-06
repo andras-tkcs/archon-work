@@ -261,7 +261,7 @@ nodes:
 
   - id: check
     depends_on: [resolve, write-design]
-    script: check-design
+    script: finalize-design
     runtime: bun
     with:
       issue: "$resolve.output.issue"

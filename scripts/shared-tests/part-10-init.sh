@@ -4,7 +4,7 @@
 # draft with every error and writes a valid one in the fixed key order (an equal one is left
 # alone); scaffold-repo never overwrites and keeps the other Archon config keys; publish-init makes
 # no branch or PR when nothing changed and one branch and one PR otherwise; doctor reports a
-# missing command.
+# missing command, and a missing archon or python3 as a warn row, never a failure.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 js() { bun -e "const r=JSON.parse(process.argv[1]); console.log($2)" "$1"; }
@@ -111,4 +111,27 @@ out="$(bun "$SHARED/doctor.ts" 2>/dev/null)"
 code=$?
 eq "$code" "0" "doctor: never fails"
 contains "$(js "$out" 'r.table')" "| verify.fast: devflow-no-such-tool | fail |" "doctor: missing command reported"
+# Only bun, git, bash and the stub gh on PATH: archon and python3 are missing executables, not failures.
+bare="$(mk_tmp)"
+for t in bun git bash; do ln -s "$(command -v "$t")" "$bare/$t"; done
+ln -s "$GH_STUB_DIR/bin/gh" "$bare/gh"; ln -s "$GH_STUB_DIR/bin/gh.ts" "$bare/gh.ts"
+out="$(PATH="$bare" "$bare/bun" "$SHARED/doctor.ts" 2>/dev/null)"
+code=$?
+eq "$code" "0" "doctor without archon: never fails"
+contains "$(js "$out" 'r.table')" "| devflow pack installed | warn | archon workflow list | install archon |" "doctor without archon: a warn row"
+contains "$(js "$out" 'r.table')" "| python3 with PyYAML | warn |" "doctor without python3: a warn row"
+contains "$(js "$out" 'r.table')" "| verify.fast: devflow-no-such-tool | fail |" "doctor without archon: missing command still reported"
+# Without python3 the profile is read unvalidated: mis-shaped lists are ignored, not a crash.
+printf 'version: 1\nverify: { fast: { a: b }, dod: "make test", ci_local: { skip_jobs: x, env: [a] } }\nci: { dispatchable: { x: y } }\n' > .devflow/devflow.yaml
+out="$(PATH="$bare" "$bare/bun" "$SHARED/doctor.ts" 2>/dev/null)"
+code=$?
+eq "$code" "0" "doctor without python3, mis-shaped profile: never fails"
+eq "$(js "$out" 'r.checks.filter((c) => /^(verify|ci)\./.test(c.name)).length')" "0" "doctor without python3, mis-shaped profile: no command rows"
+for broken in 'verify: { fast: [x' ''; do
+  printf '%s\n' "$broken" > .devflow/devflow.yaml
+  out="$(bun "$SHARED/doctor.ts" 2>/dev/null)"
+  code=$?
+  eq "$code" "0" "doctor, profile '$broken' not a mapping: never fails"
+  contains "$(js "$out" 'r.table')" "| profile valid | fail |" "doctor, profile '$broken' not a mapping: reported"
+done
 finish
