@@ -4,7 +4,8 @@
 # done, stuck, skipped and conflict outcomes give the deviations.md structure and pass validate-docs;
 # stage-docs commits only plans/issue-<n>/ (decoys stay out); push-all pushes the branch and the
 # partial refs, never forced, and falls back to <branch>-stopped-<run>; a follow-up appends ### F<n>
-# and leaves every earlier byte; agent text cannot break the file.
+# and leaves every earlier byte; agent text cannot break the file; a deliver that opened no PR is
+# recorded and pushed by wrap's final pass and the run ends red.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 fx="$REPO_ROOT/scripts/fixtures/docs"
@@ -177,4 +178,26 @@ eq "$(vd deviations)" "0" "deviations: after a failure the file still validates"
 
 # 10. Work without an issue (devflow-quick through the same tail) writes nothing.
 eq "$(js "$(INPUTS_MODE=final INPUTS_WHERE=tail bun "$SHARED/write-deviations.ts")" 'r.skipped')" "true" "deviations: no issue, nothing to do"
+# 11. Deliver failed (a red review or a gh error: no PR): wrap's final pass still records it under
+#     Review and CI, commits and pushes deviations.md, and the build's end node fails the run.
+K4="$KEY-nopr"
+INPUTS_RUN_KEY="$K4" bun -e "import { writeOutcome } from '$SHARED/outcomes.ts'; writeOutcome('deviations', { complete: true, deviations_url: 'u' }); writeOutcome('stage', { ok: true }); writeOutcome('push', { ok: true, pushed: ['$B'] })"
+final() { env INPUTS_ISSUE=7 INPUTS_BRANCH=$B INPUTS_RUN_KEY="$K4" INPUTS_PR_NUMBER= "$@"; }
+out="$(final INPUTS_MODE=final INPUTS_WHERE=wrap bun "$SHARED/write-deviations.ts" 2>/dev/null)"
+eq "$(js "$out" 'r.complete+" "+r.changed')" "false true" "deliver failed: the final pass changes deviations.md"
+contains "$(cat plans/issue-7/deviations.md)" "Deliver ran but opened no PR; see run run-1." "deliver failed: recorded under Review and CI"
+contains "$(cat plans/issue-7/deviations.md)" "build_outcome: stopped" "deliver failed: build_outcome stopped"
+eq "$(vd deviations)" "0" "deliver failed: the file validates"
+eq "$(js "$(final INPUTS_MODE=final INPUTS_CHANGED=true bun "$SHARED/stage-docs.ts")" 'r.committed')" "true" "deliver failed: deviations.md committed"
+eq "$(js "$(final INPUTS_FINAL=true INPUTS_CHANGED=true bun "$SHARED/push-all.ts" 2>/dev/null)" 'r.ok')" "true" "deliver failed: pushed"
+eq "$(git ls-remote origin refs/heads/$B | cut -f1)" "$(git rev-parse HEAD)" "deliver failed: origin has the final deviations.md"
+git fetch -q origin "$B"
+contains "$(git show FETCH_HEAD:plans/issue-7/deviations.md)" "Deliver ran but opened no PR" "deliver failed: the pushed file has the failure"
+res="$(final INPUTS_STAGE=final INPUTS_MODE=build bun "$SHARED/wrap-result.ts")"
+eq "$(js "$res" 'r.complete')" "false" "deliver failed: wrap-final is not complete"
+end_bash="$(bun "$SHARED/render-run.ts" "$fx/valid/plan.md" --issue 7 --design-revision 1 --plan-revision 1 --repo o/r --title T --main main --pack t/devflow | bun -e 'console.log(Bun.YAML.parse(await Bun.stdin.text()).nodes.find((n) => n.id === "end").bash)')"
+end_node() { bash -c "${end_bash//\$wrap-final.output/$(printf '%q' "$1")}" 2>&1; }
+contains "$(end_node "$res")" "devflow: build-issue-7 is not complete: see deviations.md (u)" "deliver failed: the end node says why"
+end_node "$res" >/dev/null; eq "$?" "1" "deliver failed: the end node fails the run"
+end_node "${res/\"complete\":false/\"complete\":true}" >/dev/null; eq "$?" "0" "a complete build's end node passes"
 finish

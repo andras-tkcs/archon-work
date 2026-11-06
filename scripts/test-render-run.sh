@@ -85,6 +85,9 @@ eq(node(wide,"deliver").with.slug, "issue-3", "deliver slug");
 eq(node(wide,"deliver").with.branch, "feat/three-wide", "deliver branch from the manifest");
 eq(node(wide,"deliver").with.head, "$wrap.output.head", "deliver starts from the head wrap pushed");
 eq(node(wide,"end").depends_on, ["wrap-final"], "end after wrap-final");
+// A failed or skipped deliver must not stop the final pass: wrap-final runs on all_done and reads no
+// deliver output (Archon fails a node that splices the output of a failed one); end then runs on it.
+for (const id of ["wrap-final","end"]) if (JSON.stringify(node(wide,id)).includes("$deliver.")) { console.error(`FAIL ${id} reads the output of deliver`); process.exit(1); }
 has(node(wide,"end").bash, "build-issue-3 is not complete: see deviations.md", "end names the build");
 eq(wide.returns, "end", "returns");
 eq(wide.outcome_field, "complete", "outcome field");
