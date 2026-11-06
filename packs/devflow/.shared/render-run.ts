@@ -215,7 +215,8 @@ export function renderRunWorkflow(o: RenderOpts): string {
     id: "end",
     depends_on: ["wrap-final"],
     bash: [
-      "python3 - '$wrap-final.output' <<'PY'",
+      "r=$wrap-final.output",
+      "python3 - \"$r\" <<'PY'",
       "import json, sys",
       "r = json.loads(sys.argv[1])",
       'out = {k: r.get(k) for k in ["complete", "stuck_phases", "branch", "pr_url", "deviations_url", "pushed"]}',
