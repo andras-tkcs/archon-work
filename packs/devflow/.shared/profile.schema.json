@@ -60,9 +60,6 @@
       "const": 1,
       "description": "Profile format version. Required; must be 1."
     },
-    "toolkit": {
-      "description": "ignored: the toolkit is retired"
-    },
     "project": {
       "type": "object",
       "additionalProperties": false,
@@ -83,9 +80,6 @@
         "must_read": {
           "$ref": "#/$defs/stringList",
           "description": "Files the planner, workers and reviewer read first. May be empty."
-        },
-        "plan_dir": {
-          "description": "ignored: retired (plans live on the plans branch)"
         },
         "adr_dir": {
           "type": "string",
@@ -294,9 +288,6 @@
     "stacks": {
       "$ref": "#/$defs/stringList",
       "description": "Stack knowledge files to load (knowledge/stack-<name>.md). May be empty."
-    },
-    "models": {
-      "description": "ignored: retired (model aliases replace it)"
     },
     "project_steward": {
       "type": "string",

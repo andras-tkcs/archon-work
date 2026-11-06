@@ -11,6 +11,7 @@ See the section "Profile" in packs/devflow/README.md.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
 from pathlib import Path
@@ -22,12 +23,14 @@ DEFAULT_PROFILE = ".devflow/devflow.yaml"
 HELP = 'see the section "Profile" in packs/devflow/README.md'
 PREFIX = "devflow.yaml"
 
-RETIRED_KEY = "toolkit"
+# Keys of the retired plugin profile: accepted with a warning and dropped before validation.
+RETIRED = {
+    ("toolkit",): "ignored: the toolkit is retired",
+    ("models",): "ignored: model aliases replace it",
+    ("docs", "plan_dir"): "ignored: plans live on the plans branch (see 'plans')",
+}
 # Every top-level key the profile may have; the schema's top-level properties must be exactly these.
-TOP_LEVEL_KEYS = (
-    "version", RETIRED_KEY, "project", "docs", "git", "verify", "ci", "stacks", "models", "plans",
-    "project_steward",
-)
+TOP_LEVEL_KEYS = ("version", "project", "docs", "git", "verify", "ci", "stacks", "plans", "project_steward")
 
 _TYPES = {
     "object": dict,
@@ -136,16 +139,18 @@ def apply_defaults(value: dict, schema: dict, root: dict) -> dict:
     return out
 
 
-def ignored_keys(profile: dict) -> list[str]:
-    """Warnings for the keys that are accepted but no longer used."""
+def drop_retired(profile: dict) -> tuple[dict, list[str]]:
+    """The profile without the retired keys, and one warning for each that was present."""
+    kept = copy.deepcopy(profile)
     warnings: list[str] = []
-    if RETIRED_KEY in profile:
-        warnings.append(f"{RETIRED_KEY}: ignored: the toolkit is retired")
-    if "plan_dir" in (profile.get("docs") or {}):
-        warnings.append("docs.plan_dir: ignored: plans live on the plans branch (see 'plans')")
-    if "models" in profile:
-        warnings.append("models: ignored: model aliases replace it")
-    return warnings
+    for path, why in RETIRED.items():
+        parent = kept
+        for key in path[:-1]:
+            parent = parent.get(key) if isinstance(parent, dict) else None
+        if isinstance(parent, dict) and path[-1] in parent:
+            del parent[path[-1]]
+            warnings.append(f"{'.'.join(path)}: {why}")
+    return kept, warnings
 
 
 def workflow_job_ids(root_dir: Path) -> set[str]:
@@ -204,14 +209,11 @@ def validate(profile, root_dir: Path | None = None) -> tuple[list[str], list[str
     errors: list[str] = []
     if not isinstance(profile, dict):
         return ["the profile must be a YAML mapping"], [], {}
+    profile, warnings = drop_retired(profile)
     check(profile, schema, schema, "", errors)
     if errors:
         return errors, [], {}
-    warnings = ignored_keys(profile)
     resolved = apply_defaults(profile, schema, schema)
-    resolved.pop(RETIRED_KEY, None)
-    resolved.pop("models", None)
-    resolved.get("docs", {}).pop("plan_dir", None)
     sem_errors, sem_warnings = semantic_checks(resolved, root_dir)
     return sem_errors, warnings + sem_warnings, resolved
 
