@@ -2,17 +2,7 @@
 // INPUTS_PUBLISH (publish's output, empty when it did not run), INPUTS_NEEDS_REFINE (needs-refine's
 // output, empty when it did not run). Output: { planned, issue, plan_revision, design_revision,
 // workflow, needs_refine, unresolved_findings }.
-import { fail, input } from "./util.ts";
-
-function json(name: string): any {
-  const raw = input(name, false).trim();
-  if (raw === "") return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return fail(`input '${name}' is not JSON: ${raw.slice(0, 200)}`);
-  }
-}
+import { input, jsonInput as json } from "./util.ts";
 
 const publish = json("publish");
 const needs = json("needs_refine");

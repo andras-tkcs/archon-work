@@ -4,22 +4,17 @@
 //   2. INPUTS_PREVIOUS (call 1's output) and INPUTS_ANSWER (the select's {decision, text}) → the result.
 // INPUTS_LAST = "true" on the last pass the graph allows: no revise option.
 // Output: { done, choice, outcome ({} when the stage did not finish), message, options, brief }.
-import { fail, input } from "./util.ts";
+import { fail, input, jsonInput } from "./util.ts";
 
 const MAX_LINES = 5;
 
 // Archon substitutes `$`; keep the text literal.
 const safe = (s: string) => s.replaceAll("$", "＄");
 
+// A stage may hand over its outcome as the JSON string "": treat it as absent.
 function json(name: string): any {
-  const raw = input(name, false).trim();
-  if (raw === "") return null;
-  try {
-    const v = JSON.parse(raw);
-    return v === "" ? null : v;
-  } catch {
-    return fail(`input '${name}' is not JSON: ${raw.slice(0, 200)}`);
-  }
+  const v = jsonInput(name);
+  return v === "" ? null : v;
 }
 
 const isObj = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0;

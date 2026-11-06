@@ -52,6 +52,17 @@ export function input(name: string, required = true): string {
   return v;
 }
 
+// An optional JSON input: null when empty (its producer did not run); fails the node when malformed.
+export function jsonInput(name: string): any {
+  const raw = input(name, false).trim();
+  if (raw === "") return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fail(`input '${name}' is not JSON: ${raw.slice(0, 200)}`);
+  }
+}
+
 // The project environment setup-env wrote; `bash` loads BASH_ENV before every project command.
 export function projectEnv(): Record<string, string> {
   const file = join(artifactsDir(), "project-env.sh");

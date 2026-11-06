@@ -3,19 +3,9 @@
 // { choice, issue, outcome }. INPUTS_MODE=result: from that choice (INPUTS_CHOICE) and the plan
 // block's outcome (INPUTS_PLAN, empty when it did not run), the run's outcome:
 // { designed, issue, revision, design_url, planned, needs_refine }.
-import { fail, input } from "./util.ts";
+import { fail, input, jsonInput as json } from "./util.ts";
 
 export const PASSES = 6;
-
-function json(name: string): any {
-  const raw = input(name, false).trim();
-  if (raw === "") return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return fail(`input '${name}' is not JSON: ${raw.slice(0, 200)}`);
-  }
-}
 
 const mode = input("mode");
 if (mode === "choice") {
