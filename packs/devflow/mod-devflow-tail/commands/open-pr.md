@@ -14,7 +14,8 @@ Open the one pull request for this change (Sonnet). Branch `<branch>`, base
    run), update its body with `gh pr edit` instead of opening another.
 3. Otherwise `gh pr create --base <main> --head <branch>` with the body below. Prefix the title
    with its type when the repo's convention asks for it. Open it ready for review, except when
-   local CI is red (`status` is `red` in `$ARTIFACTS_DIR/outcomes/ci-local.json`): then open it
+   local CI is red (`status` is `red` in `$ARTIFACTS_DIR/outcomes/ci-local.json`, or that file
+   does not exist): then open it
    with `--draft` and make `<!-- devflow:draft-ci -->` the first line of the body. A PR that
    already exists is not converted either way.
 

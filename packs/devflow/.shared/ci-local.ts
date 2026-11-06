@@ -202,11 +202,12 @@ function runJob(p: Planned, cfg: Config, root: string): JobResult {
     result.steps.push({ name: s.label, status: code === 0 ? "pass" : "fail", exit: code, tail: out });
     if (code !== 0) failed = true;
   }
+  const stepSkips = result.steps.filter((s) => s.status === "skip").length;
   if (failed) result.status = "fail";
-  else if (result.steps.every((s) => s.status === "skip")) {
+  else if (stepSkips === result.steps.length) {
     result.status = "skip";
     result.reason = "no step could run here";
-  }
+  } else if (stepSkips) result.reason = `${stepSkips} step(s) skipped`;
   return result;
 }
 
@@ -237,11 +238,18 @@ if (isEntry(import.meta)) {
     console.log(JSON.stringify({ status: jobs.some((j) => j.status === "plan") ? "plan" : "skipped", ran: jobs, failed: [], skipped: jobs.filter((j) => j.status === "skip"), dirty: [] }));
   } else {
     // The definition of done comes first: when it is red, no CI time (or fix session) is spent.
+    // A run that crashes or is killed leaves the red placeholder behind, never a neutral status.
+    const red = (reason: string): CiResult => ({ status: "red", reason, ran: [], failed: [], skipped: [], dirty: [] });
+    writeOutcome("ci-local", red("local CI did not finish"));
     const dod = join(artifactsDir(), "outcomes", "dod.json");
     let result: CiResult;
-    if (existsSync(dod) && JSON.parse(readFileSync(dod, "utf8")).green === false) {
-      result = { status: "skipped", reason: "the definition of done is red", ran: [], failed: [], skipped: [], dirty: [] };
-    } else result = runCi();
+    try {
+      if (existsSync(dod) && JSON.parse(readFileSync(dod, "utf8")).green === false) {
+        result = { status: "skipped", reason: "the definition of done is red", ran: [], failed: [], skipped: [], dirty: [] };
+      } else result = runCi();
+    } catch (e) {
+      result = red(`local CI could not run: ${e instanceof Error ? e.message : String(e)}`);
+    }
     writeOutcome("ci-local", result);
     console.error(`ci-local: ${result.status}; ran=${result.ran.filter((j) => j.status !== "skip").length} failed=${result.failed.length} skipped=${result.skipped.length}`);
     console.log(JSON.stringify(result));

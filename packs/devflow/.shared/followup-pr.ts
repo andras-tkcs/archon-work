@@ -1,6 +1,7 @@
 // After a follow-up on an open PR: one marked PR comment (<!-- devflow-followup:issue-<n> -->, edited
 // in place) shows the follow-up entries of deviations.md, and a draft PR that devflow-dod opened for a
-// red local CI is marked ready once local CI is green or skipped. Never converts a PR to a draft and
+// red local CI is marked ready once the definition of done is green and local CI is green or
+// skipped. Never converts a PR to a draft and
 // never fails the run: problems are in the output. Env: INPUTS_PR_NUMBER, INPUTS_ISSUE.
 // Prints { ok, comment_url, ready, problems }.
 import { existsSync, readFileSync } from "node:fs";
@@ -39,8 +40,9 @@ else {
 }
 
 let ready = false;
+const dod = readOwnOutcome("dod");
 const ci = readOwnOutcome("ci-local");
-if (ci && (ci.status === "green" || ci.status === "skipped")) {
+if (dod?.green === true && (ci?.status === "green" || ci?.status === "skipped")) {
   const view = gh(["pr", "view", pr, "--json", "isDraft,body"]);
   if (view.code !== 0) problems.push(`cannot read PR #${pr}: ${view.err.trim().split("\n")[0]}`);
   else {

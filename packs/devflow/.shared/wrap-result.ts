@@ -3,9 +3,10 @@
 // INPUTS_MODE (build | follow-up), INPUTS_RUN_KEY, INPUTS_BRANCH, INPUTS_PR_NUMBER (an open PR a
 // follow-up continues). Prints { complete, deliverable, stuck_phases, branch, head, pr_url,
 // deviations_url, pushed }.
-//   deliverable  the first pass found every phase done and pushed the branch, and no PR exists yet
+//   deliverable  the first pass found every phase done, committed the issue's folder and pushed the
+//                branch, and no PR exists yet
 //   complete     first stage: deliverable; final stage: a PR exists (and, for a follow-up, its
-//                phase is done and its push went through)
+//                phase is done and its commit and push went through)
 import { repoSlug } from "./gh.ts";
 import { readOutcomes } from "./outcomes.ts";
 import { input, run } from "./util.ts";
@@ -17,7 +18,8 @@ const prNumber = input("pr_number", false);
 const o = runKey ? readOutcomes(runKey) : {};
 const dev = o.deviations ?? {};
 const pushOk = o.push?.ok === true && (o["push-final"] ? o["push-final"].ok === true : true);
-const deliverable = dev.complete === true && o.push?.ok === true && prNumber === "";
+const stageOk = o.stage?.ok === true && (o["stage-final"] ? o["stage-final"].ok === true : true);
+const deliverable = dev.complete === true && o.stage?.ok === true && o.push?.ok === true && prNumber === "";
 
 let prUrl = o.pr?.url ?? "";
 if (!prUrl && prNumber) {
@@ -28,7 +30,7 @@ if (!prUrl && prNumber) {
 let complete: boolean;
 if (stage === "first") complete = deliverable;
 else if (mode === "build") complete = !!o.pr;
-else complete = dev.complete === true && pushOk && prUrl !== "";
+else complete = dev.complete === true && stageOk && pushOk && prUrl !== "";
 
 console.log(
   JSON.stringify({

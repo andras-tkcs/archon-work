@@ -63,6 +63,13 @@ eq "$(js "$out" 'r.merged.join(",")+" | "+r.conflicts.join(",")+" | "+r.not_done
 eq "$(git log -1 --format=%s%n%b | head -2 | tr '\n' '|')" "Merge issue-7 p1-export: CSV writer|Plan-Phase: issue-7/p1-export|" "merge: message and Plan-Phase trailer"
 eq "$(git status --porcelain)" "" "merge: the aborted conflict leaves a clean tree"
 
+# 3b. deps-check: a phase runs only on dependencies that are done and merged.
+deps() { INPUTS_PHASE="$1" INPUTS_DEPENDS_ON="$2" INPUTS_RUN_KEY="$KEY" INPUTS_BASE="$base" bun "$SHARED/deps-check.ts" 2>/dev/null; }
+eq "$(js "$(deps py p1-export)" 'r.ready')" "true" "deps-check: a done, merged dependency is ready"
+eq "$(js "$(deps py px)" 'r.ready')" "false" "deps-check: a done dependency whose merge conflicted is not ready"
+eq "$(bun -e "import { readOutcome } from '$SHARED/outcomes.ts'; const o = readOutcome('$KEY', 'py'); console.log(o.status + ' | ' + o.stuck_reason)")" "skipped | dependency px is conflicted" "deps-check: the skip names the conflict"
+rm -f "$(git rev-parse --path-format=absolute --git-common-dir)/devflow/outcomes/$KEY/py.json"
+
 # 4. deviations.md from the outcomes.
 wd() { env INPUTS_ISSUE=7 INPUTS_BRANCH=$B INPUTS_PLAN_COMMIT="$PC" INPUTS_RUN_KEY="$KEY" INPUTS_PLANS_DIR=plans "$@" bun "$SHARED/write-deviations.ts" 2>/dev/null; }
 out="$(wd INPUTS_MODE=build)"
@@ -85,17 +92,27 @@ mkdir -p plans/issue-99 .archon/worktrees/w
 echo decoy > plans/issue-99/x.md
 echo decoy > .archon/worktrees/w/f && git add -f .archon/worktrees/w/f
 echo "unrelated" > stray.txt
-out="$(env INPUTS_ISSUE=7 INPUTS_PLAN_COMMIT="$PC" INPUTS_MODE=build INPUTS_PLANS_DIR=plans bun "$SHARED/stage-docs.ts")"
+stage_ok() { bun -e "import { readOutcome } from '$SHARED/outcomes.ts'; console.log(readOutcome('$KEY', 'stage')?.ok)"; }
+out="$(env INPUTS_ISSUE=7 INPUTS_PLAN_COMMIT="$PC" INPUTS_MODE=build INPUTS_PLANS_DIR=plans INPUTS_RUN_KEY="$KEY" bun "$SHARED/stage-docs.ts")"
 eq "$(js "$out" 'r.committed')" "true" "stage-docs: committed"
+eq "$(stage_ok)" "true" "stage-docs: the stage outcome is ok"
 eq "$(git show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ' ')" "plans/issue-7/after.md plans/issue-7/before.md plans/issue-7/design.md plans/issue-7/deviations.md plans/issue-7/plan-test.md plans/issue-7/plan.md " "stage-docs: exactly the six documents"
 eq "$(git log -1 --format=%s)" "Docs issue-7: design, plan, test plan and deviations" "stage-docs: the commit message"
 eq "$(git ls-files .archon plans/issue-99 stray.txt)" "" "stage-docs: no decoy is tracked"
 contains "$(cat plans/issue-7/deviations.md)" "### V2. Worktree paths were removed from the index" "stage-docs: the worktree path is recorded as a deviation"
 eq "$(vd all)" "0" "stage-docs: the six documents validate together"
 git add plans/issue-99/x.md
-out="$(env INPUTS_ISSUE=7 INPUTS_PLAN_COMMIT="$PC" INPUTS_MODE=build INPUTS_PLANS_DIR=plans bun "$SHARED/stage-docs.ts" 2>&1)"; code=$?
+out="$(env INPUTS_ISSUE=7 INPUTS_PLAN_COMMIT="$PC" INPUTS_MODE=build INPUTS_PLANS_DIR=plans INPUTS_RUN_KEY="$KEY" bun "$SHARED/stage-docs.ts" 2>&1)"; code=$?
 eq "$code" "1" "stage-docs: another issue's staged file fails"
 contains "$out" "plans/issue-99/x.md" "stage-docs: the offender is named"
+eq "$(stage_ok)" "false" "stage-docs: a failure leaves the stage outcome not ok"
+
+# 5b. wrap-result: a build is deliverable only when its folder was committed as well as pushed.
+K2="$KEY-deliver"
+INPUTS_RUN_KEY="$K2" bun -e "import { writeOutcome } from '$SHARED/outcomes.ts'; writeOutcome('deviations', { complete: true }); writeOutcome('push', { ok: true, pushed: [] }); writeOutcome('stage', { ok: false })"
+eq "$(js "$(INPUTS_STAGE=first INPUTS_RUN_KEY="$K2" INPUTS_BRANCH=$B bun "$SHARED/wrap-result.ts")" 'r.deliverable')" "false" "wrap-result: a failed stage-docs is not deliverable"
+INPUTS_RUN_KEY="$K2" bun -e "import { writeOutcome } from '$SHARED/outcomes.ts'; writeOutcome('stage', { ok: true })"
+eq "$(js "$(INPUTS_STAGE=first INPUTS_RUN_KEY="$K2" INPUTS_BRANCH=$B bun "$SHARED/wrap-result.ts")" 'r.deliverable')" "true" "wrap-result: committed and pushed is deliverable"
 git reset -q plans/issue-99/x.md
 
 # 6. push-all: the branch and the partial refs, never forced; wrap's result.

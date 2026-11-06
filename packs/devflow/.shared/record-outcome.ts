@@ -1,11 +1,10 @@
 // The last node of mod-devflow-phase (it runs whatever happened before it): the phase's typed outcome
-// { phase, status: done|stuck|failed|skipped, head, summary, stuck_reason, decisions, cases,
-// partial_head, skipped }, written to the build's shared outcomes for merge and wrap. It reads only
+// (PhaseOutcome in outcomes.ts), written to the build's shared outcomes for merge and wrap. It reads only
 // files, never an upstream output: gate.json, deps.json, and what the implementer wrote
 // (decisions.jsonl, cases.json, summary.md). No gate.json means the block stopped before its gate.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readOwnOutcome, writeOutcome } from "./outcomes.ts";
+import { type PhaseDecision, type PhaseOutcome, readOwnOutcome, writeOutcome } from "./outcomes.ts";
 import { artifactsDir, input, run } from "./util.ts";
 
 const dir = artifactsDir();
@@ -29,7 +28,7 @@ if (deps && deps.ready === false) {
 const decisions = (read("decisions.jsonl") ?? "")
   .split("\n")
   .filter((l) => l.trim())
-  .flatMap((l) => {
+  .flatMap((l): PhaseDecision[] => {
     try {
       const d = JSON.parse(l);
       return d && typeof d === "object" ? [{ kind: d.kind === "deviation" ? "deviation" : "decision", title: String(d.title ?? ""), choice: String(d.choice ?? ""), why: String(d.why ?? ""), alternatives: String(d.alternatives ?? "") }] : [];
@@ -37,13 +36,13 @@ const decisions = (read("decisions.jsonl") ?? "")
       return [];
     }
   });
-const cases = (Array.isArray(json("cases.json")) ? json("cases.json") : [])
+const cases: PhaseOutcome["cases"] = (Array.isArray(json("cases.json")) ? json("cases.json") : [])
   .filter((c: any) => c && /^T\d+$/.test(String(c.id)))
   .map((c: any) => ({ id: String(c.id), result: ["pass", "fail", "not_run"].includes(c.result) ? c.result : "not_run" }));
 const summary = (read("summary.md") ?? "").trim();
 
 const gate = json("gate.json");
-let outcome;
+let outcome: PhaseOutcome;
 if (gate) {
   outcome = { phase, status: gate.status, head: gate.head, summary, stuck_reason: gate.stuck_reason ?? "", decisions, cases, partial_head: gate.partial_head ?? "", skipped: !!gate.skipped };
 } else {

@@ -7,10 +7,10 @@ description: |
   templates/deviations.md, validated), commits this issue's folder plans/issue-<n>/ and nothing
   else, and pushes the branch (never forced; a rejected push goes to <branch>-stopped-<run>) and
   the partial work of stuck phases as <branch>-partial-<id>. Its output says whether the build is
-  deliverable (every phase done, the push went through, no PR yet); the caller then runs
-  mod-devflow-deliver. Stage final, after deliver, records a deliver that opened no PR, edits a
-  follow-up's PR comment (and marks a local-CI draft ready once local CI is green), and shows a
-  stopped build on the issue. Never waits for anyone; each step degrades instead of failing.
+  deliverable (every phase done, the folder committed, the push went through, no PR yet); the
+  caller then runs mod-devflow-deliver. Stage final, after deliver, records a deliver that opened
+  no PR, edits a follow-up's PR comment (and marks a local-CI draft ready once the definition of
+  done and local CI are green), and shows a stopped build on the issue. Never waits for anyone; each step degrades instead of failing.
 model: medium
 inputs:
   stage:
@@ -96,6 +96,7 @@ nodes:
       mode: "$INPUTS.mode"
       plans_dir: "$INPUTS.plans_dir"
       plan_commit: "$INPUTS.plan_commit"
+      run_key: "$INPUTS.run_key"
     output_format: &stage_out
       type: object
       properties:
@@ -146,6 +147,7 @@ nodes:
       issue: "$INPUTS.issue"
       mode: final
       changed: "$deviations-final.output.changed"
+      run_key: "$INPUTS.run_key"
     output_format: *stage_out
 
   - id: push-final

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ci-local.ts: which jobs run locally and which are skipped (with the reason), a failing job turns
-# the result red with its output, credentials never reach a step, --list runs nothing.
+# the result red with its output, credentials never reach a step, --list runs nothing, a crash is
+# red. mod-devflow-dod's result (dod-result.ts, record-ci-fix.ts) and the follow-up's ready rule.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -100,6 +101,7 @@ lacks "$env_txt" "DB_PASSWORD=" "a *PASSWORD* variable is removed"
 contains "$env_txt" "CI=true" "CI is true"
 steps="$(job "$out" pass | field 'r.steps.map(s=>s.name+":"+s.status).join(",")')"
 eq "$steps" "actions/checkout@v4:skip,actions/setup-node@v4:skip,greet:pass,env dump:pass,in sub:pass,some/other-action@v1:skip" "uses: steps are skipped and listed"
+eq "$(job "$out" pass | field 'r.status+" "+r.reason')" "pass 3 step(s) skipped" "a passing job names its skipped steps"
 eq "$(job "$out" fail | field 'r.status')" "fail" "the failing job fails"
 contains "$(job "$out" fail | field 'r.steps[0].tail')" "line before the failure" "the failing step's output is captured"
 eq "$(job "$out" fail | field 'r.steps[1].reason')" "an earlier step failed" "later steps do not run"
@@ -133,7 +135,42 @@ echo '{"green":false}' > "$ARTIFACTS_DIR/outcomes/dod.json"
 eq "$(cd "$repo" && ci | field 'r.status+" "+r.reason')" "skipped the definition of done is red" "a red dod skips local CI"
 rm "$ARTIFACTS_DIR/outcomes/dod.json"
 
+# A crash is red, never neutral.
+echo '{' > "$ARTIFACTS_DIR/outcomes/dod.json"
+eq "$(cd "$repo" && ci 2>/dev/null | field 'r.status')" "red" "a crash in ci-local is red"
+contains "$(cat "$ARTIFACTS_DIR/outcomes/ci-local.json")" "local CI could not run" "the crash is the reason"
+rm "$ARTIFACTS_DIR/outcomes/dod.json"
+
 # No runnable job: skipped, which is fine.
 empty="$(mk_scratch)"
 eq "$(cd "$empty" && ci | field 'r.status')" "skipped" "a repository without workflows is skipped"
+
+# mod-devflow-dod's result: ok is the definition of done, ci_status the last run, rounds the fixes.
+export ARTIFACTS_DIR="$(mk_tmp)"
+dodres() { bun "$SHARED/dod-result.ts" | field "$1"; }
+eq "$(dodres 'r.ok+" "+r.ci_status+" "+r.ci_local.rounds')" "false red 0" "dod-result: nothing reported is red, not skipped"
+contains "$(dodres 'r.ci_local.reason')" "did not report" "dod-result: the missing result is named"
+fix() { INPUTS_FIX="$1" bun "$SHARED/record-ci-fix.ts" | field 'r.rounds'; }
+eq "$(fix '')" "0" "record-ci-fix: a fix that did not run is no round"
+eq "$(fix '{"fixed":true,"summary":"s","decisions":[]}')" "1" "record-ci-fix: the first session"
+eq "$(fix '{"fixed":false,"summary":"s","decisions":[]}')" "2" "record-ci-fix: the second session"
+[ -f "$ARTIFACTS_DIR/outcomes/ci-fix-2.json" ]; eq "$?" "0" "record-ci-fix: each session is an outcome"
+echo '{"green":true,"failed":[],"unavailable":[],"report":""}' > "$ARTIFACTS_DIR/outcomes/dod.json"
+echo '{"status":"green","reason":"","ran":[],"failed":[],"skipped":[],"dirty":[]}' > "$ARTIFACTS_DIR/outcomes/ci-local.json"
+eq "$(dodres 'r.ok+" "+r.ci_status+" "+r.ci_local.rounds')" "true green 2" "dod-result: green after two fix sessions"
+
+# The follow-up marks a local-CI draft ready only when the definition of done is green as well.
+use_stub_gh
+echo '{"isDraft":true,"body":"<!-- devflow:draft-ci -->\nLocal CI failed"}' > "$GH_STUB_DIR/pr-5.json"
+ready() { (cd "$empty" && INPUTS_PR_NUMBER=5 INPUTS_ISSUE=7 bun "$SHARED/followup-pr.ts" 2>/dev/null | field 'r.ready'); }
+echo '{"green":false}' > "$ARTIFACTS_DIR/outcomes/dod.json"
+echo '{"status":"skipped","reason":"the definition of done is red"}' > "$ARTIFACTS_DIR/outcomes/ci-local.json"
+eq "$(ready)" "false" "follow-up: a red definition of done keeps the draft"
+eq "$(gh_calls 'pr ready')" "0" "follow-up: gh pr ready is not called"
+echo '{"green":true}' > "$ARTIFACTS_DIR/outcomes/dod.json"
+echo '{"status":"red","reason":"local CI did not finish"}' > "$ARTIFACTS_DIR/outcomes/ci-local.json"
+eq "$(ready)" "false" "follow-up: red local CI keeps the draft"
+echo '{"status":"green","reason":""}' > "$ARTIFACTS_DIR/outcomes/ci-local.json"
+eq "$(ready)" "true" "follow-up: green dod and local CI mark the draft ready"
+eq "$(gh_calls 'pr ready 5')" "1" "follow-up: gh pr ready ran once"
 finish

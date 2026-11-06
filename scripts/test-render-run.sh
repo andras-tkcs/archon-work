@@ -117,6 +117,14 @@ if rend "$fx/bad-id.md" 4 >/dev/null 2>"$scratch/badid.err"; then
   echo "bad-id.md rendered without error" >&2; exit 1
 fi
 grep -q "invalid phase id" "$scratch/badid.err"
+# a phase id the build uses for its own outcomes or nodes (pr, merge-*, wrap) would be misread
+for reserved in pr merge-x wrap; do
+  sed "s/\bid: p1\b/id: $reserved/; s/\[p1\]/[$reserved]/g" "$fx/serial.md" > "$scratch/reserved.md"
+  if rend "$scratch/reserved.md" 2 >/dev/null 2>"$scratch/reserved.err"; then
+    echo "phase id '$reserved' rendered without error" >&2; exit 1
+  fi
+  grep -q "invalid phase id '$reserved': the build uses that name" "$scratch/reserved.err"
+done
 if rend "$fx/serial.md" "2'x" >/dev/null 2>"$scratch/badissue.err"; then
   echo "a bad issue rendered without error" >&2; exit 1
 fi

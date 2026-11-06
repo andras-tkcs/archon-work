@@ -4,24 +4,33 @@
 // stages deviations.md (the others are already on the branch). Never `git add -A` or `.`.
 // Env (else context.json): INPUTS_ISSUE (empty: work without an issue, nothing to do),
 // INPUTS_PLAN_COMMIT, INPUTS_MODE, INPUTS_PLANS_DIR, INPUTS_CHANGED ("false": the deviations pass
-// changed nothing). Prints { committed, head }.
+// changed nothing), INPUTS_RUN_KEY. Prints { committed, head } and writes the outcome `stage` (or
+// `stage-final`) { ok, committed, head }: written as not ok first, so a failure anywhere leaves it so.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DOC_KINDS, KINDS, fileOf, mainFolderOf } from "./layout.ts";
 import { parse, serialize } from "./frontmatter.ts";
+import { writeOutcome } from "./outcomes.ts";
 import { fact, fail, input, must, plansConfig, run } from "./util.ts";
 import { formatErrors, validateDocs } from "./validate-docs.ts";
 import { appendBlocks, deviationsPath } from "./write-deviations.ts";
 
 const head = () => must(["git", "rev-parse", "HEAD"]);
-const issueText = fact("issue");
-if (issueText === "" || input("changed", false) === "false") {
-  console.log(JSON.stringify({ committed: false, head: head() }));
+const mode = input("mode", false) || "build";
+const outcome = mode === "final" ? "stage-final" : "stage";
+const runKey = fact("run_key");
+writeOutcome(outcome, { ok: false, committed: false, head: "", detail: "stage-docs did not finish: see its node's log" }, runKey);
+const done = (committed: boolean) => {
+  const out = { committed, head: head() };
+  writeOutcome(outcome, { ok: true, ...out }, runKey);
+  console.log(JSON.stringify(out));
   process.exit(0);
-}
+};
+
+const issueText = fact("issue");
+if (issueText === "" || input("changed", false) === "false") done(false);
 const issue = Number(issueText);
 if (!Number.isInteger(issue) || issue < 1) fail(`issue '${issueText}' is not an issue number`);
-const mode = input("mode", false) || "build";
 const folder = mainFolderOf(issue);
 const allowed = new Set(KINDS.map((k) => `${folder}/${k}.md`));
 
@@ -59,10 +68,7 @@ if (offenders.length) fail(`staged paths outside ${folder}/ (only its six docume
 const docs = validateDocs({ issue, dir: folder, kinds: [...KINDS] });
 if (!docs.ok) fail(`the documents in ${folder}/ do not validate:\n${formatErrors(docs.errors)}`);
 
-if (run(["git", "diff", "--cached", "--quiet"]).code === 0) {
-  console.log(JSON.stringify({ committed: false, head: head() }));
-  process.exit(0);
-}
+if (run(["git", "diff", "--cached", "--quiet"]).code === 0) done(false);
 const runId = process.env.WORKFLOW_ID || "run";
 must(["git", "commit", "-q", "-m", `Docs issue-${issue}: design, plan, test plan and deviations`, "-m", `Issue: #${issue}\nRun: ${runId}`]);
-console.log(JSON.stringify({ committed: true, head: head() }));
+done(true);

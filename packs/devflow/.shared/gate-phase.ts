@@ -7,6 +7,7 @@
 // work is never merged; a stuck phase's commits are in `partial_head`.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { PhaseOutcome } from "./outcomes.ts";
 import { artifactsDir, input, must } from "./util.ts";
 
 const phase = input("phase", false) || "<unknown phase>";
@@ -27,7 +28,7 @@ function verdict(): { status: "done" | "stuck"; reason: string } {
 
 const ahead = () => Number(must(["git", "rev-list", "--count", `${base}..HEAD`]));
 
-let out;
+let out: Pick<PhaseOutcome, "head" | "phase" | "skipped" | "status" | "stuck_reason" | "partial_head">;
 if (input("done", false) === "true") {
   out = { head: base, phase, skipped: true, status: "done", stuck_reason: "", partial_head: "" };
 } else {

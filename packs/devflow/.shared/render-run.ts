@@ -4,6 +4,7 @@
 // node: every ending passes through wrap. A pure function plus a small CLI for tests.
 import { readFileSync } from "node:fs";
 import { SLUG_RE, fileOf, slugOf, workflowName } from "./layout.ts";
+import { isReservedOutcomeName } from "./outcomes.ts";
 
 export interface Phase {
   id: string;
@@ -83,6 +84,7 @@ const safe = (s: string) => s.replaceAll("$", "＄");
 const msgSafe = (s: string) => safe(s).replaceAll("'", "’");
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const FIXED_NODES = ["start", "trace-start", "before", "deliver", "wrap", "wrap-final", "end"];
 
 // Ids land in bash bodies, so they must be plain kebab-case; the values quoted with '…' must hold no quote.
 function validate(o: RenderOpts, slug: string, branch: string): void {
@@ -91,6 +93,7 @@ function validate(o: RenderOpts, slug: string, branch: string): void {
   if (!branch) throw new Error("the manifest has no feature_branch");
   for (const p of o.manifest.phases) {
     if (typeof p.id !== "string" || !KEBAB.test(p.id)) throw new Error(`invalid phase id '${p.id}': it must match ${KEBAB}`);
+    if (isReservedOutcomeName(p.id) || FIXED_NODES.includes(p.id)) throw new Error(`invalid phase id '${p.id}': the build uses that name for its own nodes or outcomes; rename the phase`);
   }
   for (const [k, v] of Object.entries({ plansRef: o.plansRef, plansDir: o.plansDir, branch, mainBranch: o.mainBranch })) {
     if (v.includes("'")) throw new Error(`invalid ${k} '${v}': it must not contain a single quote`);

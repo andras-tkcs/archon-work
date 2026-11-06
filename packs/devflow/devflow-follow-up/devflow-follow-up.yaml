@@ -6,7 +6,7 @@ description: |
 
   On an open PR, or a stopped build without one, it continues the build's branch: one task phase
   (f<k>) commits there; with a PR, the definition of done and local CI run again (a local-CI draft
-  is marked ready once local CI is green), the PR is updated and its follow-up comment edited;
+  is marked ready once the definition of done and local CI are green), the PR is updated and its follow-up comment edited;
   without one, a done phase is delivered as a new PR. After a merged or closed PR it starts
   followup/issue-<n>-<k> from the default branch and opens a new PR. Every ending appends the
   ### F<k> entry to deviations.md, commits and pushes it; a stuck task ends the run red after that.

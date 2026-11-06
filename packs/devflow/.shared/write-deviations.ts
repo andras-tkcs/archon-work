@@ -11,7 +11,7 @@ import { AFTER_POINTER, defuseQuoted, NONE, OUTCOME_RE, TABLE_HEAD, TABLE_SEP } 
 import { parse, serialize, type FrontMatter } from "./frontmatter.ts";
 import { repoSlug } from "./gh.ts";
 import { fileOf, mainFolderOf, slugOf } from "./layout.ts";
-import { readOutcomes, readOwnOutcome, writeOutcome } from "./outcomes.ts";
+import { type PhaseOutcome, type PhaseStatus, readOutcomes, readOwnOutcome, writeOutcome } from "./outcomes.ts";
 import { render } from "./render-template.ts";
 import { extractManifest, type Manifest } from "./render-run.ts";
 import { artifactsDir, fact, input, isEntry, run } from "./util.ts";
@@ -139,7 +139,7 @@ function writeChecked(n: number, text: string, minimal: () => { id: Ident; body:
 
 export interface PhaseRow {
   id: string;
-  state: "done" | "stuck" | "failed" | "skipped" | "conflict";
+  state: PhaseStatus | "conflict";
   reason: string;
   partial: string;
 }
@@ -152,7 +152,7 @@ const merged = (slug: string, id: string) =>
 export function classify(m: Manifest, outcomes: Record<string, any>, branch: string, isMerged = (id: string) => merged(m.plan_slug ?? "", id)): PhaseRow[] {
   const rows = new Map<string, PhaseRow>();
   for (const p of m.phases) {
-    const o = outcomes[p.id];
+    const o: PhaseOutcome | undefined = outcomes[p.id];
     const conflict = outcomes[`merge-${p.id}`];
     const partial = (head: unknown) => (head ? `${branch}-partial-${p.id}` : "—");
     let row: PhaseRow;

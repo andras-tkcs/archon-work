@@ -269,7 +269,8 @@ issue, or a `deviations.md` URL. With an open PR, or a stopped build without one
 build's branch; after a merged or closed PR it starts `followup/issue-<n>-<k>` from the default
 branch. One task phase (`f<k>`) does the work in that checkout, with the PR's review comments as
 untrusted data. With an open PR, the definition of done and local CI run again; a draft opened for
-red local CI is marked ready once local CI is green, and a marked comment on the PR summarises the
+red local CI is marked ready once the definition of done and local CI are green (or local CI has no
+runnable job), and a marked comment on the PR summarises the
 follow-ups. Without a PR, a done task is delivered as a new PR. Every ending appends
 `### F<k> (<date>, run <id>): <task> → done|stuck` with its decisions to `deviations.md`, commits
 and pushes it; a stuck task then ends the run red. Documents that no longer validate are recorded

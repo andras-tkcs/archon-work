@@ -132,6 +132,7 @@ if (args[0] === "pr" && args[1] === "create") {
   console.log("https://github.com/o/r/pull/900");
   process.exit(0);
 }
+if (args[0] === "pr" && args[1] === "ready") process.exit(0);
 if (args[0] === "pr" && args[1] === "list") { console.log(read(`${d}/prs.json`, "[]")); process.exit(0); }
 die(`gh stub: unhandled: ${args.join(" ")}`);
 STUB
