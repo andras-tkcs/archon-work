@@ -244,9 +244,9 @@ cp_script="$repo_root/packs/devflow/mod-devflow-plan-block/scripts/check-plan.ts
   grep -q '### Unresolved validation findings' "$chk/unresolved.md"
   grep -qF -- '- F1 [review, mechanical] p1-export: p' "$chk/unresolved.md"
   # The review's text is quoted into plan.md, so its template leftovers and links are made harmless.
-  todo='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1-export","problem":"TODO in {{x}}, TBD, see [x](src/y.ts)","fix":"f"}]}'
+  todo='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1-export","problem":"TODO in {{x}}, TBD, see [x](src/y.ts), {{{x}}} and [a](b](src/y.ts)","fix":"f"}]}'
   cp_run "$todo" 2 >/dev/null
-  grep -qF -- 'p1-export: todo in { {x}}, tbd, see [x] (src/y.ts)' "$chk/unresolved.md"
+  grep -qF -- 'p1-export: todo in { {x}}, tbd, see [x] (src/y.ts), { { {x}}} and [a] (b] (src/y.ts)' "$chk/unresolved.md"
   (cd "$scratch" && bun -e '
     import { markUnresolved } from "'"$repo_root"'/packs/devflow/.shared/publish-plan.ts";
     import { readFileSync, writeFileSync } from "node:fs";

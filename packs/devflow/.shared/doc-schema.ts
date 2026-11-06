@@ -42,11 +42,14 @@ export const LEFTOVER_RE = /\{\{|<!-- guide|<!-- repeat|\bTODO\b|\bTBD\b/;
 // Rule V7: a markdown link; its target is the capture.
 export const LINK_RE = /\]\(([^)\s]+)\)/g;
 // Quoted text (a reviewer's finding) made harmless for the rules that scan every line: V2 leftovers
-// are broken up, and links become plain text, so quoting it cannot fail V2 or V7.
+// are broken up, and links become plain text, so quoting it cannot fail V2 or V7. The brace and link
+// arms use lookaheads so overlapping input ("{{{", "[a](b](c)") leaves no match behind.
 export const defuseQuoted = (s: string) =>
   s
-    .replace(new RegExp(LEFTOVER_RE.source, "g"), (m) => (m.startsWith("{") ? "{ {" : m.startsWith("<") ? `< ${m.slice(1)}` : m.toLowerCase()))
-    .replace(LINK_RE, "] ($1)");
+    .replace(/\{(?=\{)/g, "{ ")
+    .replace(/<!-- (guide|repeat)/g, "< !-- $1")
+    .replace(/\b(TODO|TBD)\b/g, (m) => m.toLowerCase())
+    .replace(/\](?=\()/g, "] ");
 export const LINK_TARGETS = KINDS.map((k) => `${k}.md`);
 
 const revisionLog: Section = { title: "Revision log", required: true };
