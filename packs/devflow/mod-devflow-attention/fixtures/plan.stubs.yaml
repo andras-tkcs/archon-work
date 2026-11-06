@@ -1,0 +1,9 @@
+# The design is ready and the person answers "plan": settle builds the pause, answer settles it as done with choice plan.
+exec-code: true
+fixture:
+  expect: completed
+  reached: [settle, ask, answer]
+  inputs:
+    stage: devflow-refine
+    outcome: '{"designed":true,"issue":7,"revision":1,"design_url":"https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md","questions_asked":2,"assumptions":1,"assumption_lines":["- **File name**: report-<id>.csv."]}'
+ask: { decision: plan, text: "" }

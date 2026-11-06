@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # issue-comment.ts: deterministic render, state merge, the Next line of every state, and upsert
-# (created once, edited afterwards, a duplicate fails).
+# (created once, edited afterwards, a duplicate fails). settle.ts: every row of the attention table.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 fx="$REPO_ROOT/scripts/fixtures/issue-comment"
@@ -56,4 +56,28 @@ touch "$GH_STUB_DIR/fail-api"
 out="$(ic "C.upsertComment(42,{})" 2>&1)"; code=$?
 eq "$code" "1" "a gh failure fails"
 contains "$out" "cannot list the comments of issue #42" "the gh failure is named"
+
+# settle.ts: the attention pause.
+st() { env INPUTS_STAGE=devflow-refine "$@" bun "$SHARED/settle.ts" 2>&1; }
+jf() { printf '%s' "$1" | bun -e 'const o=JSON.parse(await Bun.stdin.text()); const v=o[process.argv[1]]; console.log(typeof v==="string"?v:JSON.stringify(v))' "$2"; }
+outcome='{"designed":true,"issue":7,"revision":2,"design_url":"https://x/design.md","assumptions":7,"assumption_lines":["- a1","- a2","- a3","- a4","- a5 costs $5","- a6","- a7"]}'
+first="$(st INPUTS_OUTCOME="$outcome")"
+eq "$(jf "$first" done)" "false" "designed: the pause is not done"
+eq "$(jf "$first" options)" '[{"id":"plan","label":"Plan it"},{"id":"revise","label":"Revise (add a note)"},{"id":"finish","label":"Finish"}]' "designed: plan, revise, finish"
+eq "$(jf "$first" message)" "$(printf '%s
+' 'Design for issue #7 is ready: revision 2 — https://x/design.md' '' 'Assumptions taken (not asked): 7 — listed under "Assumptions" in the file.' '- a1' '- a2' '- a3' '- a4' '- a5 costs ＄5' '… and 2 more' '' 'plan: run devflow-plan now and publish build-issue-7.' 'revise: another refine pass; your note is the change request (revision 3).' 'finish: stop here; the design stays published.')" "the exact pause message, at most 5 assumptions, \$ kept literal"
+last="$(st INPUTS_OUTCOME="$outcome" INPUTS_LAST=true)"
+eq "$(jf "$last" options)" '[{"id":"plan","label":"Plan it"},{"id":"finish","label":"Finish"}]' "last pass: no revise option"
+lacks "$(jf "$last" message)" "revise:" "last pass: no revise line"
+empty="$(st INPUTS_OUTCOME='')"
+eq "$(jf "$empty" done)|$(jf "$empty" message)" "true|" "no outcome (stage failed): done, no pause"
+for d in plan finish; do
+  r="$(st INPUTS_PREVIOUS="$first" INPUTS_ANSWER="{\"decision\":\"$d\",\"text\":\"\"}")"
+  eq "$(jf "$r" done)|$(jf "$r" choice)|$(jf "$r" message)" "true|$d|" "answer $d: done"
+  contains "$(jf "$r" outcome)" '"revision":2' "answer $d: the stage's outcome is kept"
+done
+r="$(st INPUTS_PREVIOUS="$first" INPUTS_ANSWER='{"decision":"revise","text":"use a semicolon"}')"
+eq "$(jf "$r" done)|$(jf "$r" choice)|$(jf "$r" brief)" "false|revise|use a semicolon" "answer revise: not done, the note is the brief"
+r="$(st INPUTS_PREVIOUS="$empty" INPUTS_ANSWER='')"
+eq "$r" "$empty" "no pause asked: the answer is the first call's result"
 finish

@@ -1,0 +1,9 @@
+# The person answers "revise" with a note: answer ends not done, with choice revise and the note as brief.
+exec-code: true
+fixture:
+  expect: completed
+  reached: [settle, ask, answer]
+  inputs:
+    stage: devflow-refine
+    outcome: '{"designed":true,"issue":7,"revision":1,"design_url":"https://github.com/o/r/blob/plans/plans/plans/issue-7/design.md","questions_asked":2,"assumptions":1,"assumption_lines":["- **File name**: report-<id>.csv."]}'
+ask: { decision: revise, text: "use a semicolon" }
