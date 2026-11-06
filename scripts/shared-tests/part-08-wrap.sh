@@ -115,6 +115,19 @@ INPUTS_RUN_KEY="$K2" bun -e "import { writeOutcome } from '$SHARED/outcomes.ts';
 eq "$(js "$(INPUTS_STAGE=first INPUTS_RUN_KEY="$K2" INPUTS_BRANCH=$B bun "$SHARED/wrap-result.ts")" 'r.deliverable')" "true" "wrap-result: committed and pushed is deliverable"
 git reset -q plans/issue-99/x.md
 
+# 5c. The final pass: stage-docs writes stage-final and leaves stage alone; a follow-up is complete
+#     only when its final commit went through as well.
+out="$(env INPUTS_ISSUE=7 INPUTS_MODE=final INPUTS_RUN_KEY="$KEY" bun "$SHARED/stage-docs.ts")"
+eq "$(js "$out" 'r.committed')" "false" "stage-docs final: nothing new to commit"
+eq "$(bun -e "import { readOutcome } from '$SHARED/outcomes.ts'; console.log(readOutcome('$KEY', 'stage-final')?.ok)")" "true" "stage-docs final: the stage-final outcome is ok"
+eq "$(stage_ok)" "false" "stage-docs final: the first stage outcome is untouched"
+K3="$KEY-followup"
+INPUTS_RUN_KEY="$K3" bun -e "import { writeOutcome } from '$SHARED/outcomes.ts'; writeOutcome('deviations', { complete: true }); for (const k of ['push', 'push-final']) writeOutcome(k, { ok: true, pushed: [] }); writeOutcome('stage', { ok: true }); writeOutcome('stage-final', { ok: false })"
+fu() { INPUTS_STAGE=final INPUTS_MODE=follow-up INPUTS_PR_NUMBER=5 INPUTS_RUN_KEY="$K3" INPUTS_BRANCH=$B bun "$SHARED/wrap-result.ts"; }
+eq "$(js "$(fu)" 'r.complete+" "+r.pr_url')" "false https://github.com/o/r/pull/5" "wrap-result: a follow-up whose final commit failed is not complete"
+INPUTS_RUN_KEY="$K3" bun -e "import { writeOutcome } from '$SHARED/outcomes.ts'; writeOutcome('stage-final', { ok: true })"
+eq "$(js "$(fu)" 'r.complete')" "true" "wrap-result: a follow-up committed and pushed with a PR is complete"
+
 # 6. push-all: the branch and the partial refs, never forced; wrap's result.
 out="$(INPUTS_BRANCH=$B INPUTS_RUN_KEY="$KEY" bun "$SHARED/push-all.ts" 2>/dev/null)"
 eq "$(js "$out" 'r.ok')" "true" "push-all: the branch is pushed"
