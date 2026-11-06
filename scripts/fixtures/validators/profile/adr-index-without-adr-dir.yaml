@@ -1,0 +1,13 @@
+version: 1
+docs:
+  must_read: []
+  adr_index: docs/adr/README.md
+git:
+  main_branch: main
+  branch_pattern: <type>/<kebab-case>
+verify:
+  fast:
+  - make lint
+  dod:
+  - make test
+stacks: []

@@ -14,7 +14,7 @@ $load.output.work
 ## Your authority
 
 The devflow toolkit's `/make-plan` command is the method. Read it in full first:
-`$preflight.output.devflow_root/commands/make-plan.md`. Follow its section 0 (understand the ask,
+`$preflight.output.shared_dir/commands/make-plan.md`. Follow its section 0 (understand the ask,
 read the must-read docs, the steward files and every ADR, decide small or large scope), section 2
 (the plan's sections, the implementation manifest, "Sizing for Sonnet"), section 3 (manual steps
 only at the very beginning and the very end) and the model rules below, with the overrides below.
@@ -25,7 +25,7 @@ The project profile is already validated and resolved at `$ARTIFACTS_DIR/profile
 project facts from it (must-read docs, `git.branch_pattern` and `branch_types`, `docs.adr_*`,
 `docs.changelog`, `ci.dispatchable`, `verify.*`, `project_steward`). Load the skills it names
 (`devflow:project-profile`, `devflow:pr-steward`, the `stack-*` skills for `stacks`) if your skill
-list has them; otherwise read their `SKILL.md` under `$preflight.output.devflow_root/skills/`.
+list has them; otherwise read their `SKILL.md` under `$preflight.output.shared_dir/skills/`.
 Issues: read them and their comments with `gh issue view <n> --comments`.
 
 ## Inputs from the interview
@@ -82,7 +82,7 @@ When there are none, the section holds the single line `None.`.
    single-session prompt's content (Goal, Context, Design, Steps, Acceptance, Stop conditions)
    followed by an `## Implementation manifest` with exactly one phase, id `p1-<kebab>`. Large
    scope: the full plan with its manifest. Either way, run
-   `python3 $preflight.output.devflow_root/scripts/validate_manifest.py $ARTIFACTS_DIR/plan.md --profile .claude/toolkit.yaml`
+   `python3 $preflight.output.shared_dir/scripts/validate_manifest.py $ARTIFACTS_DIR/plan.md --profile .claude/toolkit.yaml`
    and fix every error before you finish.
 3. **The plan is never committed to the feature branch**, so the retirement phase does not delete a
    plan document, and `final_checks` must not ask for that. The retirement phase still writes the

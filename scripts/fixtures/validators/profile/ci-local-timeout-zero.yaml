@@ -1,0 +1,14 @@
+version: 1
+docs:
+  must_read: []
+git:
+  main_branch: main
+  branch_pattern: <type>/<kebab-case>
+verify:
+  fast:
+  - make lint
+  dod:
+  - make test
+  ci_local:
+    timeout_minutes: 0
+stacks: []

@@ -1,0 +1,175 @@
+# A real-sized manifest (7 phases), with neutral names and paths.
+plan_slug: user-names
+feature_branch: feature/user-names
+max_parallel: 2
+manual_steps_artifact: https://example.invalid/manual-steps
+manual_steps_source: docs/user-names-plan-manual-steps.html
+manual_before: []
+manual_after:
+- id: ma1-verify
+  title: Click through the feature on a real device
+  why: CI cannot drive a real device.
+- id: ma2-verify
+  title: Click through the feature on a real device
+  why: CI cannot drive a real device.
+verify_after_merge:
+- make lint
+- make test
+final_checks:
+- docs/user-names-plan.md is deleted and nothing links to it
+- CHANGELOG.md has [Unreleased] entries
+phases:
+- id: p1-step
+  title: Step 1
+  depends_on: []
+  complexity: M
+  touches:
+  - src/part001/part002.py
+  - tests/unit/part003.py
+  brief: '1. Implement step 1 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+  - make test passes (5)
+- id: p2-step
+  title: Step 2
+  depends_on:
+  - p1-step
+  complexity: M
+  touches:
+  - src/part001/part004.py
+  - tests/unit/part005.py
+  brief: '1. Implement step 2 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+  - make test passes (5)
+- id: p3-step
+  title: Step 3
+  depends_on:
+  - p1-step
+  complexity: M
+  touches:
+  - src/part001/part006.py
+  - tests/unit/part007.py
+  brief: '1. Implement step 3 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+- id: p4-step
+  title: Step 4
+  depends_on:
+  - p2-step
+  - p3-step
+  complexity: M
+  touches:
+  - src/part001/part008/part009.py
+  - src/part001/part008/part010.py
+  - src/part001/part011.py
+  - src/part001/part012.py
+  - docs/part013.md
+  - part014/part008/part015.html
+  - part014/part016/part015.html
+  - tests/unit/part008/part017.py
+  - tests/unit/part008/part018.py
+  - tests/unit/part019.py
+  - tests/unit/part020.py
+  brief: '1. Implement step 4 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+- id: p5-step
+  title: Step 5
+  depends_on:
+  - p4-step
+  complexity: M
+  touches:
+  - src/part001/part004.py
+  - src/part001/part008/part009.py
+  - src/part001/part021.py
+  - tests/unit/part005.py
+  - tests/unit/part008/part017.py
+  - tests/unit/part022.py
+  brief: '1. Implement step 5 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+- id: p6-step
+  title: Step 6
+  depends_on:
+  - p4-step
+  complexity: S
+  touches:
+  - src/part001/part008/part010.py
+  - tests/unit/part008/part018.py
+  brief: '1. Implement step 6 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p7-step
+  title: Step 7
+  depends_on:
+  - p5-step
+  - p6-step
+  complexity: S
+  touches:
+  - docs/adr/part023.md
+  - docs/adr/part024.md
+  - docs/adr/part025.md
+  - docs/adr/README.md
+  - docs/part026.md
+  - docs/part027.md
+  - CHANGELOG.md
+  - docs/part028.md
+  - docs/part029.html
+  - src/part001/part002.py
+  - src/part001/part004.py
+  - src/part001/part006.py
+  - src/part001/part008/part009.py
+  - src/part001/part008/part010.py
+  brief: '1. Implement step 7 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+  - make test passes (5)

@@ -53,9 +53,19 @@ export function projectEnv(): Record<string, string> {
   return existsSync(file) ? { BASH_ENV: file } : {};
 }
 
-// The raw profile; preflight has already validated it with the toolkit's own validator.
+export const PROFILE_PATH = ".devflow/devflow.yaml";
+
+// The raw profile; preflight has already validated it with validate-profile.py.
 export function profile(): any {
-  const path = ".claude/toolkit.yaml";
-  if (!existsSync(path)) fail(`${path} not found: this workflow runs only in a repo with a devflow profile`);
-  return Bun.YAML.parse(readFileSync(path, "utf8"));
+  if (!existsSync(PROFILE_PATH)) fail(`${PROFILE_PATH} not found: see the README section "Profile"`);
+  return Bun.YAML.parse(readFileSync(PROFILE_PATH, "utf8"));
+}
+
+// Where this project's plans branch is: the run's input, else the profile's `plans`, else `plans`.
+export function plansConfig(): { ref: string; dir: string } {
+  const p = existsSync(PROFILE_PATH) ? (profile().plans ?? {}) : {};
+  return {
+    ref: input("plans_ref", false) || p.ref || "plans",
+    dir: input("plans_dir", false) || p.dir || "plans",
+  };
 }

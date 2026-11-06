@@ -2,7 +2,7 @@
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { artifactsDir, fail, input, must, run, tail } from "./util.ts";
+import { PROFILE_PATH, artifactsDir, fail, input, must, run, tail } from "./util.ts";
 
 function parse(name: string, text: string): any {
   try {
@@ -14,15 +14,15 @@ function parse(name: string, text: string): any {
 
 const art = artifactsDir();
 const r = parse("render", input("render"));
-const root = input("devflow_root");
+const shared = input("shared_dir");
 const findings: any[] = [];
 const add = (source: string, phase: string, problem: string, fix: string) =>
   findings.push({ id: `T${findings.length + 1}`, source, kind: "mechanical", phase, problem, fix });
 
 if (!r.ok) add("render", "", String(r.error), "Change plan.md so the renderer accepts it.");
 
-const v = run(["python3", join(root, "scripts", "validate_manifest.py"), join(art, "plan.md"), "--profile", ".claude/toolkit.yaml"]);
-if (v.code !== 0) add("validate_manifest", "", tail(v.out + v.err, 40), "Fix every error validate_manifest.py prints.");
+const v = run(["python3", join(shared, "validate-manifest.py"), join(art, "plan.md"), "--profile", PROFILE_PATH]);
+if (v.code !== 0) add("validate_manifest", "", tail(v.out + v.err, 40), "Fix every error validate-manifest.py prints.");
 
 if (r.ok) {
   const scratch = mkdtempSync(join(tmpdir(), "devflow-test-plan-"));

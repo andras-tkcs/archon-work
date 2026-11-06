@@ -14,7 +14,7 @@ $load.output.work
 ## Your authority
 
 The devflow toolkit's `/make-plan` command is the method. Read it in full first:
-`$preflight.output.devflow_root/commands/make-plan.md`. Follow its section 0 (understand the ask,
+`$preflight.output.shared_dir/commands/make-plan.md`. Follow its section 0 (understand the ask,
 read the must-read docs, the steward files and every ADR, decide small or large scope), section 2
 (the plan's sections, the implementation manifest, "Sizing for Sonnet") and section 3 (manual steps
 only at the very beginning and the very end), with the rules below (the model rules included). Where make-plan.md and this
@@ -25,7 +25,7 @@ The project profile is already validated and resolved at `$ARTIFACTS_DIR/profile
 project facts from it (must-read docs, `git.branch_pattern` and `branch_types`, `docs.adr_*`,
 `docs.changelog`, `ci.dispatchable`, `verify.*`, `project_steward`). Load the skills it names
 (`devflow:project-profile`, `devflow:pr-steward`, the `stack-*` skills for `stacks`) if your skill
-list has them; otherwise read their `SKILL.md` under `$preflight.output.devflow_root/skills/`.
+list has them; otherwise read their `SKILL.md` under `$preflight.output.shared_dir/skills/`.
 Issues: read them and their comments with `gh issue view <n> --comments`.
 
 ## Rules: this runs unattended inside one Archon run

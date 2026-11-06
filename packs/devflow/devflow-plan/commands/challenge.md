@@ -8,7 +8,7 @@ $ARGUMENTS
 Read the work, `$ARTIFACTS_DIR/interview.md` and `$ARTIFACTS_DIR/plan-draft.md`, the project
 profile at `$ARTIFACTS_DIR/profile.json`, the planner's questions `$draft.output.questions`
 (planner status `$draft.output.status`) and `$ARTIFACTS_DIR/carried.md` if it exists. The devflow method is
-`$preflight.output.devflow_root/commands/make-plan.md` (section 0, step 3, says which decisions
+`$preflight.output.shared_dir/commands/make-plan.md` (section 0, step 3, says which decisions
 are the user's).
 
 Look for a decision the draft makes that the user did not make and the code and the ADRs do not

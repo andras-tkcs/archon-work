@@ -132,8 +132,8 @@ STUB
 # d4. test-plan.ts
 tp="$repo_root/packs/devflow/devflow-plan/scripts/test-plan.ts"
 (
-  mkdir -p "$scratch/fakeflow/scripts" "$scratch/tpart"
-  cat > "$scratch/fakeflow/scripts/validate_manifest.py" <<'PY'
+  mkdir -p "$scratch/fakeflow" "$scratch/tpart"
+  cat > "$scratch/fakeflow/validate-manifest.py" <<'PY'
 import os, sys
 code = int(os.environ.get("VM_EXIT", "0"))
 if code:
@@ -144,7 +144,7 @@ PY
   bun "$render" "$fx/serial.md" --slug serial --branch feat/serial --title "Serial" \
     --main main --pack test/devflow > "$scratch/t-serial.yaml"
   cd "$repo"
-  tp_run() { ARTIFACTS_DIR="$scratch/tpart" INPUTS_DEVFLOW_ROOT="$scratch/fakeflow" INPUTS_RENDER="$1" bun "$tp"; }
+  tp_run() { ARTIFACTS_DIR="$scratch/tpart" INPUTS_SHARED_DIR="$scratch/fakeflow" INPUTS_RENDER="$1" bun "$tp"; }
   good='{"ok":true,"error":"","workflow":"devflow-run-serial","file":"'$scratch'/t-serial.yaml","waves":2}'
   tp_run "$good" | grep -q '"ok":true'
   VM_EXIT=1 tp_run "$good" | grep -q '"source":"validate_manifest"'
@@ -277,8 +277,8 @@ clone="$scratch/clone"
 git init -q --bare -b main "$origin"
 git clone -q "$origin" "$clone" 2>/dev/null
 cd "$clone"
-mkdir -p .claude
-cp "$repo_root/.claude/toolkit.yaml" .claude/toolkit.yaml
+mkdir -p .devflow
+cp "$repo_root/.devflow/devflow.yaml" .devflow/devflow.yaml
 echo base > f.txt
 git add -A
 "${git_c[@]}" commit -qm base
@@ -294,7 +294,7 @@ git switch -q main
 
 export ARTIFACTS_DIR="$scratch/art"
 mkdir -p "$ARTIFACTS_DIR"
-lp() { INPUTS_PLAN_REF=plans INPUTS_PLAN_PATH=plans/s/plan.md INPUTS_DEVFLOW_ROOT=/x "$@" bun "$loader"; }
+lp() { INPUTS_PLAN_REF=plans INPUTS_PLAN_PATH=plans/s/plan.md INPUTS_SHARED_DIR=/x "$@" bun "$loader"; }
 
 out="$(INPUTS_MODE=phase INPUTS_PHASE=p1 INPUTS_BASE="$main_sha" lp env)"
 echo "$out" | grep -q '"done":false'

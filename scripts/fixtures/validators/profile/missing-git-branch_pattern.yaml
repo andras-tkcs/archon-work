@@ -1,0 +1,11 @@
+version: 1
+docs:
+  must_read: []
+git:
+  main_branch: main
+verify:
+  fast:
+  - make lint
+  dod:
+  - make test
+stacks: []

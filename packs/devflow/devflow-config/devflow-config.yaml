@@ -96,10 +96,10 @@ nodes:
     output_format:
       type: object
       properties:
-        devflow_root: { type: string }
+        shared_dir: { type: string }
         main_branch: { type: string }
         branch_regex: { type: string }
-      required: [devflow_root, main_branch, branch_regex]
+      required: [shared_dir, main_branch, branch_regex]
 
   - id: setup
     depends_on: [preflight]
@@ -115,7 +115,7 @@ nodes:
       plan: "$review-config.output"
       branch_regex: "$preflight.output.branch_regex"
       main_branch: "$preflight.output.main_branch"
-      devflow_root: "$preflight.output.devflow_root"
+      shared_dir: "$preflight.output.shared_dir"
     output_format:
       type: object
       properties:

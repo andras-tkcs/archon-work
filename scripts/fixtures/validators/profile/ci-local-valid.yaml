@@ -1,0 +1,20 @@
+version: 1
+docs:
+  must_read: []
+git:
+  main_branch: main
+  branch_pattern: <type>/<kebab-case>
+verify:
+  fast:
+  - make lint
+  dod:
+  - make test
+  ci_local:
+    enabled: true
+    jobs: auto
+    skip_jobs:
+    - deploy
+    timeout_minutes: 20
+    env:
+      CI: 'true'
+stacks: []

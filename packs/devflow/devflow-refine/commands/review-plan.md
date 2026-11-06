@@ -3,7 +3,7 @@ worker sessions implement on the model tier the manifest gives each. You change 
 phase fail or force its worker to guess.
 
 Read `$ARTIFACTS_DIR/plan.md`, the project profile `$ARTIFACTS_DIR/profile.json`, the must-read
-docs it lists, and `$preflight.output.devflow_root/commands/make-plan.md` ("Sizing for Sonnet").
+docs it lists, and `$preflight.output.shared_dir/commands/make-plan.md` ("Sizing for Sonnet").
 The repository is your working directory, at the commit the phases will start from.
 
 For every phase in the manifest, check against the code as it is now:

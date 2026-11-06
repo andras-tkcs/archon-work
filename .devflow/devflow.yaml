@@ -1,5 +1,7 @@
-# devflow profile for this repository: what the devflow workflows (packs/devflow) and the toolkit's
-# /make-plan, /implement and /dod read. Schema: the devflow plugin's schema/profile.schema.json.
+# devflow profile for this repository: read by the devflow workflows (packs/devflow).
+# Schema: packs/devflow/.shared/profile.schema.json.
+version: 1
+
 project:
   name: archon-work
 
@@ -20,6 +22,8 @@ verify:
     - bash -n scripts/test-devflow-pack.sh
     - bash -n scripts/test-ide-link-patch.sh
     - bash -n scripts/test-render-run.sh
+    - bash -n scripts/test-devflow-validators.sh
+    - bash -n scripts/test-devflow-shared.sh
     - bash -n scripts/test-archon-repo-switch.sh
     - bash -n scripts/test-admin-tools.sh
     - scripts/test-ide-link-patch.sh
@@ -28,5 +32,7 @@ verify:
   dod:
     - scripts/test-devflow-pack.sh
     - scripts/test-render-run.sh
+    - scripts/test-devflow-validators.sh
+    - scripts/test-devflow-shared.sh
 
 stacks: []

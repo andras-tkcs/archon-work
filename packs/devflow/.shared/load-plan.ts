@@ -65,7 +65,7 @@ writeFileSync(
     branch,
     title,
     main_branch: profile().git.main_branch,
-    devflow_root: input("devflow_root", false),
+    shared_dir: input("shared_dir", false),
   }),
 );
 console.log(JSON.stringify({ slug, branch, title, done, model, review_model: manifest.review_model }));

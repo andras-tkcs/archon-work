@@ -1,0 +1,15 @@
+version: 1
+docs:
+  must_read:
+  - README.md
+  - docs/missing.md
+git:
+  main_branch: main
+  branch_pattern: <type>/<kebab-case>
+verify:
+  fast:
+  - make lint
+  dod:
+  - make test
+stacks: []
+project_steward: docs/steward-missing.md

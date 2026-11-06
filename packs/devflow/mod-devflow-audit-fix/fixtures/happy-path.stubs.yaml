@@ -2,7 +2,7 @@
 fixture:
   expect: completed
 preflight:
-  devflow_root: /stub/devflow
+  shared_dir: /stub/devflow
   main_branch: main
   branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
 setup: '{"hooks":[],"env_file":"project-env.sh"}'

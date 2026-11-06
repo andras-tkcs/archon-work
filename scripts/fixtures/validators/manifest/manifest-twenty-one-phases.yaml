@@ -1,0 +1,520 @@
+# A real-sized manifest (21 phases), with neutral names and paths.
+plan_slug: extension-api
+feature_branch: feature/extension-api
+max_parallel: 3
+tracking_issue: 42
+manual_steps_artifact: https://example.invalid/manual-steps
+manual_steps_source: docs/extension-api-plan-manual-steps.html
+manual_before:
+- id: mb1-setup
+  title: Create the test account
+  why: The first phase needs it.
+  done_when: The account exists.
+manual_after:
+- id: ma1-verify
+  title: Click through the feature on a real device
+  why: CI cannot drive a real device.
+- id: ma2-verify
+  title: Click through the feature on a real device
+  why: CI cannot drive a real device.
+verify_after_merge:
+- make lint
+- make test
+final_checks:
+- docs/extension-api-plan.md is deleted and nothing links to it
+- CHANGELOG.md has [Unreleased] entries
+phases:
+- id: p1-step
+  title: Step 1
+  depends_on: []
+  complexity: M
+  touches:
+  - src/part001/part030/part031.py
+  - src/part001/part030/part032.py
+  - src/part001/part030/part033.py
+  - src/part001/part030/part034.py
+  - docs/part035/part033.schema.json
+  - tests/part036.py
+  - tests/unit/part030/part031.py
+  - tests/unit/part030/part037.py
+  - tests/unit/part030/part038.py
+  - tests/unit/part030/part039.py
+  brief: '1. Implement step 1 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+- id: p2-step
+  title: Step 2
+  depends_on:
+  - p1-step
+  complexity: M
+  touches:
+  - src/part001/part030/part040.py
+  - src/part001/part030/part041.py
+  - src/part001/part042.py
+  - tests/unit/part030/part043.py
+  - tests/unit/part030/part044.py
+  brief: '1. Implement step 2 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p3-step
+  title: Step 3
+  depends_on:
+  - p1-step
+  complexity: M
+  touches:
+  - src/part001/part030/part045.py
+  - src/part001/part030/part046.py
+  - tests/unit/part030/part047.py
+  - tests/unit/part030/part048.py
+  - tests/fixtures/part030/part049/**
+  brief: '1. Implement step 3 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p4-step
+  title: Step 4
+  depends_on:
+  - p1-step
+  complexity: M
+  worker_model: opus
+  worker_model_reason: Subtle concurrency that cannot be made mechanical.
+  touches:
+  - src/part001/part011.py
+  - src/part001/part050/part051.py
+  - src/part001/part050/part052.py
+  - src/part001/part050/part053.py
+  - src/part001/part054.py
+  - src/part001/part021.py
+  - tests/unit/part055.py
+  - tests/unit/part050/part056.py
+  - tests/unit/part050/part057.py
+  - tests/unit/part022.py
+  brief: '1. Implement step 4 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p5-step
+  title: Step 5
+  depends_on:
+  - p1-step
+  complexity: M
+  touches:
+  - part058/part059.toml
+  - part058/README.md
+  - part058/src/part060/part031.py
+  - part058/src/part060/part061.py
+  - part058/src/part060/part062.py
+  - part058/src/part060/part040.py
+  - part058/src/part060/part063.py
+  - part058/src/part060/part064.typed
+  - tests/unit/part065/part031.py
+  - tests/unit/part065/part036.py
+  - tests/unit/part065/part066.py
+  - tests/unit/part065/part043.py
+  - tests/unit/part065/part047.py
+  brief: '1. Implement step 5 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p5b-step
+  title: Step 6
+  depends_on:
+  - p5-step
+  complexity: S
+  touches:
+  - part058/src/part060/part067.py
+  - scripts/part068.py
+  - tests/unit/part069.py
+  brief: '1. Implement step 6 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+- id: p6-step
+  title: Step 7
+  depends_on:
+  - p1-step
+  complexity: M
+  touches:
+  - src/part001/part030/part070.py
+  - src/part001/part030/part071.py
+  - tests/unit/part030/part072.py
+  - tests/unit/part030/part073.py
+  brief: '1. Implement step 7 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+- id: p7-step
+  title: Step 8
+  depends_on:
+  - p1-step
+  - p4-step
+  complexity: S
+  touches:
+  - src/part001/part030/part074.py
+  - tests/unit/part030/part075.py
+  brief: '1. Implement step 8 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+- id: p8-step
+  title: Step 9
+  depends_on:
+  - p2-step
+  complexity: M
+  worker_model: opus
+  worker_model_reason: Subtle concurrency that cannot be made mechanical.
+  touches:
+  - src/part001/part076.py
+  - src/part001/part030/part077.py
+  - src/part001/part030/part078.py
+  - tests/unit/part079.py
+  - tests/unit/part030/part080.py
+  - tests/unit/part030/part081.py
+  - tests/part082/part083.py
+  brief: '1. Implement step 9 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p9-step
+  title: Step 10
+  depends_on:
+  - p5-step
+  complexity: M
+  touches:
+  - part058/src/part060/part084/part031.py
+  - part058/src/part060/part084/part085.py
+  - part058/src/part060/part084/part086.py
+  - part058/src/part060/part084/part087.py
+  - part058/src/part060/part084/part088/**
+  - tests/unit/part065/part089.py
+  brief: '1. Implement step 10 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p9b-step
+  title: Step 11
+  depends_on:
+  - p9-step
+  complexity: M
+  touches:
+  - part058/src/part060/part084/part031.py
+  - part058/src/part060/part084/part085.py
+  - part058/src/part060/part084/part090.py
+  - part058/src/part060/part084/part091.py
+  - part058/src/part060/part084/part092.py
+  - tests/unit/part065/part093.py
+  brief: '1. Implement step 11 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+- id: p10-step
+  title: Step 12
+  depends_on:
+  - p5-step
+  complexity: S
+  touches:
+  - .github/workflows/part094.yml
+  - docs/part095.md
+  brief: '1. Implement step 12 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+- id: p11-step
+  title: Step 13
+  depends_on:
+  - p2-step
+  complexity: M
+  worker_model: opus
+  worker_model_reason: Subtle concurrency that cannot be made mechanical.
+  touches:
+  - src/part001/part030/part096.py
+  - src/part001/part097.py
+  - src/part001/part098.py
+  - src/part001/part099/part100/part101.css
+  - tests/unit/part030/part102.py
+  - tests/unit/part103.py
+  - tests/unit/part104.py
+  - tests/integration/part105.py
+  - src/part001/part106.py
+  - tests/unit/part107.py
+  brief: '1. Implement step 13 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p12-step
+  title: Step 14
+  depends_on:
+  - p2-step
+  - p3-step
+  - p4-step
+  - p7-step
+  complexity: M
+  worker_model: opus
+  worker_model_reason: Subtle concurrency that cannot be made mechanical.
+  touches:
+  - src/part001/part030/part108.py
+  - tests/unit/part030/part109.py
+  brief: '1. Implement step 14 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p13-step
+  title: Step 15
+  depends_on:
+  - p3-step
+  - p6-step
+  - p8-step
+  - p11-step
+  - p12-step
+  complexity: M
+  touches:
+  - src/part001/part030/part110.py
+  - src/part001/part030/part111.py
+  - tests/unit/part030/part112.py
+  - tests/unit/part030/part113.py
+  brief: '1. Implement step 15 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p13b-step
+  title: Step 16
+  depends_on:
+  - p13-step
+  complexity: M
+  touches:
+  - src/part001/part012.py
+  - src/part001/part114.py
+  - src/part001/part115/part116.py
+  - src/part001/part115/part117.py
+  - src/part001/part099/part118.yaml.example
+  - docs/part119.md
+  - tests/unit/part019.py
+  - tests/unit/part115/part120.py
+  - tests/unit/part115/part121.py
+  - tests/unit/part122.py
+  brief: '1. Implement step 16 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+- id: p14-step
+  title: Step 17
+  depends_on:
+  - p13b-step
+  complexity: M
+  worker_model: opus
+  worker_model_reason: Subtle concurrency that cannot be made mechanical.
+  touches:
+  - src/part001/part030/part123.py
+  - src/part001/part115/part124.py
+  - src/part001/part115/part116.py
+  - tests/unit/part030/part125.py
+  - tests/unit/part115/part126.py
+  - tests/unit/part115/part120.py
+  - tests/integration/part127.py
+  brief: '1. Implement step 17 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p15-step
+  title: Step 18
+  depends_on:
+  - p13b-step
+  complexity: M
+  touches:
+  - src/part001/part030/part128.py
+  - src/part001/part030/part110.py
+  - src/part001/part114.py
+  - src/part001/part115/part129.py
+  - src/part001/part115/part130.py
+  - src/part001/part131.py
+  - tests/unit/part030/part132.py
+  - tests/unit/part030/part112.py
+  - tests/unit/part122.py
+  - tests/unit/part115/part133.py
+  - tests/unit/part115/part134.py
+  - tests/unit/part135.py
+  - tests/integration/part136.py
+  brief: '1. Implement step 18 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p16-step
+  title: Step 19
+  depends_on:
+  - p9b-step
+  - p14-step
+  - p15-step
+  complexity: M
+  touches:
+  - tests/fixtures/part030/part137/**
+  - tests/fixtures/part030/part138/**
+  - tests/integration/part139.py
+  - tests/integration/part140.py
+  - tests/integration/part141.py
+  - tests/unit/part030/part142.py
+  brief: '1. Implement step 19 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+- id: p17-step
+  title: Step 20
+  depends_on:
+  - p16-step
+  complexity: M
+  touches:
+  - examples/part030/part143/**
+  - scripts/part144.py
+  - .github/workflows/part145.yml
+  - tests/unit/examples/part031.py
+  - tests/unit/examples/part036.py
+  - tests/unit/examples/part146.py
+  - tests/unit/part147.py
+  - tests/fixtures/part030/part143/**
+  brief: '1. Implement step 20 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
+- id: p18-step
+  title: Step 21
+  depends_on:
+  - p1-step
+  - p2-step
+  - p3-step
+  - p4-step
+  - p5-step
+  - p6-step
+  - p7-step
+  - p8-step
+  - p9-step
+  - p10-step
+  - p11-step
+  - p12-step
+  - p13-step
+  - p14-step
+  - p15-step
+  - p16-step
+  - p17-step
+  - p5b-step
+  - p9b-step
+  - p13b-step
+  complexity: M
+  touches:
+  - docs/adr/**
+  - docs/part062*.md
+  - docs/README.md
+  - docs/part148.md
+  - docs/part149.md
+  - docs/part150.md
+  - CHANGELOG.md
+  - docs/part151.html
+  - scripts/part152.py
+  brief: '1. Implement step 21 as the Design section says.
+
+    2. Extend the tests.
+
+    '
+  acceptance:
+  - make test passes (1)
+  - make test passes (2)
+  - make test passes (3)
+  - make test passes (4)
