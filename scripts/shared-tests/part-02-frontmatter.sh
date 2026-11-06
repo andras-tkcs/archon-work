@@ -25,7 +25,14 @@ contains "$(val '{issue:7,kind:"design",title:"t",revision:1,design_revision:1,r
 contains "$(val '{issue:7,kind:"design",title:"t",revision:1,run:"r",updated:"6.11.2026"}' design)" "'updated' must be a date YYYY-MM-DD" "bad date"
 contains "$(val '{issue:7,kind:"design",title:"t",revision:1,run:"r",updated:"2026-11-06",status:"x"}' design)" "key 'status' is not allowed" "extra key"
 contains "$(val '{kind:"design",issue:7,title:"t",revision:1,run:"r",updated:"2026-11-06"}' design)" "must be in the order" "keys out of order"
-contains "$(val '{}' deviations)" "kind deviations is not supported yet" "deviations is refused"
+dev='{issue:7,kind:"deviations",title:"t",revision:1,plan_revision:2,build_outcome:"running",branch:"feat/issue-7-x",run:"r",updated:"2026-11-06"}'
+eq "$(val "$dev" deviations)" "" "a valid deviations block"
+out="$(fm "console.log(F.serialize($dev,'b').split('\n').slice(1,10).map(l=>l.split(':')[0]).join(','))")"
+eq "$out" "issue,kind,title,revision,plan_revision,build_outcome,branch,run,updated" "deviations keys are written in their fixed order"
+contains "$(val '{issue:7,kind:"deviations",title:"t",revision:1,plan_revision:2,build_outcome:"done",branch:"b",run:"r",updated:"2026-11-06"}' deviations)" "'build_outcome' must be one of running, completed, stopped" "bad build_outcome"
+contains "$(val '{issue:7,kind:"deviations",title:"t",revision:1,plan_revision:0,build_outcome:"running",branch:"b",run:"r",updated:"2026-11-06"}' deviations)" "'plan_revision' must be a positive integer" "plan_revision not positive"
+contains "$(val '{issue:7,kind:"deviations",title:"t",revision:1,design_revision:1,plan_revision:1,build_outcome:"running",branch:"b",run:"r",updated:"2026-11-06"}' deviations)" "key 'design_revision' is not allowed" "design_revision on deviations"
+contains "$(val '{issue:7,kind:"deviations",title:"t",revision:1,plan_revision:1,build_outcome:"running",branch:"",run:"r",updated:"2026-11-06"}' deviations)" "key 'branch' is missing" "empty branch"
 contains "$(fm "try{F.parse('# no front matter\n')}catch(e){console.log(e.message)}")" "front matter is missing" "missing block"
 contains "$(fm "try{F.parse('---\n- a\n---\n')}catch(e){console.log(e.message)}")" "not a mapping" "a list is not front matter"
 finish

@@ -84,3 +84,14 @@ writeFileSync(`${out}/before.md`, serialize(fm("before", { design_revision: 1 })
 writeFileSync(`${out}/after.md`, serialize(fm("after", { design_revision: 1 }), render("after", { title, items: [
   { title: "Open an exported file", why: "only a person can check the spreadsheet import", steps: "1. Download a report from https://example.invalid/reports.\n2. Open it in a spreadsheet.", report: "CSV opens with a header row: pass/fail" },
 ] })));
+writeFileSync(`${out}/deviations.md`, serialize(
+  { issue: 7, kind: "deviations", title, revision: 1, plan_revision: 1, build_outcome: "stopped", branch: "feat/issue-7-csv-export", run: "run-7", updated: "2026-11-06" },
+  render("deviations", {
+    title, outcome: "stopped", done: "1", stuck: "1", skipped: "1", branch: "feat/issue-7-csv-export", pr: "no PR (stopped)", run_link: "run-7",
+    table: "| phase | state | reason | partial branch |\n|---|---|---|---|\n| p1-export-tests | stuck | fast checks red after the last step | feat/issue-7-csv-export-partial-p1-export-tests |\n| verify | skipped | dependency p1-export-tests is stuck | — |",
+    deviations: [{ title: "Rows are written in batches of 1000", phase: "p1-export", planned: "write rows one by one", actual: "write batches of 1000 rows", why: "one write per row was too slow on 100000 rows" }],
+    decisions: [{ title: "Quote every field", phase: "p1-export", choice: "csv.QUOTE_ALL", alternatives: "csv.QUOTE_MINIMAL", why: "the design is silent; quoting everything is the safe choice for spreadsheets" }],
+    tests: "- p1-export: none\n- p1-export-tests: T1 fail\n- verify: not run\n\nCases of plan-test.md with no passing result: T1, T2",
+    before: "None.", review: "None.", followups: "None.",
+  }),
+));
