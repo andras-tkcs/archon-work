@@ -45,9 +45,6 @@ inputs:
   pr_number:
     default: ""
     description: Follow-up mode, the open PR the follow-up continues; empty when there is none.
-  deliverable:
-    default: ""
-    description: Stage final, the first stage's deliverable (true when deliver ran).
 returns: result
 outcome_field: complete
 
@@ -136,7 +133,7 @@ nodes:
       issue: "$INPUTS.issue"
       branch: "$INPUTS.branch"
       run_key: "$INPUTS.run_key"
-      deliverable: "$INPUTS.deliverable"
+      pr_number: "$INPUTS.pr_number"
     output_format: *dev_out
 
   - id: stage-final

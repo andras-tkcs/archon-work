@@ -386,8 +386,12 @@ export function writeFinalTail(n: number, prUrl: string) {
   return { complete: true, changed: true, problems };
 }
 
-export function writeFinalWrap(n: number, runKey: string, deliverable: boolean) {
-  if (!deliverable || (runKey && readOutcomes(runKey).pr)) return { complete: !!(runKey && readOutcomes(runKey).pr), changed: false, problems: [] as string[] };
+// After deliver: when it ran (every phase done, the push went through, no PR yet) but opened no PR,
+// the build is stopped. A PR it opened, or a PR a follow-up continues, leaves the file as it is.
+export function writeFinalWrap(n: number, runKey: string, prNumber: string) {
+  const o = runKey ? readOutcomes(runKey) : {};
+  const delivered = o.deviations?.complete === true && o.push?.ok === true && prNumber === "";
+  if (!delivered || o.pr) return { complete: !!o.pr || prNumber !== "", changed: false, problems: [] as string[] };
   const { fm, body } = readFile(n);
   let next = withOutcome(body, "stopped", "no PR (stopped)");
   next = setSection(next, "Review and CI", `Deliver ran but opened no PR; see run ${process.env.WORKFLOW_ID || "run"}.`);
@@ -469,7 +473,7 @@ if (isEntry(import.meta)) {
     else if (mode === "follow-up") {
       result = writeFollowUp({ issue: n, branch, mainBranch: fact("main_branch") || "main", plansDir: fact("plans_dir") || "plans", planCommit: fact("plan_commit"), runKey, run: runId, task: fact("task"), fk: Number(fact("fk")) || 1 });
     } else if (mode === "final" && where === "tail") result = writeFinalTail(n, fact("pr_url"));
-    else if (mode === "final") result = writeFinalWrap(n, runKey, fact("deliverable") === "true");
+    else if (mode === "final") result = writeFinalWrap(n, runKey, fact("pr_number"));
     else throw new Error(`mode must be build, follow-up or final, not '${mode}'`);
   } catch (e) {
     // The file must exist whatever failed: keep what is there, else write the stub.

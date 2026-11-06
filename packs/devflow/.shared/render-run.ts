@@ -1,5 +1,7 @@
-// Renders the build-issue-<n> workflow that runs a published plan's phases (up to 3 at a time, each
-// in its own worktree) and then hands over to mod-devflow-deliver. A pure function plus a small CLI for tests.
+// Renders the build-issue-<n> workflow: an unattended build of a published plan. start, the phases (up
+// to 3 at a time, each in its own worktree), the merges, wrap (deviations.md committed and pushed),
+// deliver when every phase is done, wrap's final pass, end. No wait, approval, select or cancel
+// node: every ending passes through wrap. A pure function plus a small CLI for tests.
 import { readFileSync } from "node:fs";
 import { SLUG_RE, fileOf, slugOf, workflowName } from "./layout.ts";
 
@@ -34,7 +36,6 @@ export interface RenderOpts {
   plansRef: string;
   plansDir: string;
   before: string | null; // before.md, when the plan has one
-  after: string | null; // after.md, when the plan has one
   sourceRun?: string;
 }
 
@@ -103,161 +104,54 @@ export function renderRunWorkflow(o: RenderOpts): string {
   validate(o, slug, branch);
   const ws = waves(o.manifest);
   const planPath = fileOf(o.plansDir, o.issue, "plan");
-  const prerequisites = o.before !== null && (o.manifest.manual_before ?? []).length > 0;
-  const afterSteps = o.after !== null && (o.manifest.manual_after ?? []).length > 0;
+  const before = o.before !== null && (o.manifest.manual_before ?? []).length > 0;
+  const child = (name: string) => `${o.pack}:${name}`;
+  const started = "$start.output.ok == true";
   const doc: Record<string, any> = {
     name: workflowName(o.issue),
     description: [
       `Build of issue #${o.issue} (https://github.com/${o.repo}/issues/${o.issue}), "${safe(o.title)}": design r${o.designRevision}, plan r${o.planRevision}, planned by run ${o.sourceRun ?? ""}.`,
       `The plan is ${planPath} on the ${o.plansRef} branch.`,
-      `Phases run up to 3 at a time in their own worktrees. The build pauses ${prerequisites ? "for the steps in before.md and " : ""}when another worktree holds the feature branch.`,
-      `Then ${o.pack}:mod-devflow-deliver reviews the change, opens one PR with the code and watches it until a person merges it.`,
+      "No human interaction: stuck phases and decisions are written to deviations.md; phases run up to 3 at a time in their own worktrees.",
+      `At the end the issue's docs and deviations.md are committed and pushed, and a complete build opens the PR (${o.pack}:mod-devflow-deliver reviews it, runs the definition of done and local CI, and watches it until a person merges it).`,
     ].join("\n"),
     worktree: { enabled: true },
-    returns: "result",
-    outcome_field: "merged",
+    returns: "end",
+    outcome_field: "complete",
   };
   const nodes: Array<Record<string, any>> = [];
+  const ident = { issue: String(o.issue), branch, plans_ref: o.plansRef, plans_dir: o.plansDir, plan_commit: "$start.output.plan_commit", main_branch: o.mainBranch, run_key: "$start.output.run_key" };
 
-  if (prerequisites) {
-    const items = (o.manifest.manual_before ?? []).map((i) => `- ${safe(i.title ?? i.id ?? "")}`).join("\n");
+  nodes.push({
+    id: "start",
+    workflow: child("mod-devflow-start"),
+    with: { branch, main_branch: o.mainBranch, plans_ref: o.plansRef, plans_dir: o.plansDir, issue: String(o.issue), mode: "build" },
+  });
+  // Children without isolation run in this checkout and must never overlap (a second one would
+  // cancel itself on the checkout's lock), so they are chained: start, trace-start, before, the
+  // merges, wrap, deliver, wrap-final.
+  nodes.push({ id: "trace-start", workflow: child("mod-devflow-trace"), depends_on: ["start"], with: { issue: String(o.issue), event: "building", branch } });
+  if (before) {
     nodes.push({
-      id: "prerequisites",
-      wait: {
-        attention:
-          `Before implementing ${safe(o.title)}, do these steps (full steps: ${fileOf(o.plansDir, o.issue, "before")} on the ${o.plansRef} branch):\n\n` +
-          `${items}\n\nApprove when they are done; reject to stop.`,
-        form: "approval",
-        labels: { workflow: "build-issue", stage: "prerequisites" },
-      },
-    });
-    nodes.push({
-      id: "stop-at-prerequisites",
-      depends_on: ["prerequisites"],
-      when: "$prerequisites.output.decision == 'reject'",
-      cancel: "Stopped before implementation: the prerequisites were not confirmed.",
-    });
-  }
-
-  if (afterSteps) {
-    const b64 = Buffer.from(o.after!).toString("base64");
-    nodes.push({
-      id: "after-steps",
-      bash: `printf '%s' '${b64}' | base64 -d > "$ARTIFACTS_DIR/after.md"\necho "after.md written"\n`,
+      id: "before",
+      workflow: child("mod-devflow-before-check"),
+      depends_on: ["trace-start"],
+      with: { plan_commit: "$start.output.plan_commit", plans_ref: o.plansRef, plans_dir: o.plansDir, issue: String(o.issue), run_key: "$start.output.run_key" },
     });
   }
 
-  // Another worktree (a failed earlier run's) can hold the feature branch. Never remove one unasked: report it,
-  // ask a person, then remove only on approval and never with --force.
-  const findHeld = [
-    `B='${branch}'`,
-    `awk -v b="refs/heads/$B" -v me="$(git rev-parse --show-toplevel)" '$1=="worktree"{w=$2} $1=="branch" && $2==b && w!=me{print w}' <(git worktree list --porcelain)`,
-  ];
-  const gate: Record<string, any> = {};
-  if (prerequisites) {
-    gate.depends_on = ["prerequisites"];
-    gate.when = "$prerequisites.output.decision == 'approve'";
-  }
-  nodes.push({
-    id: "worktree-check",
-    ...gate,
-    bash: [
-      "set -euo pipefail",
-      "exec 3>&1 1>&2",
-      ...findHeld.slice(0, 1),
-      `git fetch origin "$B" 2>/dev/null || true`,
-      `HELD=$(${findHeld[1]})`,
-      'Q=""',
-      'if [ -n "$HELD" ]; then',
-      '  AHEAD=$(git rev-list --count "origin/$B..refs/heads/$B" 2>/dev/null || echo unknown)',
-      '  Q="The branch $B is already checked out in another worktree, probably left by an earlier run. Approving removes these worktrees (git worktree remove, never forced; a worktree with uncommitted changes is refused and the run fails). Do not approve if another run is still using one.\\n\\nCommits on the branch not on origin: $AHEAD"',
-      '  while IFS= read -r w; do Q="$Q\\n\\n$w\\nuncommitted paths: $(git -C "$w" status --porcelain | wc -l | tr -d \' \')"; done <<< "$HELD"',
-      "fi",
-      `H="$HELD" Q="$Q" python3 -c 'import json,os; print(json.dumps({"held": os.environ["H"], "question": os.environ["Q"].replace("\\\\n", "\\n")}))' >&3`,
-      "",
-    ].join("\n"),
-    output_format: {
-      type: "object",
-      properties: { held: { type: "string" }, question: { type: "string" } },
-      required: ["held", "question"],
-    },
-  });
-  nodes.push({
-    id: "confirm-worktree-removal",
-    depends_on: ["worktree-check"],
-    when: "$worktree-check.output.held != ''",
-    wait: {
-      attention: "$worktree-check.output.question",
-      form: "approval",
-      labels: { workflow: "build-issue", stage: "worktree-removal" },
-    },
-  });
-  nodes.push({
-    id: "stop-at-worktrees",
-    depends_on: ["confirm-worktree-removal"],
-    when: "$confirm-worktree-removal.output.decision == 'reject'",
-    cancel: "Stopped before implementation: the worktree holding the feature branch was not removed.",
-  });
-  nodes.push({
-    id: "remove-worktrees",
-    depends_on: ["confirm-worktree-removal"],
-    when: "$confirm-worktree-removal.output.decision == 'approve'",
-    bash: [
-      "set -euo pipefail",
-      ...findHeld.slice(0, 1),
-      `HELD=$(${findHeld[1]})`,
-      'while IFS= read -r w; do [ -n "$w" ] && git worktree remove "$w" && echo "removed $w" >&2; done <<< "$HELD"',
-      "",
-    ].join("\n"),
-  });
-
-  const start: Record<string, any> = { id: "start" };
-  start.depends_on = [
-    ...(prerequisites ? ["prerequisites"] : []),
-    "worktree-check",
-    "confirm-worktree-removal",
-    "stop-at-worktrees",
-    "remove-worktrees",
-  ];
-  start.trigger_rule = "none_failed_min_one_success";
-  if (prerequisites) start.when = "$prerequisites.output.decision == 'approve'";
-  start.bash = [
-    "set -euo pipefail",
-    "exec 3>&1 1>&2", // stdout must be the JSON only; git's own messages go to stderr
-    `B='${branch}'; M='${o.mainBranch}'; PR='${o.plansRef}'`,
-    'git fetch origin "$M"',
-    'git fetch origin "$PR"',
-    "PC=$(git rev-parse FETCH_HEAD)",
-    'HELD=$(git worktree list --porcelain | awk -v b="refs/heads/$B" -v me="$(git rev-parse --show-toplevel)" \'$1=="worktree"{w=$2} $1=="branch" && $2==b && w!=me{print w}\')',
-    'if [ -n "$HELD" ]; then echo "devflow: branch $B is already checked out in another worktree: $HELD" >&2; echo "devflow: if no run is using it and it has nothing unpushed, remove it with: git worktree remove $HELD" >&2; exit 1; fi',
-    'if git ls-remote --exit-code --heads origin "$B" >/dev/null 2>&1; then',
-    '  git fetch origin "$B"',
-    '  if git rev-parse --verify --quiet "refs/heads/$B" >/dev/null; then git switch "$B"; git merge --ff-only "origin/$B"; else git switch -c "$B" --track "origin/$B"; fi',
-    'elif git rev-parse --verify --quiet "refs/heads/$B" >/dev/null; then git switch "$B"',
-    'else git switch -c "$B" "origin/$M"; fi',
-    `printf '{"head":"%s","plan_commit":"%s"}\\n' "$(git rev-parse HEAD)" "$PC" >&3`,
-    "",
-  ].join("\n");
-  start.output_format = {
-    type: "object",
-    properties: { head: { type: "string" }, plan_commit: { type: "string" } },
-    required: ["head", "plan_commit"],
-  };
-  nodes.push(start);
-  nodes.push({
-    id: "trace-start",
-    workflow: `${o.pack}:mod-devflow-trace`,
-    depends_on: ["start"],
-    with: { issue: String(o.issue), event: "building", branch },
-  });
-
+  const phaseNodes: string[] = [];
+  const mergeNodes: string[] = [];
   ws.forEach((wave, i) => {
     const k = i + 1;
-    const prev = k === 1 ? "$start.output.head" : `$merge-${k - 1}.output.head`;
     for (const p of wave) {
+      const id = `phase-${p.id}`;
+      phaseNodes.push(id);
+      // No `when:` on a dependency: a skipped or failed dependency would fail the node instead of
+      // skipping it. The phase block checks its dependencies itself and records itself as skipped.
       nodes.push({
-        id: `phase-${p.id}`,
-        workflow: `${o.pack}:mod-devflow-phase`,
+        id,
+        workflow: child("mod-devflow-phase"),
         isolation: "worktree",
         depends_on: [k === 1 ? "start" : `merge-${k - 1}`],
         with: {
@@ -265,36 +159,37 @@ export function renderRunWorkflow(o: RenderOpts): string {
           plan_path: planPath,
           plan_commit: "$start.output.plan_commit",
           phase: p.id,
-          base: prev,
+          base: k === 1 ? "$start.output.head" : `$merge-${k - 1}.output.head`,
+          depends_on: (p.depends_on ?? []).join(","),
+          run_key: "$start.output.run_key",
         },
       });
     }
-    const lines = ["set -euo pipefail", "exec 3>&1 1>&2"];
-    wave.forEach((p, j) => {
-      const h = `h${j + 1}`;
-      const t = msgSafe(p.title ?? p.id);
-      lines.push(
-        `${h}=$phase-${p.id}.output.head`,
-        `if git merge-base --is-ancestor "$${h}" HEAD; then echo "${p.id} already merged" >&2`,
-        `else git merge --no-ff "$${h}" -m 'Merge ${slug} ${p.id}: ${t}' -m 'Plan-Phase: ${slug}/${p.id}' || { git merge --abort; echo "devflow: merging ${p.id} conflicts; its touches overlap another phase" >&2; exit 1; }`,
-        "fi",
-      );
-    });
-    lines.push(`printf '{"head":"%s"}\\n' "$(git rev-parse HEAD)" >&3`, "");
+    const titles = Object.fromEntries(wave.map((p) => [p.id, msgSafe(p.title ?? p.id)]));
     nodes.push({
       id: `merge-${k}`,
-      depends_on: wave.map((p) => `phase-${p.id}`),
-      bash: lines.join("\n"),
-      output_format: { type: "object", properties: { head: { type: "string" } }, required: ["head"] },
+      workflow: child("mod-devflow-merge"),
+      depends_on: [...wave.map((p) => `phase-${p.id}`), ...(k === 1 ? ["trace-start", ...(before ? ["before"] : [])] : [`merge-${k - 1}`])],
+      trigger_rule: "all_done",
+      when: started,
+      with: { slug, phases: wave.map((p) => p.id).join(","), titles: JSON.stringify(titles), run_key: "$start.output.run_key", wave: String(k) },
     });
+    mergeNodes.push(`merge-${k}`);
   });
 
-  const deps = [`merge-${ws.length}`];
-  if (afterSteps) deps.push("after-steps");
+  nodes.push({
+    id: "wrap",
+    workflow: child("mod-devflow-wrap"),
+    depends_on: [...phaseNodes, ...mergeNodes, ...(before ? ["before"] : [])],
+    trigger_rule: "all_done",
+    when: started,
+    with: { stage: "first", mode: "build", ...ident },
+  });
   nodes.push({
     id: "deliver",
-    workflow: `${o.pack}:mod-devflow-deliver`,
-    depends_on: deps,
+    workflow: child("mod-devflow-deliver"),
+    depends_on: ["wrap"],
+    when: "$wrap.output.deliverable == true",
     with: {
       plan_ref: o.plansRef,
       plan_path: planPath,
@@ -302,15 +197,47 @@ export function renderRunWorkflow(o: RenderOpts): string {
       slug,
       branch,
       title: safe(o.title),
-      head: `$merge-${ws.length}.output.head`,
+      head: "$wrap.output.head",
       issue: String(o.issue),
+      run_key: "$start.output.run_key",
+      phases: "plan",
     },
   });
   nodes.push({
-    id: "result",
-    depends_on: ["deliver"],
-    bash: `m=$deliver.output.merged; printf '{"merged":%s}\\n' "$m"\n`,
-    output_format: { type: "object", properties: { merged: { type: "boolean" } }, required: ["merged"] },
+    id: "wrap-final",
+    workflow: child("mod-devflow-wrap"),
+    depends_on: ["wrap", "deliver"],
+    trigger_rule: "all_done",
+    when: started,
+    with: { stage: "final", mode: "build", ...ident },
+  });
+  nodes.push({
+    id: "end",
+    depends_on: ["wrap-final"],
+    bash: [
+      "python3 - '$wrap-final.output' <<'PY'",
+      "import json, sys",
+      "r = json.loads(sys.argv[1])",
+      'out = {k: r.get(k) for k in ["complete", "stuck_phases", "branch", "pr_url", "deviations_url", "pushed"]}',
+      "print(json.dumps(out))",
+      'if out["complete"] is not True:',
+      `    print(f"devflow: ${workflowName(o.issue)} is not complete: see deviations.md ({out['deviations_url']})", file=sys.stderr)`,
+      "    sys.exit(1)",
+      "PY",
+      "",
+    ].join("\n"),
+    output_format: {
+      type: "object",
+      properties: {
+        complete: { type: "boolean" },
+        stuck_phases: { type: "array", items: { type: "string" } },
+        branch: { type: "string" },
+        pr_url: { type: "string" },
+        deviations_url: { type: "string" },
+        pushed: { type: "array", items: { type: "string" } },
+      },
+      required: ["complete", "stuck_phases", "branch", "pr_url", "deviations_url", "pushed"],
+    },
   });
 
   doc.nodes = nodes;
@@ -323,7 +250,7 @@ if (import.meta.main) {
     const file = argv.shift();
     if (!file) {
       throw new Error(
-        "usage: render-run.ts <plan.md> --issue N --design-revision D --plan-revision P --repo O/R --title T --main M --pack P [--before file] [--after file] [--plans-ref plans] [--plans-dir plans]",
+        "usage: render-run.ts <plan.md> --issue N --design-revision D --plan-revision P --repo O/R --title T --main M --pack P [--before file] [--plans-ref plans] [--plans-dir plans]",
       );
     }
     const flag: Record<string, string> = {};
@@ -343,7 +270,6 @@ if (import.meta.main) {
         plansRef: flag["plans-ref"] || "plans",
         plansDir: flag["plans-dir"] || "plans",
         before: read(flag.before),
-        after: read(flag.after),
         sourceRun: process.env.WORKFLOW_ID ?? "",
       }),
     );

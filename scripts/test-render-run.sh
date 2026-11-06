@@ -22,7 +22,7 @@ rend() {
 
 # a. render
 bun "$render" "$fx/three-wide.md" --issue 3 --design-revision 2 --plan-revision 1 --repo o/r --title "Three wide" \
-  --main main --pack test/devflow --after "$fx/after.md" --before "$fx/before.md" > "$scratch/three-wide.yaml"
+  --main main --pack test/devflow --before "$fx/before.md" > "$scratch/three-wide.yaml"
 rend "$fx/serial.md" 2 --title "Serial" --before "$fx/before.md" > "$scratch/serial.yaml"
 
 # b. archon validate accepts both
@@ -41,38 +41,68 @@ done
 
 # c. structure
 bun -e '
-const [wide, serial] = process.argv.slice(1).map((f) => Bun.YAML.parse(require("node:fs").readFileSync(f, "utf8")) as any);
+const [wide, serial] = process.argv.slice(1, 3).map((f) => Bun.YAML.parse(require("node:fs").readFileSync(f, "utf8")) as any);
 const eq = (a: unknown, b: unknown, what: string) => { if (JSON.stringify(a) !== JSON.stringify(b)) { console.error(`FAIL ${what}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`); process.exit(1); } };
 const has = (s: string, part: string, what: string) => { if (!s.includes(part)) { console.error(`FAIL ${what}: no ${JSON.stringify(part)} in ${JSON.stringify(s)}`); process.exit(1); } };
 const ids = (d: any) => d.nodes.map((n: any) => n.id);
 const node = (d: any, id: string) => d.nodes.find((n: any) => n.id === id);
 eq(wide.name, "build-issue-3", "three-wide name");
 eq(serial.name, "build-issue-2", "serial name");
-eq(ids(wide).sort(), ["phase-p1","phase-p2","phase-p3","phase-p4","phase-p5","start","trace-start","merge-1","merge-2","deliver","result","prerequisites","stop-at-prerequisites","after-steps","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "three-wide node ids");
+eq(ids(wide), ["start","trace-start","before","phase-p1","phase-p2","phase-p3","merge-1","phase-p4","phase-p5","merge-2","wrap","deliver","wrap-final","end"], "three-wide node ids");
 for (const p of ["p1","p2","p3"]) eq(node(wide, `phase-${p}`).depends_on, ["start"], `phase-${p} deps`);
 for (const p of ["p4","p5"]) eq(node(wide, `phase-${p}`).depends_on, ["merge-1"], `phase-${p} deps`);
 for (const p of ["p1","p2","p3","p4","p5"]) eq(node(wide, `phase-${p}`).isolation, "worktree", `phase-${p} isolation`);
+for (const p of ["p1","p2","p3","p4","p5"]) eq(node(wide, `phase-${p}`).when, undefined, `phase-${p} has no when (the block checks its dependencies)`);
+// Each phase passes its manifest dependencies to the block, which skips itself unless they are done.
+const manifest = (f: string) => (Bun.YAML.parse(require("node:fs").readFileSync(f, "utf8").match(/^## Implementation manifest[\s\S]*?^```ya?ml$([\s\S]*?)^```$/m)[1]) as any).phases;
+for (const p of manifest(process.argv[3])) eq(node(wide, `phase-${p.id}`).with.depends_on, (p.depends_on ?? []).join(","), `phase-${p.id} passes its depends_on`);
+eq(node(wide,"phase-p4").with.base, "$merge-1.output.head", "a later wave starts from the previous merge");
+eq(node(wide,"phase-p1").with.run_key, "$start.output.run_key", "phases get the run key");
 eq(node(wide,"phase-p1").workflow, "test/devflow:mod-devflow-phase", "phase workflow");
 eq(node(wide,"phase-p1").with.plan_path, "plans/plans/issue-3/plan.md", "phase plan path");
-eq(node(wide,"deliver").workflow, "test/devflow:mod-devflow-deliver", "deliver workflow");
+for (const [id, wf] of [["start","mod-devflow-start"],["before","mod-devflow-before-check"],["merge-1","mod-devflow-merge"],["wrap","mod-devflow-wrap"],["deliver","mod-devflow-deliver"],["wrap-final","mod-devflow-wrap"],["trace-start","mod-devflow-trace"]]) eq(node(wide,id).workflow, `test/devflow:${wf}`, `${id} workflow`);
+eq(node(wide,"start").with, { branch: "feat/three-wide", main_branch: "main", plans_ref: "plans", plans_dir: "plans", issue: "3", mode: "build" }, "start inputs");
+// Children that share this checkout run one after another: start, trace-start, before, the merges, wrap, deliver, wrap-final.
+eq(node(wide,"trace-start").depends_on, ["start"], "trace-start after start");
+eq(node(wide,"before").depends_on, ["trace-start"], "before after trace-start");
+eq(node(wide,"merge-1").depends_on, ["phase-p1","phase-p2","phase-p3","trace-start","before"], "merge-1 waits for the wave, trace-start and before");
+eq(node(wide,"merge-2").depends_on, ["phase-p4","phase-p5","merge-1"], "merge-2 waits for its wave");
+eq(node(wide,"trace-start").with, { issue: "3", event: "building", branch: "feat/three-wide" }, "trace-start inputs");
+has(node(wide,"merge-1").with.titles, "it’s ＄x", "merge titles lose their quote and dollar");
+eq(node(wide,"merge-1").with.slug, "issue-3", "merge slug");
+for (const id of ["merge-1","merge-2","wrap","wrap-final"]) {
+  eq(node(wide,id).trigger_rule, "all_done", `${id} runs whatever the phases did`);
+  eq(node(wide,id).when, "$start.output.ok == true", `${id} needs a started build`);
+}
+const phasesAndMerges = ["phase-p1","phase-p2","phase-p3","phase-p4","phase-p5","merge-1","merge-2"];
+for (const id of phasesAndMerges) if (!node(wide,"wrap").depends_on.includes(id)) { console.error(`FAIL wrap does not depend on ${id}`); process.exit(1); }
+eq(node(wide,"wrap").with.stage, "first", "wrap stage");
+eq(node(wide,"wrap-final").with.stage, "final", "wrap-final stage");
+eq(node(wide,"wrap-final").depends_on, ["wrap","deliver"], "wrap-final after deliver");
+eq(node(wide,"deliver").when, "$wrap.output.deliverable == true", "deliver only when deliverable");
 eq(node(wide,"deliver").with.issue, "3", "deliver issue");
 eq(node(wide,"deliver").with.slug, "issue-3", "deliver slug");
 eq(node(wide,"deliver").with.branch, "feat/three-wide", "deliver branch from the manifest");
-eq(node(wide,"trace-start").workflow, "test/devflow:mod-devflow-trace", "trace-start workflow");
-eq(node(wide,"trace-start").depends_on, ["start"], "trace-start after start");
-eq(node(wide,"trace-start").with, { issue: "3", event: "building", branch: "feat/three-wide" }, "trace-start inputs");
-eq(wide.returns, "result", "returns");
+eq(node(wide,"deliver").with.head, "$wrap.output.head", "deliver starts from the head wrap pushed");
+eq(node(wide,"end").depends_on, ["wrap-final"], "end after wrap-final");
+has(node(wide,"end").bash, "build-issue-3 is not complete: see deviations.md", "end names the build");
+eq(wide.returns, "end", "returns");
+eq(wide.outcome_field, "complete", "outcome field");
 eq(ids(wide).includes("merge-3"), false, "no merge-3");
-has(node(wide, "merge-1").bash, "Merge issue-3 p1: it’s ＄x", "title replacement");
-has(node(wide, "merge-1").bash, "Plan-Phase: issue-3/p1", "merge trailer");
-has(node(wide, "prerequisites").wait.attention, "plans/plans/issue-3/before.md on the plans branch", "prerequisites name before.md");
 has(wide.description, "#3 (https://github.com/o/r/issues/3)", "description names the issue");
 has(wide.description, "design r2, plan r1", "description names the revisions");
 has(wide.description, "plans/plans/issue-3/plan.md on the plans branch", "description names the plan path");
-// serial has a before.md but no manual_before and no manual_after: no prerequisites, no after-steps.
-eq(ids(serial).sort(), ["phase-p1","phase-p2","start","trace-start","merge-1","merge-2","deliver","result","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "serial node ids");
-for (const d of [wide, serial]) if (JSON.stringify(d).includes("devflow-run")) { console.error("FAIL a rendered workflow names devflow-run"); process.exit(1); }
-' "$scratch/three-wide.yaml" "$scratch/serial.yaml"
+has(wide.description, "No human interaction: stuck phases and decisions are written to deviations.md", "description says unattended");
+// serial has a before.md but no manual_before: no before check.
+eq(ids(serial), ["start","trace-start","phase-p1","merge-1","phase-p2","merge-2","wrap","deliver","wrap-final","end"], "serial node ids");
+eq(node(serial,"merge-1").depends_on, ["phase-p1","trace-start"], "serial merge-1 waits for trace-start");
+// No rendered build ever waits for a person or cancels after start.
+for (const [f, d] of [["three-wide", wide], ["serial", serial]] as const) {
+  const text = require("node:fs").readFileSync(process.argv[f === "three-wide" ? 1 : 2], "utf8");
+  for (const bad of ["wait:", "approval", "select:", "cancel:"]) if (text.includes(bad)) { console.error(`FAIL ${f} contains ${bad}`); process.exit(1); }
+  if (JSON.stringify(d).includes("devflow-run")) { console.error("FAIL a rendered workflow names devflow-run"); process.exit(1); }
+}
+ ' "$scratch/three-wide.yaml" "$scratch/serial.yaml" "$fx/three-wide.md"
 echo "structure: ok"
 
 # d. a cycle is an error
@@ -117,9 +147,9 @@ STUB
   rart="$scratch/rart"
   mkdir -p "$rart"
   cp "$fx/serial.md" "$rart/plan.md"
-  mods() { local p="$1"; printf '{"name":"%s:mod-devflow-phase"},{"name":"%s:mod-devflow-deliver"},{"name":"%s:mod-devflow-trace"},{"name":"%s:devflow-plan"}' "$p" "$p" "$p" "$p"; }
+  mods() { local p="$1" n out=""; for n in devflow-plan mod-devflow-start mod-devflow-phase mod-devflow-merge mod-devflow-wrap mod-devflow-deliver mod-devflow-trace ${2-}; do out="$out${out:+,}{\"name\":\"$p:$n\"}"; done; printf '%s' "$out"; }
   list_ok="{\"workflows\":[$(mods test/devflow)]}"
-  list_bad='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"}]}'
+  list_bad="{\"workflows\":[$(mods test/devflow | sed 's/,{"name":"test\/devflow:mod-devflow-wrap"}//')]}"
   list_two="{\"workflows\":[$(mods test/devflow),$(mods other/devflow)]}"
   rr_run() {
     PATH="$scratch/rstub:$PATH" STUB_LIST="$1" WORKFLOW_ID="${RR_WORKFLOW_ID-wf-test}" STUB_GET="${STUB_GET-}" ARTIFACTS_DIR="$rart" \
@@ -141,8 +171,8 @@ STUB
   echo "$out" | grep -q "differs from the branch 'feat/other'"
   out="$(RR_EXISTING=feat/kept rr_run "$list_ok" 2)"
   echo "$out" | grep -q "a re-plan keeps the branch"
-  if rr_run "$list_bad" 2 >/dev/null 2>"$scratch/rr.err"; then echo "missing mod-devflow-trace was accepted" >&2; exit 1; fi
-  grep -q 'has no test/devflow:mod-devflow-trace' "$scratch/rr.err"
+  if rr_run "$list_bad" 2 >/dev/null 2>"$scratch/rr.err"; then echo "missing mod-devflow-wrap was accepted" >&2; exit 1; fi
+  grep -q 'has no test/devflow:mod-devflow-wrap' "$scratch/rr.err"
   # pack default: the pack this run was started from
   rm -f "$rart/build-issue-2.yaml"
   out="$(STUB_GET='{"workflow_name":"test/devflow:devflow-plan"}' rr_run "$list_ok" 2 "")"
@@ -191,7 +221,7 @@ PY
 const fs = require("node:fs");
 const [src, dst] = process.argv.slice(1);
 const d: any = Bun.YAML.parse(fs.readFileSync(src, "utf8"));
-d.nodes = d.nodes.filter((n: any) => n.id !== "result");
+d.nodes = d.nodes.filter((n: any) => n.id !== "end");
 delete d.returns;
 delete d.outcome_field;
 fs.writeFileSync(dst, Bun.YAML.stringify(d));
