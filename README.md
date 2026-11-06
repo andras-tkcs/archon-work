@@ -17,15 +17,17 @@ Nothing is exposed to the public internet except SSH (and you can close that too
 | `bootstrap.sh` | Installer **and** updater, run as root. Baseline: a fresh Ubuntu 24.04 machine. Re-run it any time. |
 | `slack-app-manifest.yml` | Paste into Slack to create the Archon app in one step. |
 | `tailscale-policy.hujson` | Tailnet policy: who reaches the runners, Tailscale SSH rules (uses `tag:runner`). |
-| `packs/devflow/` | The devflow workflow pack for Archon (plan → implement → review → PR, with `devflow-plan` publishing a parallel implementation workflow and `devflow-refine` revising it before implementation, for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
+| `packs/devflow/` | The devflow workflow pack for Archon (refine → plan → build: `devflow-refine` writes an issue's design, `devflow-plan` publishes its plan and a parallel build workflow, the build implements, reviews and opens one PR; for any repo with a devflow profile). The bootstrap installs it; see its [README](packs/devflow/README.md). |
 | `scripts/test-devflow-pack.sh` | Validates the pack and replays its fixtures (needs `archon`). |
 | `scripts/test-render-run.sh` | Tests the devflow pack's plan workflow renderer, its plan test scripts and its git scripts (needs `archon` and `bun`). |
+| `scripts/test-devflow-validators.sh` | Tests the devflow pack's profile and manifest validators (needs `python3` with PyYAML). |
+| `scripts/test-devflow-shared.sh` | Tests the devflow pack's shared scripts against scratch repositories and a stub `gh` (needs `bun`, and `archon` for part 7). |
 | `scripts/test-ide-link-patch.sh` | Tests the bootstrap's patch that points Archon's **Open in IDE** button at code-server. |
 | `scripts/test-archon-repo-switch.sh` | Tests the bootstrap's helpers that detect and replace plugins left by another Archon repo when `ARCHON_REPO` changes. |
 | `admin/` | The sealed admin user's GitHub baseline tool (`gh-baseline`) and the example policy; the bootstrap downloads them, hash-checked. |
 | `scripts/test-admin-tools.sh` | Tests the admin tool and checks that the hashes in `bootstrap.sh` match `admin/`. |
 | `.github/CODEOWNERS` | Code owners: the admin account reviews admin code, the bootstrap and CI workflows. |
-| `.claude/toolkit.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh` and `scripts/test-render-run.sh`. |
+| `.devflow/devflow.yaml` | This repo's devflow profile, so the devflow workflows can run on it. Its definition of done is `scripts/test-devflow-pack.sh`, `scripts/test-render-run.sh`, `scripts/test-devflow-validators.sh` and `scripts/test-devflow-shared.sh`. |
 
 ---
 
@@ -84,7 +86,7 @@ curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/<tag>/bootstrap.sh \
 ```
 
 It installs base tools, GitHub CLI, Tailscale (with Tailscale SSH), Claude Code, Archon and
-code-server (VS Code in the browser), the devflow toolkit plugins for Claude Code, bun and
+code-server (VS Code in the browser), bun and
 Node.js, and the devflow workflow pack for Archon, turns on unattended upgrades, creates an
 `agent` user (no sudo) and a sealed `ghadmin` user for the admin GitHub login, registers `archon.service` and `code-server@agent.service`, sets up
 the firewall and Tailscale Serve. The Archon service is
@@ -195,9 +197,9 @@ here.
   (🔄 → ✅/❌, a live status message, buttons for approval gates). Runs started from the web
   UI or the CLI don't post to Slack, so start the runs you want to be pinged about from
   Slack (`/archon …` or `/archon-workflow run …`).
-- **devflow:** in a repository with a devflow profile (`.claude/toolkit.yaml`), run
-  `tkcs-lab/devflow:devflow-plan` (or `-refine`, `-quick`, `-docs`, `-audit`, `-config`, `-deps`) with the
-  issue or the change; see [packs/devflow](packs/devflow/README.md). `-config` reviews settings and fixes files by PR;
+- **devflow:** in a repository with a devflow profile (`.devflow/devflow.yaml`), run
+  `tkcs-lab/devflow:devflow-refine` with the issue, then `devflow-plan` (or `-quick`, `-docs`, `-audit`, `-config`, `-deps`
+  with the change); see [packs/devflow](packs/devflow/README.md). `-config` reviews settings and fixes files by PR;
   settings changes are for the admin user's `gh-baseline` (see §3 Admin GitHub identity).
 - **Watching the code change (git diff):** Archon's UI has no diff view, so the VM also
   runs code-server at `https://<TS_HOSTNAME>.<tailnet>.ts.net:8443` (works in iPad Safari).
@@ -245,8 +247,7 @@ Re-running `bootstrap.sh` is the upgrade path. Each run:
   the one it came from**. In that case it stops the service (running workflows are
   interrupted), replaces the binary, re-adds the Claude provider (required after every Archon
   update), replaces plugins left by another repo, and starts it again,
-- updates the devflow toolkit plugins (unless they are synced from claude.ai, which manages them),
-  bun, and the devflow pack (`archon plugin update`; a running workflow keeps the revision it
+- updates bun, and the devflow pack (`archon plugin update`; a running workflow keeps the revision it
   started with). Node.js is installed once and not upgraded, so a new major can't break a
   project's checks,
 - reinstalls code-server from its latest release (restarted only if the version changed),

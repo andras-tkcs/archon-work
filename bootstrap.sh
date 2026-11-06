@@ -208,30 +208,6 @@ elif [[ "$UPGRADE" == 1 ]]; then
 fi
 as_agent "claude --version" >/dev/null || die "claude not runnable after install"
 
-# ---------------------------------------------------------------- 5b. devflow pack prerequisites
-# The devflow pack's preflight needs the devflow toolkit as a Claude Code plugin of the agent user.
-# Plugins synced from claude.ai are managed there; otherwise they come from the GitHub marketplace.
-log "devflow toolkit (Claude Code plugins)"
-TOOLKIT_PLUGINS=(devflow stack-python stack-go stack-swift stack-ipados)
-plugin_ids="$(as_agent "claude plugin list --json" 2>/dev/null | jq -r '.[].id' || true)"
-if grep -qx 'devflow@synced' <<<"$plugin_ids"; then
-  echo "devflow is synced from claude.ai"
-else
-  as_agent "claude plugin marketplace add andras-tkcs/claude-toolkit" >/dev/null \
-    || warn "could not add the claude-toolkit marketplace"
-  if [[ "$UPGRADE" == 1 ]]; then
-    as_agent "claude plugin marketplace update claude-toolkit" >/dev/null \
-      || warn "could not update the claude-toolkit marketplace"
-  fi
-  for p in "${TOOLKIT_PLUGINS[@]}"; do
-    if ! grep -qx "$p@claude-toolkit" <<<"$plugin_ids"; then
-      as_agent "claude plugin install $p@claude-toolkit --scope user" || warn "could not install the $p plugin"
-    elif [[ "$UPGRADE" == 1 ]]; then
-      as_agent "claude plugin update $p@claude-toolkit" >/dev/null || warn "could not update the $p plugin"
-    fi
-  done
-fi
-
 # Archon script nodes run on bun; Node.js/npm is what JavaScript projects' setup hooks and checks call.
 log "bun and Node.js for $AGENT_USER"
 if ! as_agent "command -v bun" >/dev/null; then

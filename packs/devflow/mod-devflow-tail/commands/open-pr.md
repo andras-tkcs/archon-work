@@ -1,4 +1,4 @@
-Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `devflow_root`, `branch`
+Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `shared_dir`, `branch`
 (`<branch>`), `slug`, `title`. The resolved profile is `$ARTIFACTS_DIR/profile.json`. The work order is
 `$ARTIFACTS_DIR/plan.md` when it exists (with phases and a manifest), otherwise `$ARTIFACTS_DIR/work.md`
 (an outcome and acceptance, no phases); `<work order>` below means whichever exists. When the work order

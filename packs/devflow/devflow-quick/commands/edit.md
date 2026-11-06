@@ -3,8 +3,7 @@ in files.
 
 - Work order: `$ARTIFACTS_DIR/work.md`. Read it in full: it is the whole scope.
 - Resolved profile: `$ARTIFACTS_DIR/profile.json`; follow its `docs.must_read`, its `project_steward`
-  file and the `pr-steward` skill (`devflow:pr-steward`, or `skills/pr-steward/SKILL.md` under
-  the devflow root in `$ARTIFACTS_DIR/context.json`).
+  file and `$ARTIFACTS_DIR/knowledge/pr-steward.md`.
 - Branch: `$prepare-branch.output.branch` (`git branch --show-current` must match, else stop as blocked).
 - Start project commands with `. "$ARTIFACTS_DIR/project-env.sh";`.
 

@@ -23,15 +23,13 @@ The previous step's result, empty on the first step:
 3. **Find the next phase.** A phase is done when `git log --grep "Plan-Phase: <slug>/<phase id>"`
    finds a commit on this branch. The next phase is the first not-done phase, in manifest order,
    whose `depends_on` are all done. If every phase is done, return `complete` (step 7).
-4. **Implement it** the way the devflow `/implement` child brief says (the full text is section 3
-   of `$preflight.output.devflow_root/commands/implement.md`):
+4. **Implement it:**
    - Stay inside the phase's `brief` and `touches`. Work that belongs to another phase goes into
      your summary, not into the code. If the brief is wrong, impossible, or leaves a decision open
      that the plan's Design section does not settle, stop as blocked instead of improvising.
      Never do anything listed under `manual_before` or `manual_after`.
-   - Follow the profile's must-read docs, the `project_steward` file, and the `pr-steward` skill
-     (`devflow:pr-steward`, or `$preflight.output.devflow_root/skills/pr-steward/SKILL.md`), and the
-     stack skills. A user-visible change gets its line under the changelog section the profile
+   - Follow the profile's must-read docs, the `project_steward` file, and `$ARTIFACTS_DIR/knowledge/pr-steward.md`, and the
+     `$ARTIFACTS_DIR/knowledge/stack-*.md` files. A user-visible change gets its line under the changelog section the profile
      names (`docs.changelog.section`), when it names one; never add a version heading.
    - Tests first where the brief names them; never skip, weaken, delete or mark expected-failure a
      test.

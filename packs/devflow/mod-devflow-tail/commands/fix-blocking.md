@@ -1,4 +1,4 @@
-Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `devflow_root`, `branch`
+Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `shared_dir`, `branch`
 (`<branch>`), `slug`, `title`. The resolved profile is `$ARTIFACTS_DIR/profile.json`. The work order is
 `$ARTIFACTS_DIR/plan.md` when it exists (with phases and a manifest), otherwise `$ARTIFACTS_DIR/work.md`
 (an outcome and acceptance, no phases); `<work order>` below means whichever exists. When the work order
@@ -10,7 +10,7 @@ You fix the **blocking** findings of a code review (Sonnet), and nothing else.
 - Review report: `$ARTIFACTS_DIR/review.md`. Its blocking findings are your whole scope; leave
   the non-blocking ones alone (a later step handles them).
 - Work order: <work order>. Follow its
-  must-read docs, its `project_steward` file and the `pr-steward` skill.
+  must-read docs, its `project_steward` file and `$ARTIFACTS_DIR/knowledge/pr-steward.md`.
 - You are on branch `<branch>`. Start project commands with
   `. "$ARTIFACTS_DIR/project-env.sh";`.
 

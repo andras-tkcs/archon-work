@@ -1,4 +1,4 @@
-Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `devflow_root`, `branch`
+Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `shared_dir`, `branch`
 (`<branch>`), `slug`, `title`. The resolved profile is `$ARTIFACTS_DIR/profile.json`. The work order is
 `$ARTIFACTS_DIR/plan.md` when it exists (with phases and a manifest), otherwise `$ARTIFACTS_DIR/work.md`
 (an outcome and acceptance, no phases); `<work order>` below means whichever exists. When the work order
@@ -14,8 +14,7 @@ Read:
 - The work order: <work order> (a plan: Design, each phase's `acceptance`, `final_checks`; or a work.md: its Outcome and Acceptance, with no phases).
 - The resolved profile `$ARTIFACTS_DIR/profile.json`, every doc in its `docs.must_read`, and its
   `project_steward` file.
-- The `review-checklist` and `secure-code-review` skills (`devflow:` prefixed in your skill list,
-  or `<devflow_root>/skills/<name>/SKILL.md`). Apply both.
+- `$ARTIFACTS_DIR/knowledge/review-checklist.md` and `$ARTIFACTS_DIR/knowledge/secure-code-review.md`. Apply both.
 - The change, against the main branch `<main>` (call it `<main>`):
   `git fetch origin <main>`, then `git diff origin/<main>...HEAD`, and `git log` for the commits.
 
@@ -26,7 +25,7 @@ disputed. First confirm each earlier blocking finding is fixed, or validly answe
 commit; then review the diff since the head it names, and finally the whole change once more for
 seams.
 
-When the diff changes documentation or the website, also load the `docs-review` skill and apply it to those files. Check what `/implement`'s final review checks: behaviour that differs from the Design, a design
+When the diff changes documentation or the website, also read `$ARTIFACTS_DIR/knowledge/docs-review.md` and apply it to those files. Also check: behaviour that differs from the Design, a design
 decision a worker made that the plan did not, seams between phases, a missing test for an
 acceptance item, a weakened or skipped test, a security or privacy regression, docs that describe
 something other than the code, every `final_checks` item. Also check, against the actual diff:
@@ -40,7 +39,7 @@ something other than the code, every `final_checks` item. Also check, against th
 Run the profile's `verify.fast` commands yourself (start them with
 `. "$ARTIFACTS_DIR/project-env.sh";`).
 
-Severity follows the `review-checklist` skill: **blocking** is anything you would refuse to merge;
+Severity follows `review-checklist.md`: **blocking** is anything you would refuse to merge;
 style, naming, small simplifications and follow-ups are **non-blocking**. Evidence bar: every
 finding cites `path:line` and says what is wrong and what the fix is. Drop anything that rests on
 "might".
