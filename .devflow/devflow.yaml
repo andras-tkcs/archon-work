@@ -1,0 +1,38 @@
+# devflow profile for this repository: read by the devflow workflows (packs/devflow).
+# Schema: packs/devflow/.shared/profile.schema.json.
+version: 1
+
+project:
+  name: archon-work
+
+docs:
+  must_read:
+    - README.md
+    - packs/devflow/README.md
+
+git:
+  main_branch: main
+  branch_pattern: <type>/<kebab-case>
+  branch_types: [feat, fix, docs, chore]
+  merge_style: merge-commit
+
+verify:
+  fast:
+    - bash -n bootstrap.sh
+    - bash -n scripts/test-devflow-pack.sh
+    - bash -n scripts/test-ide-link-patch.sh
+    - bash -n scripts/test-render-run.sh
+    - bash -n scripts/test-devflow-validators.sh
+    - bash -n scripts/test-devflow-shared.sh
+    - bash -n scripts/test-archon-repo-switch.sh
+    - bash -n scripts/test-admin-tools.sh
+    - scripts/test-ide-link-patch.sh
+    - scripts/test-archon-repo-switch.sh
+    - scripts/test-admin-tools.sh
+  dod:
+    - scripts/test-devflow-pack.sh
+    - scripts/test-render-run.sh
+    - scripts/test-devflow-validators.sh
+    - scripts/test-devflow-shared.sh
+
+stacks: []

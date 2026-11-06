@@ -1,0 +1,10 @@
+version: 1
+git:
+  main_branch: main
+  branch_pattern: <type>/<kebab-case>
+verify:
+  fast:
+  - make lint
+  dod:
+  - make test
+stacks: []

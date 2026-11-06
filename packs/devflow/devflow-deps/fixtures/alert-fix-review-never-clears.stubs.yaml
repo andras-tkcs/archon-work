@@ -4,7 +4,7 @@ fixture:
   fail-node: tail__review-gate
 exec-code: true
 preflight:
-  devflow_root: /stub/devflow
+  shared_dir: /stub/devflow
   main_branch: main
   branch_regex: ^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$
 setup: '{}'

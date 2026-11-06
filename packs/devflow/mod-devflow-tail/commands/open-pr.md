@@ -1,4 +1,4 @@
-Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `devflow_root`, `branch`
+Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `shared_dir`, `branch`
 (`<branch>`), `slug`, `title`. The resolved profile is `$ARTIFACTS_DIR/profile.json`. The work order is
 `$ARTIFACTS_DIR/plan.md` when it exists (with phases and a manifest), otherwise `$ARTIFACTS_DIR/work.md`
 (an outcome and acceptance, no phases); `<work order>` below means whichever exists. When the work order
@@ -22,6 +22,10 @@ Build it from the run's files, never from memory:
 
 - **What this changes**: the plan's Goal, and the issue it closes (`Closes #<n>`) if the work
   named one. Read <work order>.
+- **Traceability** (only when `context.json` has a non-empty `issue`): the line
+  `Closes #<issue>`, and a "Traceability" section that links the design (`design_url`, revision
+  `design_revision`) and the plan (`plan_url`, revision `plan_revision`) on the plans branch, all
+  read from `context.json`, and names this run (`$WORKFLOW_ID`). Without an issue, leave out both.
 - **Phases**: each phase with its commit (`git log --grep "Plan-Phase:"`), and the combined
   acceptance checklist.
 - **Definition of done**: from `$ARTIFACTS_DIR/verify-dod.md`. A row marked `UNAVAILABLE` was not

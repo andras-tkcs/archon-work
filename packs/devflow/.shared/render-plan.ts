@@ -1,21 +1,26 @@
-// Renders the devflow-run-<slug> workflow from the final plan and validates it with `archon validate`.
+// Renders the build-issue-<n> workflow from the drafted plan and validates it with `archon validate`.
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { repoSlug } from "./gh.ts";
+import { slugOf, workflowName } from "./layout.ts";
 import { extractManifest, renderRunWorkflow, waves } from "./render-run.ts";
-import { artifactsDir, fail, input, must, run, tail } from "./util.ts";
+import { artifactsDir, fail, input, must, plansConfig, run, tail } from "./util.ts";
 
 const art = artifactsDir();
-const slug = input("slug");
+const issue = Number(input("issue"));
 const branch = input("branch");
+const existingBranch = input("existing_branch", false);
 const title = input("title");
+const designRevision = Number(input("design_revision"));
+// The published plan is revision plan_revision_base (0 when there is none); this run writes the next one.
+const planRevision = Number(input("plan_revision_base")) + 1;
 const mainBranch = input("main_branch");
 const branchRegex = input("branch_regex");
-const plansRef = input("plans_ref");
-const plansDir = input("plans_dir");
+const plans = plansConfig();
 
-// With soft_errors=true (devflow-plan's fix loop) a plan error is output, not a node failure:
-// finalize can fix it, so the loop must see it.
+// With soft_errors=true (the plan block's fix loop) a plan error is output, not a node failure:
+// draft-plan can fix it, so the loop must see it.
 const soft = input("soft_errors", false) === "true";
 function planError(msg: string): never {
   if (!soft) fail(msg);
@@ -24,16 +29,17 @@ function planError(msg: string): never {
 }
 
 const planFile = join(art, "plan.md");
-if (!existsSync(planFile)) planError(`${planFile} does not exist: finalize did not write the plan`);
+if (!existsSync(planFile)) planError(`${planFile} does not exist: draft-plan did not write the plan`);
 let manifest;
 try {
   manifest = extractManifest(readFileSync(planFile, "utf8"));
 } catch (e) {
   planError((e as Error).message);
 }
-if (manifest.plan_slug !== slug) planError(`the manifest's plan_slug '${manifest.plan_slug}' differs from the slug '${slug}'`);
+if (manifest.plan_slug !== slugOf(issue)) planError(`the manifest's plan_slug '${manifest.plan_slug}' must be '${slugOf(issue)}'`);
 if (manifest.feature_branch !== branch) planError(`the manifest's feature_branch '${manifest.feature_branch}' differs from the branch '${branch}'`);
 if (!new RegExp(branchRegex).test(branch)) planError(`the branch '${branch}' does not match ${branchRegex}`);
+if (existingBranch && branch !== existingBranch) planError(`the branch '${branch}' differs from the published plan's '${existingBranch}': a re-plan keeps the branch`);
 
 // The installed catalog, read once: for the building-block check.
 const list = run(["archon", "workflow", "list", "--json"]);
@@ -68,7 +74,7 @@ if (!pack) {
   }
   pack = m[1];
 }
-const missing = ["mod-devflow-phase", "mod-devflow-deliver"].map((n) => `${pack}:${n}`).filter((n) => !names.includes(n));
+const missing = ["mod-devflow-phase", "mod-devflow-deliver", "mod-devflow-trace"].map((n) => `${pack}:${n}`).filter((n) => !names.includes(n));
 if (missing.length) {
   fail(
     `the installed pack ${pack} has no ${missing.join(" and ")} in \`archon workflow list\`; update the pack (bootstrap.sh, or archon plugin update <its plugin id>) or start the workflow with --input pack=<owner>/devflow`,
@@ -76,19 +82,27 @@ if (missing.length) {
 }
 
 const read = (f: string) => (existsSync(join(art, f)) ? readFileSync(join(art, f), "utf8") : null);
-const name = `devflow-run-${slug}`;
+const name = workflowName(issue);
+let repo: string;
+try {
+  repo = repoSlug();
+} catch (e) {
+  fail((e as Error).message);
+}
 let yaml: string;
 try {
   yaml = renderRunWorkflow({
     manifest,
-    slug,
-    branch,
+    issue,
+    designRevision,
+    planRevision,
+    repo,
     title,
     mainBranch,
     pack,
-    plansRef,
-    plansDir,
-    prerequisites: read("prerequisites.md"),
+    plansRef: plans.ref,
+    plansDir: plans.dir,
+    before: read("before.md"),
     after: read("after.md"),
     sourceRun: process.env.WORKFLOW_ID ?? "",
   });

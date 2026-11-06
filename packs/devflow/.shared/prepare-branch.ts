@@ -55,6 +55,6 @@ if (out.proceed) {
 // The shared tail and its commands read the run's facts from here.
 writeFileSync(
   join(artifactsDir(), "context.json"),
-  JSON.stringify({ ...out, main_branch: mainBranch, devflow_root: input("devflow_root") }, null, 2),
+  JSON.stringify({ ...out, main_branch: mainBranch, shared_dir: input("shared_dir") }, null, 2),
 );
 console.log(JSON.stringify(out));

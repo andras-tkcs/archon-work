@@ -8,13 +8,13 @@
 // implementation step relies on.
 import { appendFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { artifactsDir, fail, input, profile, projectEnv, run, tail } from "./util.ts";
+import { PROFILE_PATH, artifactsDir, fail, input, profile, projectEnv, run, tail } from "./util.ts";
 
 const mode = input("mode");
 if (mode !== "fast" && mode !== "dod") fail(`mode must be fast or dod, got '${mode}'`);
 
 const entries: Array<string | { run: string; cwd?: string }> = profile().verify?.[mode] ?? [];
-if (entries.length === 0) fail(`.claude/toolkit.yaml has no verify.${mode} commands`);
+if (entries.length === 0) fail(`${PROFILE_PATH} has no verify.${mode} commands`);
 
 const env = projectEnv();
 const report = join(artifactsDir(), `verify-${mode}.md`);

@@ -3,14 +3,14 @@ description: |
   A cybersecurity audit taken through to fixes: audit, review the findings, make a plan,
   implement (then the shared review, definition of done, PR and watch of mod-devflow-audit-fix).
 
-  1. An Opus auditor applies the toolkit's secure-code-review checklist to the repository (or the
+  1. An Opus auditor applies the pack's secure-code-review checklist to the repository (or the
      scope you name): trust boundaries, secrets in the tree and in history, injection, authorization,
      CI permissions and action pins, supply chain, and the repo's own static analysis and dependency audits.
   2. A fresh Opus reviewer tries to disprove every finding against the code, the ADRs and
      the security policy's scope, drops what does not hold, and decides: fix, not doing (with the reason),
      or a decision only the maintainer can make. Only that last group pauses the run, as one
      question.
-  3. The fixes go through mod-devflow-audit-fix (a confidential one-run plan and implementation): make-plan, implement, review, fix, definition of done, PR.
+  3. The fixes go through mod-devflow-audit-fix (a confidential one-run plan and implementation): plan, implement, review, fix, definition of done, PR.
 
   Confidential by construction: vulnerabilities are not discussed in public, so the findings
   live in the run's artifacts only. No issue is filed, and the PR names the class of fix,
@@ -35,10 +35,10 @@ nodes:
     output_format:
       type: object
       properties:
-        devflow_root: { type: string }
+        shared_dir: { type: string }
         main_branch: { type: string }
         branch_regex: { type: string }
-      required: [devflow_root, main_branch, branch_regex]
+      required: [shared_dir, main_branch, branch_regex]
 
   - id: setup
     depends_on: [preflight]

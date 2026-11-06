@@ -1,0 +1,49 @@
+plan_slug: demo
+feature_branch: feat/demo
+max_parallel: 2
+manual_before:
+- id: mb1-account
+  title: Create an account
+  why: p1 needs it
+  done_when: the key exists
+manual_after:
+- id: ma1-check
+  title: Click through
+  why: CI cannot
+manual_steps_artifact: https://example.invalid/manual-steps
+manual_steps_source: docs/demo-plan-manual-steps.html
+verify_after_merge:
+- make test
+final_checks:
+- the plan is deleted
+phases:
+- id: p1-core
+  title: Core
+  depends_on: []
+  complexity: S
+  touches:
+  - src/core.py
+  - tests/test_core.py
+  brief: do it
+  acceptance:
+  - make test passes
+- id: p2-api
+  title: API
+  depends_on:
+  - p1-core
+  complexity: M
+  touches:
+  - src/core.py
+  - src/api.py
+  brief: do it
+  acceptance:
+  - make test passes
+- id: p3-docs
+  title: Docs
+  depends_on:
+  - p1-core
+  touches:
+  - docs/*.md
+  brief: do it
+  acceptance:
+  - a grep matches

@@ -1,4 +1,4 @@
-Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `devflow_root`, `branch`
+Run facts are in `$ARTIFACTS_DIR/context.json`: `main_branch` (written `<main>` below), `shared_dir`, `branch`
 (`<branch>`), `slug`, `title`. The resolved profile is `$ARTIFACTS_DIR/profile.json`. The work order is
 `$ARTIFACTS_DIR/plan.md` when it exists (with phases and a manifest), otherwise `$ARTIFACTS_DIR/work.md`
 (an outcome and acceptance, no phases); `<work order>` below means whichever exists. When the work order
@@ -14,8 +14,7 @@ open review threads, comments from others, mergeability). Your earlier passes, i
 `$ARTIFACTS_DIR/steward-log.md`. The plan: <work order>; the resolved profile:
 `$ARTIFACTS_DIR/profile.json`.
 
-Read the `pr-steward` skill (`devflow:pr-steward`, or
-`<devflow_root>/skills/pr-steward/SKILL.md`) and the profile's `project_steward`
+Read `$ARTIFACTS_DIR/knowledge/pr-steward.md` and the profile's `project_steward`
 file first. They are the policy; where the project's file is more specific, it wins.
 
 Start in sync: `git fetch origin` and `git merge --ff-only origin/<the PR branch>` (someone may have
@@ -31,7 +30,7 @@ pushed). Start project commands with `. "$ARTIFACTS_DIR/project-env.sh";`.
   did not cause (it is red on `<main>` too, or it is infrastructure) gets a PR comment with the
   evidence, not a code change. Never re-run a check to make it go away, never push an empty
   commit, never close and reopen the PR, never skip or weaken a test or lower a threshold. Work
-  this host cannot do is dispatched from the profile's `ci.dispatchable` per the skill, never a
+  this host cannot do is dispatched from the profile's `ci.dispatchable` per `pr-steward.md`, never a
   release or a deploy for real.
 - **Review thread or comment.** Judge it on its merits. Valid: fix it, reply in the thread with the
   commit SHA, and resolve the thread (`gh api graphql` `resolveReviewThread`). Wrong or out of

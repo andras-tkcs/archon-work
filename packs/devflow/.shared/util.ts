@@ -1,6 +1,11 @@
 // Shared helpers for the devflow pack's scripts. Diagnostics go to stderr; stdout is the node's JSON.
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+
+// True when the process runs this module as a node script: directly, or through a workflow's
+// scripts/<same name>.ts wrapper, which imports it (so import.meta.main is false there). False when a
+// test imports it. Pass the module's own import.meta.
+export const isEntry = (meta: ImportMeta) => basename(Bun.main) === basename(meta.path);
 
 export interface Run {
   code: number;
@@ -47,15 +52,36 @@ export function input(name: string, required = true): string {
   return v;
 }
 
+// An optional JSON input: null when empty (its producer did not run); fails the node when malformed.
+export function jsonInput(name: string): any {
+  const raw = input(name, false).trim();
+  if (raw === "") return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fail(`input '${name}' is not JSON: ${raw.slice(0, 200)}`);
+  }
+}
+
 // The project environment setup-env wrote; `bash` loads BASH_ENV before every project command.
 export function projectEnv(): Record<string, string> {
   const file = join(artifactsDir(), "project-env.sh");
   return existsSync(file) ? { BASH_ENV: file } : {};
 }
 
-// The raw profile; preflight has already validated it with the toolkit's own validator.
+export const PROFILE_PATH = ".devflow/devflow.yaml";
+
+// The raw profile; preflight has already validated it with validate-profile.py.
 export function profile(): any {
-  const path = ".claude/toolkit.yaml";
-  if (!existsSync(path)) fail(`${path} not found: this workflow runs only in a repo with a devflow profile`);
-  return Bun.YAML.parse(readFileSync(path, "utf8"));
+  if (!existsSync(PROFILE_PATH)) fail(`${PROFILE_PATH} not found: see the README section "Profile"`);
+  return Bun.YAML.parse(readFileSync(PROFILE_PATH, "utf8"));
+}
+
+// Where this project's plans branch is: the run's input, else the profile's `plans`, else `plans`.
+export function plansConfig(): { ref: string; dir: string } {
+  const p = existsSync(PROFILE_PATH) ? (profile().plans ?? {}) : {};
+  return {
+    ref: input("plans_ref", false) || p.ref || "plans",
+    dir: input("plans_dir", false) || p.dir || "plans",
+  };
 }

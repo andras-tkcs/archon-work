@@ -1,45 +1,60 @@
-# RED: the manifest validator rejects the plan in the first round; the dry run runs plan-loop once, so plan-result finds no tested.json and the run fails.
+# RED: the manifest validator rejects the plan in the first round; the dry run runs plan-loop once, so plan-result
+# finds no tested.json and the run fails.
 exec-code: true
 fixture:
   expect: failed
-  fail-node: plan-result
-preflight:
-  devflow_root: /stub/devflow
+  fail-node: stage__plan-result
+stage__preflight:
+  shared_dir: /stub/devflow
   main_branch: main
-  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
-setup: '{"hooks":[],"env_file":"project-env.sh"}'
-ask:
-  text: "x"
-draft:
-  status: done
-  questions: []
-  why_no_more: all settled
-challenge:
-  questions: []
-  reason: none
-next:
-  done: true
-  stop: false
-  incomplete: false
-  question: ""
-finalize:
-  scope: large
-  slug: x
-  branch: feat/x
-  title: X
-  prerequisites: true
-  after: false
+  branch_regex: "^(feat|fix|docs|chore)/[a-z0-9]+(-[a-z0-9]+)*$"
+stage__setup: '{"hooks":[],"env_file":"project-env.sh"}'
+stage__resolve:
+  issue: 7
+  slug: issue-7
+  folder: plans/plans/issue-7
+  title: Export reports as CSV
+  body: Reports can only be viewed in the browser.
+  comments: ""
+  url: https://github.com/o/r/issues/7
+  state: open
+  design_revision: 1
+  plan_revision: 0
+  design_present: true
+  plan_present: false
+  existing_branch: ""
+  plans_commit: 0123456789abcdef0123456789abcdef01234567
+  change: ""
+  started: false
+  refusal: ""
+stage__load-design:
+  design_revision: 1
+  refusal: ""
+draft-plan:
+  scope: small
+  title: Export reports as CSV
+  branch: feat/issue-7-csv-export
+  before: false
+  after: true
+  needs_refine_present: false
+  needs_refine_question: ""
+  needs_refine_why: ""
 render:
   ok: true
   error: ""
-  workflow: devflow-run-x
-  file: /stub/x.yaml
-  waves: 2
+  workflow: build-issue-7
+  file: /stub/art/build-issue-7.yaml
+  waves: 3
 plan-test:
   ok: false
   findings:
-    - {id: T1, source: validate_manifest, kind: mechanical, phase: "", problem: stub, fix: stub}
-publish:
-  commit: abc
-  workflow: devflow-run-x
-  message: ok
+    - id: T1
+      source: validate_manifest
+      kind: mechanical
+      phase: ""
+      problem: "manifest: phase 'p1-export' is missing 'brief'"
+      fix: Fix every error validate-manifest.py prints.
+plan-review:
+  clean: true
+  summary: every phase checked
+  findings: []

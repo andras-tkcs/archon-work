@@ -3,7 +3,7 @@
 ## Implementation manifest
 
 ```yaml
-plan_slug: bad-model
+plan_slug: issue-5
 feature_branch: feat/bad-model
 review_model: medium
 review_model_reason: two phases

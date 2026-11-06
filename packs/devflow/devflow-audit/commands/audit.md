@@ -5,11 +5,8 @@ Scope: `$INPUTS.scope`. If that is empty, the whole repository at
 `origin/$preflight.output.main_branch` (`git fetch origin $preflight.output.main_branch` first;
 `git log -1 origin/$preflight.output.main_branch` is the commit you pin: every `path:line` refers to it).
 
-Method, from the devflow toolkit's `/review` command (security dimension only; tests and docs are
-not your job here): load the `secure-code-review` skill (`devflow:secure-code-review`, otherwise
-`skills/secure-code-review/SKILL.md` under the devflow root, found with
-`ls -d ~/.claude/plugins/synced/*/devflow ~/.claude/plugins/cache/*/devflow/*`) and the stack skill
-for the profile's `stacks`. Read `$ARTIFACTS_DIR/profile.json`, every doc in its `docs.must_read`,
+Method (security dimension only; tests and docs are not your job here): read
+`$ARTIFACTS_DIR/knowledge/secure-code-review.md` and the `$ARTIFACTS_DIR/knowledge/stack-*.md` files (one per profile stack). Read `$ARTIFACTS_DIR/profile.json`, every doc in its `docs.must_read`,
 the security policy (`SECURITY.md` or `.github/SECURITY.md`) when the repo has one, every ADR whose
 title touches security, trust, auth, secrets or the project's own security controls, and any
 threat-model material in the docs. What an ADR decided, or what the security policy puts out of
@@ -26,10 +23,10 @@ scope, is not a finding.
    - A dependency audit with a tool the project environment or host already has, against every
      lockfile in the tree. If none is available, check versions against advisories only where
      you can cite the advisory; otherwise write "not audited" for that manifest.
-   - Secrets in history: search `git log -p --all` for the patterns in the skill.
+   - Secrets in history: search `git log -p --all` for the patterns in `secure-code-review.md`.
    - `.github/workflows/`: token permissions, `pull_request_target`, untrusted input in `run:`,
      actions pinned to a SHA, secrets reaching fork-triggered jobs.
-3. **Audit the code** against the skill's checklist, trust boundary by trust boundary, reading the
+3. **Audit the code** against `secure-code-review.md`'s checklist, trust boundary by trust boundary, reading the
    code that matters yourself (use `Explore` subagents for broad sweeps only). For each candidate,
    trace the path from the untrusted input to the sink, and write the path down.
 

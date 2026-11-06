@@ -1,7 +1,7 @@
 name: devflow-docs
 description: |
   Review the documentation and the website, then fix what the review found, through to a merged
-  pull request. An Opus reviewer applies the toolkit's docs-review checklist (accuracy against
+  pull request. An Opus reviewer applies the pack's docs-review checklist (accuracy against
   the code, validity of commands and links, completeness, consistency, clarity, staleness, and the
   website's build and basics) and writes the fixes down; a Sonnet session makes them with
   verify.fast and a website build; then the shared delivery tail (Opus review with fix rounds,
@@ -27,10 +27,10 @@ nodes:
     output_format:
       type: object
       properties:
-        devflow_root: { type: string }
+        shared_dir: { type: string }
         main_branch: { type: string }
         branch_regex: { type: string }
-      required: [devflow_root, main_branch, branch_regex]
+      required: [shared_dir, main_branch, branch_regex]
 
   - id: setup
     depends_on: [preflight]
@@ -66,7 +66,7 @@ nodes:
       plan: "$review-docs.output"
       branch_regex: "$preflight.output.branch_regex"
       main_branch: "$preflight.output.main_branch"
-      devflow_root: "$preflight.output.devflow_root"
+      shared_dir: "$preflight.output.shared_dir"
     output_format:
       type: object
       properties:

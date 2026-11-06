@@ -6,11 +6,11 @@ description: |
   non-blocking findings, the definition of done, one PR, a watch until a person merges).
 
   It refuses what is not small (a design decision, more than a handful of files, an ADR-worthy
-  or trust-boundary change, a new outside integration, a dependency bump) and says to use devflow-plan.
+  or trust-boundary change, a new outside integration, a dependency bump) and says to use devflow-refine.
   Never merges.
 
   Use when: a typo, a wording change, a one-file bug fix, a config tweak, a test for existing code.
-  NOT for: anything that needs a plan (devflow-plan), docs and website review (devflow-docs).
+  NOT for: anything that needs a design and a plan (devflow-refine, then devflow-plan), docs and website review (devflow-docs).
 model: large
 worktree:
   enabled: true
@@ -28,10 +28,10 @@ nodes:
     output_format:
       type: object
       properties:
-        devflow_root: { type: string }
+        shared_dir: { type: string }
         main_branch: { type: string }
         branch_regex: { type: string }
-      required: [devflow_root, main_branch, branch_regex]
+      required: [shared_dir, main_branch, branch_regex]
 
   - id: setup
     depends_on: [preflight]
@@ -56,7 +56,7 @@ nodes:
   - id: refuse
     depends_on: [scope]
     when: "$scope.output.fits == false"
-    cancel: "Not a small edit, so no edit was made: $scope.output.reason. Use devflow-plan for this."
+    cancel: "Not a small edit, so no edit was made: $scope.output.reason. Use devflow-refine for this."
 
   - id: prepare-branch
     depends_on: [scope]
@@ -67,7 +67,7 @@ nodes:
       plan: "$scope.output"
       branch_regex: "$preflight.output.branch_regex"
       main_branch: "$preflight.output.main_branch"
-      devflow_root: "$preflight.output.devflow_root"
+      shared_dir: "$preflight.output.shared_dir"
     output_format:
       type: object
       properties:

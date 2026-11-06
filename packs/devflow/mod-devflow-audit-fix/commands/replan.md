@@ -8,7 +8,7 @@ $clarify.output.text
 
 Revise `$ARTIFACTS_DIR/plan.md` so every question you asked is settled by the answer, and record
 each decision in the plan's Design section in your own words. Re-run
-`python3 $preflight.output.devflow_root/scripts/validate_manifest.py $ARTIFACTS_DIR/plan.md --profile .claude/toolkit.yaml`
+`python3 $preflight.output.shared_dir/validate-manifest.py $ARTIFACTS_DIR/plan.md --profile .devflow/devflow.yaml`
 and fix every error. Commit nothing and push nothing.
 
 Set `proceed` to false, with the reason in `reason`, when the answer says not to go ahead, leaves

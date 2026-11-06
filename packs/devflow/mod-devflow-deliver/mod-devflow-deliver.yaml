@@ -1,6 +1,6 @@
 name: mod-devflow-deliver
 description: |
-  Internal building block (mod-), started by a devflow-run-<slug> workflow; never start it yourself.
+  Internal building block (mod-), started by a build-issue-<n> workflow; never start it yourself.
 
   Delivers a published plan after its phases are merged: it fixes red fast checks on the
   feature branch, checks the build gate, then runs the shared tail (review, fixes, definition
@@ -30,6 +30,9 @@ inputs:
   head:
     default: ""
     description: The commit the feature branch must be at.
+  issue:
+    default: ""
+    description: The issue the build belongs to, for its devflow comment; empty for plans without an issue.
 returns: tail
 outcome_field: merged
 
@@ -40,10 +43,10 @@ nodes:
     output_format:
       type: object
       properties:
-        devflow_root: { type: string }
+        shared_dir: { type: string }
         main_branch: { type: string }
         branch_regex: { type: string }
-      required: [devflow_root, main_branch, branch_regex]
+      required: [shared_dir, main_branch, branch_regex]
 
   - id: setup
     depends_on: [preflight]
@@ -57,7 +60,7 @@ nodes:
     runtime: bun
     with:
       mode: deliver
-      devflow_root: "$preflight.output.devflow_root"
+      shared_dir: "$preflight.output.shared_dir"
     output_format:
       type: object
       properties:
@@ -112,3 +115,4 @@ nodes:
     depends_on: [gate-build]
     with:
       review_model: "$load-plan.output.review_model"
+      issue: "$INPUTS.issue"

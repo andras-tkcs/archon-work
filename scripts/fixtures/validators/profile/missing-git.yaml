@@ -1,0 +1,9 @@
+version: 1
+docs:
+  must_read: []
+verify:
+  fast:
+  - make lint
+  dod:
+  - make test
+stacks: []

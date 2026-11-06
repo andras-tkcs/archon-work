@@ -1,0 +1,8 @@
+# The stage did not publish (empty outcome): no pause is asked, and answer passes settle's result on.
+exec-code: true
+fixture:
+  expect: completed
+  reached: [settle, answer]
+  inputs:
+    stage: devflow-refine
+    outcome: ""

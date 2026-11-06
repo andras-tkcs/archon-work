@@ -1,6 +1,7 @@
-// Renders the devflow-run-<slug> workflow that runs a published plan's phases (up to 3 at a time, each
+// Renders the build-issue-<n> workflow that runs a published plan's phases (up to 3 at a time, each
 // in its own worktree) and then hands over to mod-devflow-deliver. A pure function plus a small CLI for tests.
 import { readFileSync } from "node:fs";
+import { SLUG_RE, fileOf, slugOf, workflowName } from "./layout.ts";
 
 export interface Phase {
   id: string;
@@ -23,15 +24,17 @@ export interface Manifest {
 
 export interface RenderOpts {
   manifest: Manifest;
-  slug: string;
-  branch: string;
+  issue: number;
+  designRevision: number;
+  planRevision: number;
+  repo: string; // owner/name
   title: string;
   mainBranch: string;
   pack: string;
   plansRef: string;
   plansDir: string;
-  prerequisites: string | null;
-  after: string | null;
+  before: string | null; // before.md, when the plan has one
+  after: string | null; // after.md, when the plan has one
   sourceRun?: string;
 }
 
@@ -80,28 +83,35 @@ const msgSafe = (s: string) => safe(s).replaceAll("'", "’");
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-// Ids and the slug land in bash bodies, so they must be plain kebab-case; the values quoted with '…' must hold no quote.
-function validate(o: RenderOpts): void {
-  if (!KEBAB.test(o.slug)) throw new Error(`invalid slug '${o.slug}': it must match ${KEBAB}`);
+// Ids land in bash bodies, so they must be plain kebab-case; the values quoted with '…' must hold no quote.
+function validate(o: RenderOpts, slug: string, branch: string): void {
+  if (!Number.isInteger(o.issue) || o.issue < 1 || !SLUG_RE.test(slug)) throw new Error(`invalid issue '${o.issue}': it must be a positive integer`);
+  if (o.manifest.plan_slug !== slug) throw new Error(`the manifest's plan_slug '${o.manifest.plan_slug}' must be '${slug}'`);
+  if (!branch) throw new Error("the manifest has no feature_branch");
   for (const p of o.manifest.phases) {
     if (typeof p.id !== "string" || !KEBAB.test(p.id)) throw new Error(`invalid phase id '${p.id}': it must match ${KEBAB}`);
   }
-  for (const [k, v] of Object.entries({ plansRef: o.plansRef, plansDir: o.plansDir, branch: o.branch, mainBranch: o.mainBranch })) {
+  for (const [k, v] of Object.entries({ plansRef: o.plansRef, plansDir: o.plansDir, branch, mainBranch: o.mainBranch })) {
     if (v.includes("'")) throw new Error(`invalid ${k} '${v}': it must not contain a single quote`);
   }
   validateModels(o.manifest);
 }
 
 export function renderRunWorkflow(o: RenderOpts): string {
-  validate(o);
+  const slug = slugOf(o.issue);
+  const branch = String(o.manifest.feature_branch ?? "");
+  validate(o, slug, branch);
   const ws = waves(o.manifest);
-  const planPath = `${o.plansDir}/${o.slug}/plan.md`;
+  const planPath = fileOf(o.plansDir, o.issue, "plan");
+  const prerequisites = o.before !== null && (o.manifest.manual_before ?? []).length > 0;
+  const afterSteps = o.after !== null && (o.manifest.manual_after ?? []).length > 0;
   const doc: Record<string, any> = {
-    name: `devflow-run-${o.slug}`,
+    name: workflowName(o.issue),
     description: [
-      `Implementation of the devflow plan ${o.slug} ("${safe(o.title)}") from run ${o.sourceRun ?? ""}.`,
+      `Build of issue #${o.issue} (https://github.com/${o.repo}/issues/${o.issue}), "${safe(o.title)}": design r${o.designRevision}, plan r${o.planRevision}, planned by run ${o.sourceRun ?? ""}.`,
       `The plan is ${planPath} on the ${o.plansRef} branch.`,
-      `Phases run up to 3 at a time in their own worktrees, then ${o.pack}:mod-devflow-deliver reviews, opens the PR and watches it.`,
+      `Phases run up to 3 at a time in their own worktrees. The build pauses ${prerequisites ? "for the steps in before.md and " : ""}when another worktree holds the feature branch.`,
+      `Then ${o.pack}:mod-devflow-deliver reviews the change, opens one PR with the code and watches it until a person merges it.`,
     ].join("\n"),
     worktree: { enabled: true },
     returns: "result",
@@ -109,16 +119,16 @@ export function renderRunWorkflow(o: RenderOpts): string {
   };
   const nodes: Array<Record<string, any>> = [];
 
-  if (o.prerequisites !== null) {
+  if (prerequisites) {
     const items = (o.manifest.manual_before ?? []).map((i) => `- ${safe(i.title ?? i.id ?? "")}`).join("\n");
     nodes.push({
       id: "prerequisites",
       wait: {
         attention:
-          `Before implementing ${safe(o.title)}, do these steps (full steps: ${o.plansDir}/${o.slug}/prerequisites.md on the ${o.plansRef} branch):\n\n` +
+          `Before implementing ${safe(o.title)}, do these steps (full steps: ${fileOf(o.plansDir, o.issue, "before")} on the ${o.plansRef} branch):\n\n` +
           `${items}\n\nApprove when they are done; reject to stop.`,
         form: "approval",
-        labels: { workflow: "devflow-run", stage: "prerequisites" },
+        labels: { workflow: "build-issue", stage: "prerequisites" },
       },
     });
     nodes.push({
@@ -129,8 +139,8 @@ export function renderRunWorkflow(o: RenderOpts): string {
     });
   }
 
-  if (o.after !== null) {
-    const b64 = Buffer.from(o.after).toString("base64");
+  if (afterSteps) {
+    const b64 = Buffer.from(o.after!).toString("base64");
     nodes.push({
       id: "after-steps",
       bash: `printf '%s' '${b64}' | base64 -d > "$ARTIFACTS_DIR/after.md"\necho "after.md written"\n`,
@@ -140,11 +150,11 @@ export function renderRunWorkflow(o: RenderOpts): string {
   // Another worktree (a failed earlier run's) can hold the feature branch. Never remove one unasked: report it,
   // ask a person, then remove only on approval and never with --force.
   const findHeld = [
-    `B='${o.branch}'`,
+    `B='${branch}'`,
     `awk -v b="refs/heads/$B" -v me="$(git rev-parse --show-toplevel)" '$1=="worktree"{w=$2} $1=="branch" && $2==b && w!=me{print w}' <(git worktree list --porcelain)`,
   ];
   const gate: Record<string, any> = {};
-  if (o.prerequisites !== null) {
+  if (prerequisites) {
     gate.depends_on = ["prerequisites"];
     gate.when = "$prerequisites.output.decision == 'approve'";
   }
@@ -179,7 +189,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
     wait: {
       attention: "$worktree-check.output.question",
       form: "approval",
-      labels: { workflow: "devflow-run", stage: "worktree-removal" },
+      labels: { workflow: "build-issue", stage: "worktree-removal" },
     },
   });
   nodes.push({
@@ -203,18 +213,18 @@ export function renderRunWorkflow(o: RenderOpts): string {
 
   const start: Record<string, any> = { id: "start" };
   start.depends_on = [
-    ...(o.prerequisites !== null ? ["prerequisites"] : []),
+    ...(prerequisites ? ["prerequisites"] : []),
     "worktree-check",
     "confirm-worktree-removal",
     "stop-at-worktrees",
     "remove-worktrees",
   ];
   start.trigger_rule = "none_failed_min_one_success";
-  if (o.prerequisites !== null) start.when = "$prerequisites.output.decision == 'approve'";
+  if (prerequisites) start.when = "$prerequisites.output.decision == 'approve'";
   start.bash = [
     "set -euo pipefail",
     "exec 3>&1 1>&2", // stdout must be the JSON only; git's own messages go to stderr
-    `B='${o.branch}'; M='${o.mainBranch}'; PR='${o.plansRef}'`,
+    `B='${branch}'; M='${o.mainBranch}'; PR='${o.plansRef}'`,
     'git fetch origin "$M"',
     'git fetch origin "$PR"',
     "PC=$(git rev-parse FETCH_HEAD)",
@@ -234,6 +244,12 @@ export function renderRunWorkflow(o: RenderOpts): string {
     required: ["head", "plan_commit"],
   };
   nodes.push(start);
+  nodes.push({
+    id: "trace-start",
+    workflow: `${o.pack}:mod-devflow-trace`,
+    depends_on: ["start"],
+    with: { issue: String(o.issue), event: "building", branch },
+  });
 
   ws.forEach((wave, i) => {
     const k = i + 1;
@@ -260,7 +276,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
       lines.push(
         `${h}=$phase-${p.id}.output.head`,
         `if git merge-base --is-ancestor "$${h}" HEAD; then echo "${p.id} already merged" >&2`,
-        `else git merge --no-ff "$${h}" -m 'Merge ${o.slug} ${p.id}: ${t}' -m 'Plan-Phase: ${o.slug}/${p.id}' || { git merge --abort; echo "devflow: merging ${p.id} conflicts; its touches overlap another phase" >&2; exit 1; }`,
+        `else git merge --no-ff "$${h}" -m 'Merge ${slug} ${p.id}: ${t}' -m 'Plan-Phase: ${slug}/${p.id}' || { git merge --abort; echo "devflow: merging ${p.id} conflicts; its touches overlap another phase" >&2; exit 1; }`,
         "fi",
       );
     });
@@ -274,7 +290,7 @@ export function renderRunWorkflow(o: RenderOpts): string {
   });
 
   const deps = [`merge-${ws.length}`];
-  if (o.after !== null) deps.push("after-steps");
+  if (afterSteps) deps.push("after-steps");
   nodes.push({
     id: "deliver",
     workflow: `${o.pack}:mod-devflow-deliver`,
@@ -283,10 +299,11 @@ export function renderRunWorkflow(o: RenderOpts): string {
       plan_ref: o.plansRef,
       plan_path: planPath,
       plan_commit: "$start.output.plan_commit",
-      slug: o.slug,
-      branch: o.branch,
+      slug,
+      branch,
       title: safe(o.title),
       head: `$merge-${ws.length}.output.head`,
+      issue: String(o.issue),
     },
   });
   nodes.push({
@@ -304,22 +321,28 @@ if (import.meta.main) {
   try {
     const argv = process.argv.slice(2);
     const file = argv.shift();
-    if (!file) throw new Error("usage: render-run.ts <plan.md> --slug S --branch B --title T --main M --pack P [--prerequisites file] [--after file] [--plans-ref plans] [--plans-dir plans]");
+    if (!file) {
+      throw new Error(
+        "usage: render-run.ts <plan.md> --issue N --design-revision D --plan-revision P --repo O/R --title T --main M --pack P [--before file] [--after file] [--plans-ref plans] [--plans-dir plans]",
+      );
+    }
     const flag: Record<string, string> = {};
     for (let i = 0; i < argv.length; i += 2) flag[argv[i].replace(/^--/, "")] = argv[i + 1] ?? "";
-    for (const r of ["slug", "branch", "title", "main", "pack"]) if (!flag[r]) throw new Error(`missing --${r}`);
+    for (const r of ["issue", "design-revision", "plan-revision", "repo", "title", "main", "pack"]) if (!flag[r]) throw new Error(`missing --${r}`);
     const read = (f?: string) => (f ? readFileSync(f, "utf8") : null);
     process.stdout.write(
       renderRunWorkflow({
         manifest: extractManifest(readFileSync(file, "utf8")),
-        slug: flag.slug,
-        branch: flag.branch,
+        issue: Number(flag.issue),
+        designRevision: Number(flag["design-revision"]),
+        planRevision: Number(flag["plan-revision"]),
+        repo: flag.repo,
         title: flag.title,
         mainBranch: flag.main,
         pack: flag.pack,
         plansRef: flag["plans-ref"] || "plans",
         plansDir: flag["plans-dir"] || "plans",
-        prerequisites: read(flag.prerequisites),
+        before: read(flag.before),
         after: read(flag.after),
         sourceRun: process.env.WORKFLOW_ID ?? "",
       }),

@@ -14,6 +14,9 @@ inputs:
   review_model:
     default: large
     description: The tier of the final review, medium or large. mod-devflow-deliver passes the plan's review_model; the other includers keep the default.
+  issue:
+    default: ""
+    description: The issue whose devflow comment records the PR and its end; empty for work without an issue (the trace nodes then do nothing).
 
 nodes:
   - id: review-tier
@@ -137,6 +140,15 @@ nodes:
         url: { type: string }
       required: [number, url]
 
+  - id: trace-pr
+    include: mod-devflow-trace
+    depends_on: [open-pr]
+    with:
+      issue: "$INPUTS.issue"
+      event: pr_open
+      pr_number: "$open-pr.output.number"
+      pr_url: "$open-pr.output.url"
+
   # ---- 6. watch the PR until it merges: conflicts, red CI, review threads ------------------
   - id: watch
     depends_on: [open-pr]
@@ -183,3 +195,13 @@ nodes:
         state: { type: string }
         url: { type: string }
       required: [merged, state, url]
+
+  - id: trace-finish
+    include: mod-devflow-trace
+    depends_on: [open-pr, finish]
+    with:
+      issue: "$INPUTS.issue"
+      event: finished
+      pr_number: "$open-pr.output.number"
+      pr_url: "$finish.output.url"
+      state: "$finish.output.state"

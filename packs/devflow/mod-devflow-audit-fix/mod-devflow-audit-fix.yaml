@@ -3,11 +3,11 @@ description: |
   Building block, included only by devflow-audit: plans and implements confidential fixes in
   one run, without publishing the plan. Not run on its own.
 
-  Nodes: make-plan, implement, review, fix the blocking findings, fix the non-blocking ones,
+  Nodes: plan, implement, review, fix the blocking findings, fix the non-blocking ones,
   run the definition of done, open the PR, then watch it until it merges, resolving conflicts,
-  red CI and review threads on the way. Every project fact comes from .claude/toolkit.yaml.
+  red CI and review threads on the way. Every project fact comes from .devflow/devflow.yaml.
 
-  Pauses for a person only where /make-plan would ask: a decision only the user can make,
+  Pauses for a person only where the planning method would ask: a decision only the user can make,
   or manual_before steps to confirm. Merging stays with a person; the run never merges.
 model: large
 worktree:
@@ -20,17 +20,17 @@ returns: tail
 outcome_field: merged
 
 nodes:
-  # ---- Setup: profile, toolkit, environment ----------------------------------------------
+  # ---- Setup: profile, gh, environment -------------------------------------------------
   - id: preflight
     script: preflight
     runtime: bun
     output_format:
       type: object
       properties:
-        devflow_root: { type: string }
+        shared_dir: { type: string }
         main_branch: { type: string }
         branch_regex: { type: string }
-      required: [devflow_root, main_branch, branch_regex]
+      required: [shared_dir, main_branch, branch_regex]
 
   - id: setup
     depends_on: [preflight]
@@ -38,7 +38,7 @@ nodes:
     runtime: bun
     timeout: 1800000
 
-  # ---- 1. make-plan ----------------------------------------------------------------------
+  # ---- 1. plan ---------------------------------------------------------------------------
   - id: plan
     depends_on: [setup]
     command: plan
@@ -90,7 +90,7 @@ nodes:
       replan: { from: "$replan.output", if_skipped: "" }
       branch_regex: "$preflight.output.branch_regex"
       main_branch: "$preflight.output.main_branch"
-      devflow_root: "$preflight.output.devflow_root"
+      shared_dir: "$preflight.output.shared_dir"
     output_format:
       type: object
       properties:

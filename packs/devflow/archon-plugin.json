@@ -2,11 +2,17 @@
   "schemaVersion": 1,
   "kind": "workflow-pack",
   "name": "devflow",
-  "description": "The devflow toolkit (andras-tkcs/claude-toolkit) as Archon runs: plan, implement, review, definition of done, one PR watched until a person merges it; plus quick edits, docs review, security audit, a read-only repository configuration review (file fixes through a PR, settings gaps listed for the admin's gh-baseline) and Dependabot repair, plan-only runs that publish a parallel implementation workflow, and refinement of a published plan before it is implemented",
-  "compatibility": { "archon": ">=0.13.0" },
+  "description": "Issue to pull request as Archon runs: devflow-refine writes an issue's design (at most two question rounds), devflow-plan publishes its plan, test plan and the parallel build workflow build-issue-<n>, and the build implements, reviews, runs the definition of done and opens one PR watched until a person merges it; every file follows a template and one mechanical validator, and the issue carries one devflow comment. Plus quick edits, docs review, security audit, a read-only repository configuration review (file fixes through a PR, settings gaps listed for the admin's gh-baseline) and Dependabot repair.",
+  "compatibility": {
+    "archon": ">=0.13.0"
+  },
   "entrypoints": {
-    "devflow-plan": "devflow-plan/devflow-plan.yaml",
     "devflow-refine": "devflow-refine/devflow-refine.yaml",
+    "devflow-plan": "devflow-plan/devflow-plan.yaml",
+    "mod-devflow-refine-block": "mod-devflow-refine-block/mod-devflow-refine-block.yaml",
+    "mod-devflow-plan-block": "mod-devflow-plan-block/mod-devflow-plan-block.yaml",
+    "mod-devflow-attention": "mod-devflow-attention/mod-devflow-attention.yaml",
+    "mod-devflow-trace": "mod-devflow-trace/mod-devflow-trace.yaml",
     "mod-devflow-phase": "mod-devflow-phase/mod-devflow-phase.yaml",
     "mod-devflow-deliver": "mod-devflow-deliver/mod-devflow-deliver.yaml",
     "devflow-quick": "devflow-quick/devflow-quick.yaml",

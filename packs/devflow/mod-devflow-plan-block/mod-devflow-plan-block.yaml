@@ -1,0 +1,307 @@
+name: mod-devflow-plan-block
+description: |
+  Building block, not a workflow to run alone. Use when: devflow-plan or devflow-refine turns an
+  issue's published design.md into a plan and its build workflow. NOT for: starting it directly,
+  or refining the design (mod-devflow-refine-block).
+
+  Resolves the issue (refusing a closed issue, one whose build has started, or one without a
+  design), reads design.md and refuses it when it does not validate. Then a planner writes
+  plan.md, plan-test.md, before.md and after.md from their templates, and the plan is tested
+  (validate-docs on the four files with the design, the manifest validator, a dry run of the
+  generated build-issue-<n> workflow, and a fresh reviewer who checks every phase against the
+  code and the design; up to two fix rounds). An invalid plan is never published. The plan is
+  published to the plans branch in one commit with workflows/build-issue-<n>.yaml, and the issue
+  comment is updated. A gap the design leaves and the planner cannot decide ends with
+  needs_refine: the question goes on the issue comment, nothing is committed. Never pauses.
+model: medium
+worktree:
+  enabled: true
+inputs:
+  work:
+    description: The issue to plan (a number, #number or URL, or a plan/design URL or file name).
+  plans_ref:
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
+  plans_dir:
+    default: ""
+    description: The directory on that branch holding plans/issue-<n>/ and workflows/; empty means the profile's plans.dir, else plans.
+  pack:
+    default: ""
+    description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means the pack this workflow was started from.
+returns: result
+outcome_field: planned
+
+nodes:
+  - id: preflight
+    script: preflight
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        shared_dir: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+      required: [shared_dir, main_branch, branch_regex]
+
+  - id: setup
+    depends_on: [preflight]
+    script: setup-env
+    runtime: bun
+    timeout: 1800000
+
+  - id: resolve
+    depends_on: [preflight, setup]
+    script: resolve-input
+    runtime: bun
+    with:
+      work: "$INPUTS.work"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      main_branch: "$preflight.output.main_branch"
+      pack: "$INPUTS.pack"
+      mode: plan
+    output_format:
+      type: object
+      properties:
+        issue: { type: integer }
+        slug: { type: string }
+        folder: { type: string }
+        title: { type: string }
+        body: { type: string }
+        comments: { type: string }
+        url: { type: string }
+        state: { type: string }
+        design_revision: { type: integer }
+        plan_revision: { type: integer }
+        design_present: { type: boolean }
+        plan_present: { type: boolean }
+        existing_branch: { type: string }
+        plans_commit: { type: string }
+        change: { type: string }
+        started: { type: boolean }
+        refusal: { type: string }
+      required: [issue, slug, folder, title, body, comments, url, state, design_revision, plan_revision, design_present, plan_present, existing_branch, plans_commit, change, started, refusal]
+
+  - id: refuse
+    depends_on: [resolve]
+    when: "$resolve.output.refusal != ''"
+    cancel: "$resolve.output.refusal"
+
+  - id: load-design
+    depends_on: [resolve]
+    when: "$resolve.output.refusal == ''"
+    script: load-design
+    runtime: bun
+    with:
+      issue: "$resolve.output.issue"
+      plans_commit: "$resolve.output.plans_commit"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+    output_format:
+      type: object
+      properties:
+        design_revision: { type: integer }
+        refusal: { type: string }
+      required: [design_revision, refusal]
+
+  - id: refuse-design
+    depends_on: [load-design]
+    when: "$load-design.output.refusal != ''"
+    cancel: "$load-design.output.refusal"
+
+  # ---- Draft, test and fix the plan: the first pass and up to two fix rounds ---------------
+  - id: plan-loop
+    depends_on: [preflight, resolve, load-design]
+    when: "$load-design.output.refusal == ''"
+    loop_group:
+      max_iterations: 3
+      until_bash: 'd=$plan-check.output.done; [ "$d" = true ]'
+      nodes:
+        - id: draft-plan
+          command: draft-plan
+          model: ['@devflow-planner', medium]
+          context: fresh
+          output_format:
+            type: object
+            properties:
+              scope: { type: string, enum: [small, large] }
+              title: { type: string }
+              branch: { type: string }
+              before: { type: boolean }
+              after: { type: boolean }
+              needs_refine_present: { type: boolean }
+              needs_refine_question: { type: string }
+              needs_refine_why: { type: string }
+            required: [scope, title, branch, before, after, needs_refine_present, needs_refine_question, needs_refine_why]
+
+        - id: render
+          depends_on: [draft-plan]
+          when: "$draft-plan.output.needs_refine_present == false"
+          script: render-run
+          runtime: bun
+          with:
+            issue: "$resolve.output.issue"
+            title: "$draft-plan.output.title"
+            branch: "$draft-plan.output.branch"
+            existing_branch: "$resolve.output.existing_branch"
+            design_revision: "$load-design.output.design_revision"
+            plan_revision_base: "$resolve.output.plan_revision"
+            main_branch: "$preflight.output.main_branch"
+            branch_regex: "$preflight.output.branch_regex"
+            plans_ref: "$INPUTS.plans_ref"
+            plans_dir: "$INPUTS.plans_dir"
+            pack: "$INPUTS.pack"
+            soft_errors: "true"
+          output_format:
+            type: object
+            properties:
+              ok: { type: boolean }
+              error: { type: string }
+              workflow: { type: string }
+              file: { type: string }
+              waves: { type: integer }
+            required: [ok, error, workflow, file, waves]
+
+        - id: plan-test
+          depends_on: [render]
+          script: test-plan
+          runtime: bun
+          timeout: 600000
+          with:
+            render: "$render.output"
+            shared_dir: "$preflight.output.shared_dir"
+          output_format:
+            type: object
+            properties:
+              ok: { type: boolean }
+              findings: { type: array, items: { type: object } }
+            required: [ok, findings]
+
+        - id: plan-review
+          depends_on: [plan-test]
+          when: "$plan-test.output.ok == true"
+          command: review-plan
+          model: ['@devflow-reviewer', large]
+          context: fresh
+          denied_tools: [Write, Edit, NotebookEdit]
+          output_format:
+            type: object
+            properties:
+              clean: { type: boolean }
+              summary: { type: string }
+              findings:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    source: { type: string, enum: [review] }
+                    kind: { type: string, enum: [mechanical, open-decision] }
+                    phase: { type: string }
+                    problem: { type: string }
+                    fix: { type: string }
+                  required: [id, source, kind, phase, problem, fix]
+            required: [clean, summary, findings]
+
+        - id: plan-check
+          depends_on: [draft-plan, render, plan-test, plan-review]
+          trigger_rule: all_done
+          script: check-plan
+          runtime: bun
+          with:
+            draft: "$draft-plan.output"
+            resolve: "$resolve.output"
+            load_design: "$load-design.output"
+            test: { from: "$plan-test.output", if_skipped: "" }
+            review: { from: "$plan-review.output", if_skipped: "" }
+            render: { from: "$render.output", if_skipped: "" }
+            round: "$LOOP_PREV.plan-check.output.round"
+          output_format:
+            type: object
+            properties:
+              done: { type: boolean }
+              round: { type: integer }
+              findings: { type: integer }
+              needs_refine_present: { type: boolean }
+              needs_refine_question: { type: string }
+              needs_refine_why: { type: string }
+            required: [done, round, findings, needs_refine_present, needs_refine_question, needs_refine_why]
+
+  # ---- needs_refine: only the issue comment changes ----------------------------------------
+  - id: needs-refine
+    depends_on: [resolve, plan-loop]
+    when: "$plan-loop.output.needs_refine_present == true"
+    script: publish-needs-refine
+    runtime: bun
+    with:
+      issue: "$resolve.output.issue"
+      question: "$plan-loop.output.needs_refine_question"
+      why: "$plan-loop.output.needs_refine_why"
+    output_format:
+      type: object
+      properties:
+        planned: { type: boolean }
+        needs_refine: { type: boolean }
+        comment_url: { type: string }
+      required: [planned, needs_refine, comment_url]
+
+  # ---- Publish -----------------------------------------------------------------------------
+  - id: plan-result
+    depends_on: [plan-loop]
+    when: "$plan-loop.output.needs_refine_present == false"
+    script: plan-result
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        issue: { type: integer }
+        revision: { type: integer }
+        branch: { type: string }
+        title: { type: string }
+        workflow: { type: string }
+      required: [issue, revision, branch, title, workflow]
+
+  - id: publish
+    depends_on: [preflight, resolve, load-design, plan-result]
+    script: publish-plan
+    runtime: bun
+    with:
+      issue: "$resolve.output.issue"
+      title: "$plan-result.output.title"
+      plan_revision: "$plan-result.output.revision"
+      design_revision: "$load-design.output.design_revision"
+      workflow: "$plan-result.output.workflow"
+      main_branch: "$preflight.output.main_branch"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+    output_format:
+      type: object
+      properties:
+        commit: { type: string }
+        workflow: { type: string }
+        revision: { type: integer }
+        unresolved: { type: integer }
+        message: { type: string }
+      required: [commit, workflow, revision, unresolved, message]
+
+  - id: result
+    depends_on: [resolve, load-design, publish, needs-refine]
+    trigger_rule: all_done
+    script: plan-block-result
+    runtime: bun
+    with:
+      issue: "$resolve.output.issue"
+      design_revision: "$load-design.output.design_revision"
+      publish: { from: "$publish.output", if_skipped: "" }
+      needs_refine: { from: "$needs-refine.output", if_skipped: "" }
+    output_format:
+      type: object
+      properties:
+        planned: { type: boolean }
+        issue: { type: integer }
+        plan_revision: { type: integer }
+        design_revision: { type: integer }
+        workflow: { type: string }
+        needs_refine: { type: boolean }
+        unresolved_findings: { type: integer }
+      required: [planned, issue, plan_revision, design_revision, workflow, needs_refine, unresolved_findings]

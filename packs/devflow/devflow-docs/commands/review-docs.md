@@ -3,9 +3,7 @@ work order into `$ARTIFACTS_DIR`.
 
 Scope: `$INPUTS.scope`. If that is empty, all documentation and the website.
 
-Method: the devflow toolkit's `docs-review` skill (`devflow:docs-review` in your skill list; otherwise
-`skills/docs-review/SKILL.md` under the devflow root, which `ls -d ~/.claude/plugins/synced/*/devflow ~/.claude/plugins/cache/*/devflow/*` finds).
-Load it and apply every check in it. Also read the resolved profile `$ARTIFACTS_DIR/profile.json`, every
+Method: `$ARTIFACTS_DIR/knowledge/docs-review.md`. Read it and apply every check in it. Also read the resolved profile `$ARTIFACTS_DIR/profile.json`, every
 doc in its `docs.must_read`, its `project_steward` file, the repo's documentation conventions
 wherever its contributing guide puts them, and the ADR index when there is one.
 

@@ -1,0 +1,69 @@
+name: mod-devflow-attention
+description: |
+  Building block, not a workflow to run alone. Use when: a devflow workflow ends a stage and a
+  person chooses what happens next (plan, revise, finish). NOT for: starting it directly; include
+  it after the stage block.
+
+  A script builds the pause from the stage's typed outcome (no agent decides whether to pause);
+  the pause is one select. The block's output is the answer: done, choice (plan, revise or
+  finish), the stage's outcome, and the note of a revise answer as brief. With last "true" the
+  revise option is left out.
+model: medium
+worktree:
+  enabled: true
+inputs:
+  stage:
+    description: The stage that just ended, for example devflow-refine.
+  outcome:
+    default: ""
+    description: The stage's typed outcome as JSON; empty when the stage did not finish.
+  last:
+    default: "false"
+    description: '"true" on the last pass the caller allows: the pause offers no revise.'
+returns: answer
+
+nodes:
+  - id: settle
+    script: settle
+    runtime: bun
+    with:
+      stage: "$INPUTS.stage"
+      outcome: "$INPUTS.outcome"
+      last: "$INPUTS.last"
+    output_format: &settle
+      type: object
+      properties:
+        done: { type: boolean }
+        choice: { type: string }
+        outcome: { type: object }
+        message: { type: string }
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string }
+            required: [id, label]
+        brief: { type: string }
+      required: [done, choice, message, options, brief]
+
+  - id: ask
+    depends_on: [settle]
+    when: "$settle.output.message != ''"
+    wait:
+      attention: "$settle.output.message"
+      form: select
+      options: "$settle.output.options"
+      labels:
+        stage: "$INPUTS.stage"
+
+  - id: answer
+    script: settle
+    runtime: bun
+    depends_on: [settle, ask]
+    trigger_rule: all_done
+    with:
+      previous: "$settle.output"
+      answer: { from: $ask.output, if_skipped: "" }
+    output_format: *settle

@@ -1,0 +1,8 @@
+# A build without an issue: trace.ts (executed) does nothing and the block completes.
+exec-code: true
+fixture:
+  expect: completed
+  reached: [trace]
+  inputs:
+    issue: ""
+    event: building

@@ -1,0 +1,5 @@
+git:
+  branch_types:
+  - feature
+  - fix
+  branch_pattern: <type>/<kebab-case>

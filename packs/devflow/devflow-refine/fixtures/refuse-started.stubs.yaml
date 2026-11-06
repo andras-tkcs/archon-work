@@ -1,48 +1,26 @@
-# RED: the plan's branch is on origin; the run is cancelled before any model is called.
+# The build of the issue has started: resolve refuses and the run is cancelled before any research.
 fixture:
   expect: cancelled
-preflight:
-  devflow_root: /stub/devflow
+  reached: [stage-1__refuse]
+stage-1__preflight:
+  shared_dir: /stub/devflow
   main_branch: main
-  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
-setup: '{"hooks":[],"env_file":"project-env.sh"}'
-load:
-  slug: x
-  branch: feat/x
-  title: X
-  plan_commit: abc
+  branch_regex: "^(feat|fix|docs|chore)/[a-z0-9]+(-[a-z0-9]+)*$"
+stage-1__resolve:
+  issue: 7
+  slug: issue-7
+  folder: plans/plans/issue-7
+  title: Export reports as CSV
+  body: Reports can only be viewed in the browser.
+  comments: ""
+  url: https://github.com/o/r/issues/7
+  state: open
+  design_revision: 1
+  plan_revision: 0
+  design_present: true
+  plan_present: false
+  existing_branch: "feat/issue-7-csv-export"
+  plans_commit: ""
+  change: ""
   started: true
-  reason: "branch"
-  refusal: "Not refined: the plan x is already being implemented (its branch feat/x exists on origin). devflow-refine only changes plans whose implementation has not started."
-  work: split p2
-ask:
-  text: "x"
-draft:
-  status: done
-  questions: []
-  why_no_more: all settled
-challenge:
-  questions: []
-  reason: none
-next:
-  done: true
-  stop: false
-  incomplete: false
-  question: ""
-finalize:
-  scope: large
-  slug: x
-  branch: feat/x
-  title: X
-  prerequisites: true
-  after: false
-render:
-  workflow: devflow-run-x
-  file: /stub/x.yaml
-  waves: 2
-publish:
-  commit: abc
-  workflow: devflow-run-x
-  message: ok
-still-unstarted:
-  ok: true
+  refusal: "Not changed: the build of issue #7 has started (branch feat/issue-7-csv-export exists on origin). devflow-refine and devflow-plan only change issues whose build has not started."

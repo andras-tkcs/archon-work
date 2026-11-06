@@ -3,7 +3,7 @@
 ## Implementation manifest
 
 ```yaml
-plan_slug: no-review-model
+plan_slug: issue-9
 feature_branch: feat/no-review-model
 manual_before: []
 phases:

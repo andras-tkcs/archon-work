@@ -2,8 +2,7 @@ You work on one Dependabot pull request (Sonnet), attempt $next.output.attempts 
 #$next.output.number, branch `$next.output.branch`. You start with no memory of earlier steps.
 
 Read first: the resolved profile `$ARTIFACTS_DIR/profile.json` and its `docs.must_read` and
-`project_steward` file, the `pr-steward` skill (`devflow:pr-steward`, or `skills/pr-steward/SKILL.md`
-under the devflow root), `$ARTIFACTS_DIR/deps-triage.md` (why this PR was chosen, and what to
+`project_steward` file, `$ARTIFACTS_DIR/knowledge/pr-steward.md`, `$ARTIFACTS_DIR/deps-triage.md` (why this PR was chosen, and what to
 watch), `.github/dependabot.yml`, and the doc that says how the locks are made. If this is
 attempt 2, `$ARTIFACTS_DIR/deps/pr-$next.output.number-ci.md` has the failing jobs' logs from the last
 push: start from them. Start project commands with `. "$ARTIFACTS_DIR/project-env.sh";`.

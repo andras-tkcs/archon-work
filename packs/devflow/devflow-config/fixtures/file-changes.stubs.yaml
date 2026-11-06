@@ -32,7 +32,7 @@ review-config:
     title: 'default branch: deletion blocked'
     command: gh-baseline apply OWNER/REPO --policy ~/policy.json --only R-BR-01
 preflight:
-  devflow_root: /stub/devflow
+  shared_dir: /stub/devflow
   main_branch: main
   branch_regex: ^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$
 setup: '{}'
@@ -85,3 +85,5 @@ tail__finish:
   state: MERGED
   url: https://github.com/example/project/pull/1100
 tail__review-tier: '{"model":"large"}'
+tail__trace-pr__trace: { ok: true, skipped: true, url: "" }
+tail__trace-finish__trace: { ok: true, skipped: true, url: "" }
