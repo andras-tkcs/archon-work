@@ -13,10 +13,16 @@ export interface Run {
   err: string;
 }
 
+// A missing executable is exit 127 with "<cmd>: not found", as a shell reports it, not a throw.
+const notFound = (cmd: string): Run => ({ code: 127, out: "", err: `${cmd}: not found` });
+export const isNotFound = (r: Run) => r.code === 127 && r.out === "" && /^\S+: not found$/.test(r.err);
+
 export function run(cmd: string[], opts: { cwd?: string; env?: Record<string, string>; timeoutMs?: number } = {}): Run {
+  const env = { ...process.env, ...(opts.env ?? {}) };
+  if (!Bun.which(cmd[0], { PATH: env.PATH ?? "", cwd: opts.cwd })) return notFound(cmd[0]);
   const r = Bun.spawnSync(cmd, {
     cwd: opts.cwd,
-    env: { ...process.env, ...(opts.env ?? {}) },
+    env,
     stdout: "pipe",
     stderr: "pipe",
     timeout: opts.timeoutMs,
