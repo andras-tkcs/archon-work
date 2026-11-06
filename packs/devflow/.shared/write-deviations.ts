@@ -235,8 +235,6 @@ export function writeBuild(o: BuildOpts) {
   for (const p of plan.manifest.phases) {
     for (const d of (outcomes[p.id]?.decisions ?? []) as Decision[]) (d.kind === "deviation" ? deviations : decisions).push({ ...d, phase: p.id });
   }
-  const sd = outcomes["stage-deviation"];
-  if (sd) deviations.push({ title: sd.title, planned: "only the issue's documents are committed", choice: sd.detail, why: sd.why ?? "worktree paths must never reach the branch", phase: "wrap" });
   const body: Body = {
     ...emptyBody(),
     outcome: complete ? "running" : "stopped",
