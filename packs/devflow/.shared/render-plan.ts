@@ -74,7 +74,9 @@ if (!pack) {
   }
   pack = m[1];
 }
-const missing = ["mod-devflow-phase", "mod-devflow-deliver", "mod-devflow-trace"].map((n) => `${pack}:${n}`).filter((n) => !names.includes(n));
+const blocks = ["mod-devflow-start", "mod-devflow-phase", "mod-devflow-merge", "mod-devflow-wrap", "mod-devflow-deliver", "mod-devflow-trace"];
+if ((manifest.manual_before ?? []).length > 0) blocks.push("mod-devflow-before-check");
+const missing = blocks.map((n) => `${pack}:${n}`).filter((n) => !names.includes(n));
 if (missing.length) {
   fail(
     `the installed pack ${pack} has no ${missing.join(" and ")} in \`archon workflow list\`; update the pack (bootstrap.sh, or archon plugin update <its plugin id>) or start the workflow with --input pack=<owner>/devflow`,
@@ -103,7 +105,6 @@ try {
     plansRef: plans.ref,
     plansDir: plans.dir,
     before: read("before.md"),
-    after: read("after.md"),
     sourceRun: process.env.WORKFLOW_ID ?? "",
   });
 } catch (e) {

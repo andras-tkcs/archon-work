@@ -1,0 +1,303 @@
+name: devflow-init
+description: |
+  Makes a repository ready for the devflow workflows, and re-makes it whenever a detail changes.
+  Starts from what exists (.devflow/devflow.yaml, else a legacy .claude/toolkit.yaml, converted),
+  scans the repository (default branch, merge style, branch names, docs, commands, stacks, CI jobs
+  local CI can run), drafts the profile with the source of every value, and asks at most two rounds
+  of questions, only where the scan cannot settle a required key. Then it writes and validates
+  .devflow/devflow.yaml, creates only what is missing (.archon/devflow/policy/rulings.md, the plans
+  source in .archon/config.yaml, the .gitignore line for Archon's worktrees, the plans branch),
+  removes the legacy toolkit profile, checks the machine (doctor) and opens one PR. Nothing
+  changed: no branch and no PR. Never merges and never force-pushes.
+
+  Use when: a repository starts using devflow, a project fact changed ("add the go stack", "make
+  the macos workflow dispatchable"), or a workflow said ".devflow/devflow.yaml not found: run
+  devflow-init first". NOT for: changing code (devflow-quick) or reviewing repository settings
+  (devflow-config).
+model: medium
+worktree:
+  enabled: true
+inputs:
+  hint:
+    default: ""
+    description: Free text applied before any question, for example "add the go stack and the macos workflow as dispatchable".
+  branch_type:
+    default: ""
+    description: The type of the PR branch <type>/devflow-init; empty means chore when the profile's branch_types allow it, else its first type.
+returns: result
+outcome_field: initialised
+
+nodes:
+  - id: preflight
+    script: preflight
+    runtime: bun
+    with:
+      profile: optional
+    output_format:
+      type: object
+      properties:
+        shared_dir: { type: string }
+        main_branch: { type: string }
+        branch_regex: { type: string }
+        has_profile: { type: boolean }
+        has_legacy: { type: boolean }
+      required: [shared_dir, main_branch, branch_regex, has_profile, has_legacy]
+
+  - id: scan
+    depends_on: [preflight]
+    script: scan-repo
+    runtime: bun
+    with:
+      main_branch: "$preflight.output.main_branch"
+      hint: "$INPUTS.hint"
+    output_format:
+      type: object
+      properties:
+        scan_file: { type: string }
+        source: { type: string, enum: [profile, legacy, none] }
+        stacks: { type: array, items: { type: string } }
+        leftovers: { type: array, items: { type: string } }
+      required: [scan_file, source, stacks, leftovers]
+
+  - id: propose
+    depends_on: [scan]
+    command: propose-profile
+    model: medium
+    context: fresh
+    mutates_checkout: false
+    output_format:
+      type: object
+      properties:
+        profile: { type: object }
+        provenance: { type: object, additionalProperties: { type: string, enum: [existing, detected, default] } }
+        questions:
+          type: array
+          maxItems: 6
+          items: &question
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              context: { type: string }
+              options:
+                type: array
+                minItems: 2
+                maxItems: 4
+                items:
+                  type: object
+                  properties:
+                    key: { type: string }
+                    text: { type: string }
+                  required: [key, text]
+              recommendation:
+                type: object
+                properties:
+                  key: { type: string }
+                  why: { type: string }
+                required: [key, why]
+              why_a_person:
+                type: string
+                enum: [no_doc_settles_it, docs_disagree, changes_shipped_contract, plan_would_deliver_less]
+            required: [id, title, context, options, recommendation, why_a_person]
+        question_count: { type: integer }
+        summary: { type: string }
+      required: [profile, provenance, questions, question_count, summary]
+
+  # ---- Round 1: only when the scan left something a person must settle ---------------------
+  - id: format-1
+    depends_on: [propose]
+    when: "$propose.output.question_count > '0'"
+    script: format-round
+    runtime: bun
+    with:
+      mode: init
+      round: "1"
+      draft: "$propose.output.profile"
+      provenance: "$propose.output.provenance"
+      questions: "$propose.output.questions"
+    output_format: &message
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+
+  - id: ask-1
+    depends_on: [format-1]
+    wait:
+      attention: "$format-1.output.message"
+      form: message
+      labels:
+        workflow: devflow-init
+        stage: round-1
+
+  - id: record-1
+    depends_on: [propose, ask-1]
+    script: record-answers
+    runtime: bun
+    with:
+      round: "1"
+      questions: "$propose.output.questions"
+      answer: "$ask-1.output.text"
+    output_format: &stop
+      type: object
+      properties:
+        stop: { type: boolean }
+      required: [stop]
+
+  - id: stop-1
+    depends_on: [record-1]
+    when: "$record-1.output.stop == true"
+    cancel: "Stopped: nothing was written."
+
+  - id: apply-1
+    depends_on: [record-1]
+    when: "$record-1.output.stop == false"
+    command: apply-answers
+    model: medium
+    context: fresh
+    mutates_checkout: false
+    output_format: &applied
+      type: object
+      properties:
+        profile: { type: object }
+        provenance: { type: object, additionalProperties: { type: string, enum: [existing, detected, default] } }
+        followups:
+          type: array
+          maxItems: 3
+          items: *question
+        followup_count: { type: integer }
+        summary: { type: string }
+      required: [profile, provenance, followups, followup_count, summary]
+
+  # ---- Round 2, the last: only when an answer left a required key undecidable --------------
+  - id: format-2
+    depends_on: [apply-1]
+    when: "$apply-1.output.followup_count > '0'"
+    script: format-round
+    runtime: bun
+    with:
+      mode: init
+      round: "2"
+      draft: "$apply-1.output.profile"
+      provenance: "$apply-1.output.provenance"
+      questions: "$apply-1.output.followups"
+    output_format: *message
+
+  - id: ask-2
+    depends_on: [format-2]
+    wait:
+      attention: "$format-2.output.message"
+      form: message
+      labels:
+        workflow: devflow-init
+        stage: round-2
+
+  - id: record-2
+    depends_on: [apply-1, ask-2]
+    script: record-answers
+    runtime: bun
+    with:
+      round: "2"
+      questions: "$apply-1.output.followups"
+      answer: "$ask-2.output.text"
+    output_format: *stop
+
+  - id: stop-2
+    depends_on: [record-2]
+    when: "$record-2.output.stop == true"
+    cancel: "Stopped: nothing was written."
+
+  - id: apply-2
+    depends_on: [record-2]
+    when: "$record-2.output.stop == false"
+    command: apply-answers
+    model: medium
+    context: fresh
+    mutates_checkout: false
+    output_format: *applied
+
+  # ---- Write, scaffold, check, publish -----------------------------------------------------
+  - id: final
+    depends_on: [propose, apply-1, apply-2]
+    trigger_rule: none_failed_min_one_success
+    script: pick-draft
+    runtime: bun
+    with:
+      propose: "$propose.output"
+      apply_1: { from: "$apply-1.output", if_skipped: "" }
+      apply_2: { from: "$apply-2.output", if_skipped: "" }
+    output_format:
+      type: object
+      properties:
+        profile: { type: object }
+        provenance: { type: object }
+      required: [profile, provenance]
+
+  - id: write
+    depends_on: [final]
+    script: write-profile
+    runtime: bun
+    with:
+      profile: "$final.output.profile"
+    output_format:
+      type: object
+      properties:
+        path: { type: string }
+        changed: { type: boolean }
+      required: [path, changed]
+
+  - id: scaffold
+    depends_on: [write]
+    script: scaffold-repo
+    runtime: bun
+    output_format:
+      type: object
+      properties:
+        changed: { type: array, items: { type: string } }
+      required: [changed]
+
+  - id: doctor
+    depends_on: [scaffold]
+    script: doctor
+    runtime: bun
+    timeout: 300000
+    output_format:
+      type: object
+      properties:
+        ok: { type: integer }
+        warn: { type: integer }
+        fail: { type: integer }
+        table: { type: string }
+        checks: { type: array, items: { type: object } }
+      required: [ok, warn, fail, table, checks]
+
+  - id: publish
+    depends_on: [doctor]
+    script: publish-init
+    runtime: bun
+    with:
+      provenance: "$final.output.provenance"
+      doctor: "$doctor.output"
+      leftovers: "$scan.output.leftovers"
+      branch_type: "$INPUTS.branch_type"
+    output_format: &result
+      type: object
+      properties:
+        initialised: { type: boolean }
+        changed: { type: boolean }
+        files: { type: array, items: { type: string } }
+        pr_url: { type: string }
+        plans_branch_created: { type: boolean }
+        doctor:
+          type: object
+          properties:
+            ok: { type: integer }
+            warn: { type: integer }
+            fail: { type: integer }
+          required: [ok, warn, fail]
+      required: [initialised, changed, files, pr_url, plans_branch_created, doctor]
+
+  - id: result
+    depends_on: [publish]
+    bash: 'o=$publish.output; printf "%s\n" "$o"'
+    output_format: *result

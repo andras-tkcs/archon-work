@@ -1,0 +1,14 @@
+# Only a legacy .claude/toolkit.yaml: the scan converts it, nothing needs asking, the profile is
+# written and the legacy file is removed in the same PR, which lists the hook leftovers.
+fixture:
+  expect: completed
+  reached: [write, scaffold, publish, result]
+preflight: { shared_dir: /stub/devflow, main_branch: main, branch_regex: "", has_profile: false, has_legacy: true }
+scan: { scan_file: /stub/scan.json, source: legacy, stacks: [python], leftovers: [.claude/toolkit.yaml, .claude/hooks/devflow.sh] }
+propose: { profile: { version: 1, project: { name: demo }, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>", branch_types: [feat, fix, chore] }, verify: { fast: ["ruff check ."], dod: [pytest] }, stacks: [python] }, provenance: { version: default, project: existing, docs: existing, git: existing, verify: existing, stacks: existing }, questions: [], question_count: 0, summary: converted the legacy profile }
+final: { profile: { version: 1, project: { name: demo }, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>", branch_types: [feat, fix, chore] }, verify: { fast: ["ruff check ."], dod: [pytest] }, stacks: [python] }, provenance: { version: default } }
+write: { path: .devflow/devflow.yaml, changed: true }
+scaffold: { changed: [.archon/devflow/policy/rulings.md, .claude/toolkit.yaml] }
+doctor: { ok: 9, warn: 1, fail: 0, table: "| check | status | detail | fix |", checks: [] }
+publish: &out { initialised: true, changed: true, files: [.devflow/devflow.yaml, .archon/devflow/policy/rulings.md, .claude/toolkit.yaml], pr_url: "https://github.com/o/r/pull/4", plans_branch_created: false, doctor: { ok: 9, warn: 1, fail: 0 } }
+result: *out

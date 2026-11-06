@@ -1,0 +1,16 @@
+# The definition of done and local CI are green: no fix session runs.
+fixture:
+  expect: completed
+dod:
+  green: true
+  failed: []
+  unavailable: []
+  report: /stub/verify-dod.md
+ci-local: { status: green, reason: "", ran: [{ workflow: ci.yml, job: test, status: pass, reason: "", steps: [] }], failed: [], skipped: [], dirty: [] }
+record-fix: { rounds: 0 }
+ci-local-final: { status: green, reason: "", ran: [{ workflow: ci.yml, job: test, status: pass, reason: "", steps: [] }], failed: [], skipped: [], dirty: [] }
+result:
+  ok: true
+  dod: { green: true, failed: [], unavailable: [] }
+  ci_local: { status: green, rounds: 0, ran: [], failed: [], skipped: [] }
+  ci_status: green

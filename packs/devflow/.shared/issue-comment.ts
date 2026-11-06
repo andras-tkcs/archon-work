@@ -6,7 +6,7 @@ import { fail, plansConfig } from "./util.ts";
 
 export type State = Record<string, any>;
 
-export const BUILD_STATES = ["not_started", "building", "pr_open", "merged", "closed"] as const;
+export const BUILD_STATES = ["not_started", "building", "pr_open", "merged", "closed", "stopped"] as const;
 const STATE_RE = /<!-- devflow-state: (.*) -->/;
 
 const isObj = (v: unknown): v is State => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -39,7 +39,10 @@ export function nextLine(n: number, s: State): string {
     case "building":
       return `Build running (run ${s.build.run})`;
     case "pr_open":
-      return `Review and merge PR #${s.build.pr?.number}.`;
+      if (s.build.ci_local === "red") return `Local CI is red: run \`devflow-follow-up #${s.build.pr?.number} "fix local CI: ${s.build.ci_failed_job || "<job>"}"\``;
+      return `Read deviations.md, then review and merge PR #${s.build.pr?.number} (or run \`devflow-follow-up #${s.build.pr?.number} "<task>"\`)`;
+    case "stopped":
+      return `Read deviations.md, then run \`devflow-follow-up #${n} "<task>"\``;
     case "merged":
     case "closed":
       return "Done.";
@@ -70,8 +73,11 @@ export function renderComment(n: number, s: State): string {
     pr_open: `PR #${pr?.number} open`,
     merged: "merged",
     closed: "closed without merge",
+    stopped: "**stopped**",
   }[buildState(s)];
-  rows.push(`| Build | ${text} | — | \`${workflowName(n)}\`${prLink} |`);
+  const ci = s.build?.ci_local === "red" ? " · local CI red" : "";
+  const dev = s.build?.deviations_url ? ` · [deviations.md](${s.build.deviations_url})` : "";
+  rows.push(`| Build | ${text}${ci} | — | \`${workflowName(n)}\`${prLink}${dev} |`);
 
   const out = [commentMarker(n), `<!-- devflow-state: ${json} -->`, `### devflow · issue #${n}`, "", ...rows, "", `**Next:** ${nextLine(n, s)}`, ""];
   const rulings: string[] = s.proposed_rulings ?? [];

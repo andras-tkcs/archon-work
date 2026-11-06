@@ -4,6 +4,11 @@ import { KINDS, PLAN_KINDS } from "./layout.ts";
 export type FrontMatter = Record<string, unknown>;
 
 export const KEY_ORDER = ["issue", "kind", "title", "revision", "design_revision", "run", "updated"] as const;
+// deviations.md is written by the build on the feature branch: it names the plan, the outcome and the branch.
+export const DEVIATIONS_KEY_ORDER = ["issue", "kind", "title", "revision", "plan_revision", "build_outcome", "branch", "run", "updated"] as const;
+export const BUILD_OUTCOMES = ["running", "completed", "stopped"] as const;
+
+const keyOrder = (kind: unknown): readonly string[] => (kind === "deviations" ? DEVIATIONS_KEY_ORDER : KEY_ORDER);
 
 // Throws when the block is missing or is not a YAML mapping.
 export function parse(text: string): { fm: FrontMatter; body: string } {
@@ -31,7 +36,7 @@ function scalar(v: unknown): string {
 }
 
 export function serialize(fm: FrontMatter, body: string): string {
-  const lines = KEY_ORDER.filter((k) => fm[k] !== undefined).map((k) => `${k}: ${scalar(fm[k])}`);
+  const lines = keyOrder(fm.kind).filter((k) => fm[k] !== undefined).map((k) => `${k}: ${scalar(fm[k])}`);
   return `---\n${lines.join("\n")}\n---\n\n${body}`;
 }
 
@@ -39,9 +44,8 @@ const isPosInt = (v: unknown) => typeof v === "number" && Number.isInteger(v) &&
 
 // Every problem of the block for a file of <kind>; empty when it is valid.
 export function validate(fm: FrontMatter, kind: string): string[] {
-  if (kind === "deviations") return ["kind deviations is not supported yet"];
   if (!(KINDS as readonly string[]).includes(kind)) return [`unknown file kind '${kind}'`];
-  const expected = KEY_ORDER.filter((k) => k !== "design_revision" || (PLAN_KINDS as readonly string[]).includes(kind));
+  const expected = keyOrder(kind).filter((k) => k !== "design_revision" || (PLAN_KINDS as readonly string[]).includes(kind));
   const errs: string[] = [];
   for (const k of expected) if (fm[k] === undefined || fm[k] === null || fm[k] === "") errs.push(`front matter key '${k}' is missing`);
   for (const k of Object.keys(fm)) {
@@ -52,8 +56,11 @@ export function validate(fm: FrontMatter, kind: string): string[] {
   const order = expected.filter((k) => present.includes(k));
   if (errs.length === 0 && present.join(",") !== order.join(",")) errs.push(`front matter keys must be in the order ${expected.join(", ")}`);
   if (fm.kind !== undefined && fm.kind !== kind) errs.push(`front matter kind '${fm.kind}' does not match the file '${kind}.md'`);
-  for (const k of ["issue", "revision", "design_revision"]) {
+  for (const k of ["issue", "revision", "design_revision", "plan_revision"]) {
     if (fm[k] !== undefined && !isPosInt(fm[k])) errs.push(`front matter '${k}' must be a positive integer, got '${fm[k]}'`);
+  }
+  if (fm.build_outcome !== undefined && !(BUILD_OUTCOMES as readonly unknown[]).includes(fm.build_outcome)) {
+    errs.push(`front matter 'build_outcome' must be one of ${BUILD_OUTCOMES.join(", ")}, got '${fm.build_outcome}'`);
   }
   if (fm.updated !== undefined && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(fm.updated))) {
     errs.push(`front matter 'updated' must be a date YYYY-MM-DD, got '${fm.updated}'`);

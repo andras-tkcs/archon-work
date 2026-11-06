@@ -24,12 +24,19 @@ eq "$(next '{design:{revision:1}}')" 'Review `design.md`, then run `devflow-plan
 eq "$(next '{design:{revision:2},plan:{revision:1,design_revision:1}}')" 'Review `design.md`, then run `devflow-plan #42`' "Next: stale plan"
 eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"not_started"}}')" 'Review the plan, then run `archon workflow sync` and `archon workflow run build-issue-42 --detach`' "Next: not started"
 eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"building",run:"r7"}}')" 'Build running (run r7)' "Next: building"
-eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"pr_open",pr:{number:57}}}')" 'Review and merge PR #57.' "Next: PR open"
+eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"pr_open",pr:{number:57}}}')" 'Read deviations.md, then review and merge PR #57 (or run `devflow-follow-up #57 "<task>"`)' "Next: PR open"
+eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"pr_open",pr:{number:57},ci_local:"red",ci_failed_job:"test"}}')" 'Local CI is red: run `devflow-follow-up #57 "fix local CI: test"`' "Next: PR open with local CI red"
+eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"pr_open",pr:{number:57},ci_local:"red"}}')" 'Local CI is red: run `devflow-follow-up #57 "fix local CI: <job>"`' "Next: local CI red without a job name"
+eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"stopped",branch:"feat/x"}}')" 'Read deviations.md, then run `devflow-follow-up #42 "<task>"`' "Next: stopped"
+row="$(ic "process.stdout.write(C.renderComment(42,{...$full,build:{state:'stopped',branch:'feat/x',deviations_url:'https://github.com/o/r/blob/feat/x/plans/issue-42/deviations.md'}}))" | grep '^| Build')"
+eq "$row" '| Build | **stopped** | — | `build-issue-42` · [deviations.md](https://github.com/o/r/blob/feat/x/plans/issue-42/deviations.md) |' "the stopped row links deviations.md"
+row="$(ic "process.stdout.write(C.renderComment(42,{...$full,build:{state:'pr_open',pr:{number:57,url:'u'},ci_local:'red'}}))" | grep '^| Build')"
+contains "$row" "PR #57 open · local CI red" "the build row says local CI is red"
 eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"merged"}}')" 'Done.' "Next: merged"
 eq "$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"closed"}}')" 'Done.' "Next: closed"
 eq "$(next '{design:{revision:1},needs_refine:{question:"q"}}')" 'Answer the open question with `devflow-refine #42: <answer>`' "Next: needs_refine wins"
-out="$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"stopped"}}' 2>&1)"
-contains "$out" "unknown build state 'stopped'" "an unknown build state fails"
+out="$(next '{design:{revision:1},plan:{revision:1,design_revision:1},build:{state:"exploded"}}' 2>&1)"
+contains "$out" "unknown build state 'exploded'" "an unknown build state fails"
 
 use_stub_gh
 up() { ic "console.log(JSON.stringify(C.upsertComment(42,$1)))"; }
@@ -104,6 +111,16 @@ contains "$(state)" '"state":"merged"' "finished MERGED: merged"
 tr INPUTS_EVENT=finished INPUTS_PR_NUMBER=57 INPUTS_PR_URL=https://github.com/o/r/pull/57 INPUTS_STATE=CLOSED >/dev/null
 contains "$(state)" '"state":"closed"' "finished otherwise: closed"
 eq "$(gh_calls '^POST ')" "1" "the build edits the one comment"
+mkdir -p "$tart/outcomes"
+echo '{"status":"red","failed":[{"job":"lint"}]}' > "$tart/outcomes/ci-local.json"
+echo '{"deviations_url":"https://github.com/o/r/blob/feat/issue-42-x/plans/issue-42/deviations.md"}' > "$tart/outcomes/deviations.json"
+tr INPUTS_EVENT=pr_open INPUTS_PR_NUMBER=58 INPUTS_PR_URL=https://github.com/o/r/pull/58 >/dev/null
+eq "$(state)" '{"state":"pr_open","run":"build-run","branch":"feat/issue-42-x","pr":{"number":58,"url":"https://github.com/o/r/pull/58"},"ci_local":"red","ci_failed_job":"lint","deviations_url":"https://github.com/o/r/blob/feat/issue-42-x/plans/issue-42/deviations.md"}' "pr_open: local CI and deviations.md from the run's outcomes"
+rm "$tart/outcomes/ci-local.json" "$tart/outcomes/deviations.json"
+tr INPUTS_EVENT=stopped INPUTS_BRANCH=feat/issue-42-x INPUTS_DEVIATIONS_URL=https://github.com/o/r/blob/feat/issue-42-x/plans/issue-42/deviations.md >/dev/null
+contains "$(state)" '"state":"stopped"' "stopped: the state"
+contains "$(state)" '"deviations_url":"https://github.com/o/r/blob/feat/issue-42-x/plans/issue-42/deviations.md"' "stopped: deviations.md is linked"
+contains "$(state)" '"ci_local":"red"' "a later event keeps what it does not know"
 touch "$GH_STUB_DIR/fail-api"
 out="$(tr INPUTS_EVENT=building)"; code=$?
 eq "$code" "0" "a failed comment write never fails the build"

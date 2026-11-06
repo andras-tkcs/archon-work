@@ -1,0 +1,75 @@
+name: mod-devflow-before-check
+description: |
+  Building block, not a workflow to run alone. Use when: a build-issue-<n> run checks the manual
+  steps of before.md. NOT for: starting it directly.
+
+  Tests each before.md item's "Done when" condition with read-only commands (gh secret list, an
+  API GET, test -f) and records met, unmet or unknown with the evidence. Never writes, never
+  waits for anyone and never blocks the build: unmet and unknown items are listed in
+  deviations.md under "Before steps".
+model: medium
+inputs:
+  plan_commit:
+    description: The commit of the plans branch the build started from.
+  plans_ref:
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
+  plans_dir:
+    default: ""
+    description: The plans directory; empty means the profile's plans.dir, else plans.
+  issue:
+    description: The issue number.
+  run_key:
+    default: ""
+    description: The build's run key from mod-devflow-start; names the shared outcomes.
+returns: record
+
+nodes:
+  - id: load-before
+    script: load-before
+    runtime: bun
+    with:
+      plan_commit: "$INPUTS.plan_commit"
+      plans_dir: "$INPUTS.plans_dir"
+      issue: "$INPUTS.issue"
+    output_format:
+      type: object
+      properties:
+        items: { type: array }
+      required: [items]
+
+  - id: before-check
+    depends_on: [load-before]
+    command: before-check
+    model: medium
+    context: fresh
+    denied_tools: [Write, Edit, NotebookEdit]
+    output_format:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              n: { type: integer }
+              title: { type: string }
+              status: { type: string, enum: [met, unmet, unknown] }
+              evidence: { type: string }
+            required: [n, title, status, evidence]
+      required: [items]
+
+  - id: record
+    depends_on: [load-before, before-check]
+    trigger_rule: all_done
+    script: record-before
+    runtime: bun
+    with:
+      items: { from: "$before-check.output", if_skipped: "" }
+      listed: { from: "$load-before.output", if_skipped: "" }
+      run_key: "$INPUTS.run_key"
+    output_format:
+      type: object
+      properties:
+        items: { type: array }
+      required: [items]

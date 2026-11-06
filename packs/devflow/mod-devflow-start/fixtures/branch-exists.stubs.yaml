@@ -1,0 +1,15 @@
+# The feature branch is already on origin: the block cancels and points at devflow-follow-up.
+fixture:
+  expect: cancelled
+  reached: [refuse]
+  inputs:
+    branch: feat/issue-7-csv-export
+    main_branch: main
+    issue: "7"
+start:
+  ok: false
+  refusal: "Not started: branch feat/issue-7-csv-export already exists (on origin). Use devflow-follow-up to continue it."
+  branch: feat/issue-7-csv-export
+  head: ""
+  plan_commit: ""
+  run_key: ""

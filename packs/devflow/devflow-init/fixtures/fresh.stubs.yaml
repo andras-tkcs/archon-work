@@ -1,0 +1,18 @@
+# A repository with no profile: one round of questions, answered ok; the profile, rulings.md, the
+# Archon config entry and the .gitignore line are written and one PR is opened.
+fixture:
+  expect: completed
+  reached: [ask-1, apply-1, write, scaffold, publish, result]
+preflight: { shared_dir: /stub/devflow, main_branch: main, branch_regex: "", has_profile: false, has_legacy: false }
+scan: { scan_file: /stub/scan.json, source: none, stacks: [python], leftovers: [] }
+propose: { profile: { version: 1, project: { name: demo }, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>", branch_types: [feat, fix, chore] }, verify: { fast: ["ruff check ."], dod: [pytest] }, stacks: [python] }, provenance: { version: default, project.name: detected, docs.must_read: detected, git.main_branch: detected, git.branch_pattern: detected, git.branch_types: detected, verify.fast: detected, verify.dod: detected, stacks: detected }, questions: [{ id: Q1, title: Definition of done, context: "No full test command was found beside pytest. Which command proves the change is done?", options: [{ key: a, text: pytest }, { key: b, text: make test-all }], recommendation: { key: a, why: the only test command in the repository }, why_a_person: no_doc_settles_it }], question_count: 1, summary: drafted from the scan }
+format-1: { message: "devflow-init — round 1 of max 2" }
+ask-1: { text: ok }
+record-1: { stop: false }
+apply-1: { profile: { version: 1, project: { name: demo }, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>", branch_types: [feat, fix, chore] }, verify: { fast: ["ruff check ."], dod: [pytest] }, stacks: [python] }, provenance: { version: default, project.name: detected, docs.must_read: detected, git.main_branch: detected, git.branch_pattern: detected, git.branch_types: detected, verify.fast: detected, verify.dod: detected, stacks: detected }, followups: [], followup_count: 0, summary: accepted }
+final: { profile: { version: 1, project: { name: demo }, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>", branch_types: [feat, fix, chore] }, verify: { fast: ["ruff check ."], dod: [pytest] }, stacks: [python] }, provenance: { version: default, project.name: detected, docs.must_read: detected, git.main_branch: detected, git.branch_pattern: detected, git.branch_types: detected, verify.fast: detected, verify.dod: detected, stacks: detected } }
+write: { path: .devflow/devflow.yaml, changed: true }
+scaffold: { changed: [.archon/devflow/policy/rulings.md, .archon/config.yaml, .gitignore] }
+doctor: { ok: 9, warn: 1, fail: 0, table: "| check | status | detail | fix |", checks: [] }
+publish: &out { initialised: true, changed: true, files: [.devflow/devflow.yaml, .archon/devflow/policy/rulings.md, .archon/config.yaml, .gitignore], pr_url: "https://github.com/o/r/pull/3", plans_branch_created: true, doctor: { ok: 9, warn: 1, fail: 0 } }
+result: *out

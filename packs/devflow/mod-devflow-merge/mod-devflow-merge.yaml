@@ -1,0 +1,47 @@
+name: mod-devflow-merge
+description: |
+  Building block, not a workflow to run alone. Use when: a build-issue-<n> run merges one wave of
+  its phases into the feature branch. NOT for: starting it directly.
+
+  Merges each phase of the wave whose outcome is done (--no-ff, trailer Plan-Phase: <slug>/<id>),
+  skipping heads the branch already has. A conflict never fails the build: the merge is aborted,
+  the conflict is recorded for deviations.md and the phase's head is pushed later as
+  <branch>-partial-<id>. Never waits for anyone.
+model: medium
+worktree:
+  enabled: true
+inputs:
+  slug:
+    description: The plan's slug, issue-<n>.
+  phases:
+    description: The wave's phase ids, comma-separated, in merge order.
+  titles:
+    default: "{}"
+    description: JSON object of phase id to title, for the merge commit messages.
+  run_key:
+    description: The build's run key from mod-devflow-start (names the shared outcomes).
+  wave:
+    default: "1"
+    description: The wave number.
+returns: merge
+outcome_field: ok
+
+nodes:
+  - id: merge
+    script: merge-phases
+    runtime: bun
+    with:
+      slug: "$INPUTS.slug"
+      phases: "$INPUTS.phases"
+      titles: "$INPUTS.titles"
+      run_key: "$INPUTS.run_key"
+      wave: "$INPUTS.wave"
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+        head: { type: string }
+        merged: { type: array, items: { type: string } }
+        conflicts: { type: array, items: { type: string } }
+        not_done: { type: array, items: { type: string } }
+      required: [ok, head, merged, conflicts, not_done]

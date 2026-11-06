@@ -8,6 +8,7 @@
 // implementation step relies on.
 import { appendFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { writeOutcome } from "./outcomes.ts";
 import { PROFILE_PATH, artifactsDir, fail, input, profile, projectEnv, run, tail } from "./util.ts";
 
 const mode = input("mode");
@@ -40,4 +41,7 @@ for (const e of entries) {
 
 const green = failed.length === 0 && (mode === "dod" || unavailable.length === 0);
 console.error(`verify.${mode}: ${green ? "green" : "red"}; failed=${failed.length} unavailable=${unavailable.length}`);
+// The last line says whether the run was green, for gate-phase, which must not read a loop's output.
+appendFileSync(report, `<!-- green: ${green} -->\n`);
+if (mode === "dod") writeOutcome("dod", { green, failed, unavailable, report });
 console.log(JSON.stringify({ green, failed, unavailable, report }));

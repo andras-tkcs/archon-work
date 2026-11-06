@@ -1,0 +1,55 @@
+# The task cannot be done: the phase reports stuck, no definition of done runs, deviations.md gets
+# F1 (stuck) and is committed and pushed, the issue shows the build stopped, then end fails the run.
+exec-code: true
+fixture:
+  expect: failed
+  fail-node: end
+  reached: [work__record-outcome, wrap__push, wrap-final__push-final, wrap-final__trace-end__trace]
+preflight: &preflight
+  shared_dir: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: &setup '{"hooks":[],"env_file":"project-env.sh"}'
+resolve:
+  issue: 42
+  slug: issue-42
+  plans_ref: plans
+  plans_dir: plans
+  plan_path: plans/plans/issue-42/plan.md
+  title: CSV export
+  branch: feat/issue-42-csv-export
+  branch_on_origin: true
+  pr: { number: 57, url: "https://github.com/o/r/pull/57", state: open, merged: false }
+  pr_number: "57"
+  pr_open: true
+  plan_commit: 0123456789abcdef0123456789abcdef01234567
+  deviations_present: true
+  mode: continue-branch
+  task: rename the flag
+  fk: "1"
+  review_comments: ""
+  doc_errors: []
+  refusal: ""
+start__start: { ok: true, refusal: "", branch: feat/issue-42-csv-export, head: "1111111111111111111111111111111111111111", plan_commit: 0123456789abcdef0123456789abcdef01234567, run_key: issue-42-f-111111111111 }
+trace-start__trace: { ok: true, skipped: false, url: "https://github.com/o/r/issues/42#issuecomment-1" }
+brief: { task_file: /stub/followup-task.md }
+work__deps-check: { ready: true }
+work__preflight: *preflight
+work__setup: *setup
+work__load-plan: { slug: issue-42, branch: feat/issue-42-csv-export, title: CSV export, done: false, model: medium }
+implement-medium: { status: blocked, phase: f1, summary: the flag is read by a generated file I cannot regenerate }
+implement: { status: blocked, phase: f1, summary: the flag is read by a generated file I cannot regenerate }
+check: { green: false, failed: [], unavailable: [], report: /stub/verify-fast.md }
+work__gate: { head: "1111111111111111111111111111111111111111", phase: f1, skipped: false, status: stuck, stuck_reason: "the implementer is blocked", partial_head: "" }
+work__record-outcome: { phase: f1, status: stuck, head: "1111111111111111111111111111111111111111", summary: "", stuck_reason: "the implementer is blocked", decisions: [], cases: [], partial_head: "", skipped: false }
+wrap__probe: { stage: first, pr_number: "57" }
+wrap__deviations: { complete: false, changed: true, stuck_phases: [f1], deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", problems: [], skipped: false }
+wrap__stage: { committed: true, head: "3333333333333333333333333333333333333333" }
+wrap__push: { ok: true, pushed: [feat/issue-42-csv-export], head: "3333333333333333333333333333333333333333", problems: [] }
+wrap__result: { complete: false, deliverable: false, stuck_phases: [f1], branch: feat/issue-42-csv-export, head: "3333333333333333333333333333333333333333", pr_url: "https://github.com/o/r/pull/57", deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", pushed: [feat/issue-42-csv-export] }
+wrap-final__probe: { stage: final, pr_number: "57" }
+wrap-final__deviations-final: { complete: false, changed: false, stuck_phases: [f1], deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", problems: [], skipped: false }
+wrap-final__stage-final: { committed: false, head: "3333333333333333333333333333333333333333" }
+wrap-final__trace-end__trace: { ok: true, skipped: false, url: "https://github.com/o/r/issues/42#issuecomment-1" }
+wrap-final__push-final: { ok: true, pushed: [], head: "3333333333333333333333333333333333333333", problems: [] }
+wrap-final__result: { complete: false, deliverable: false, stuck_phases: [f1], branch: feat/issue-42-csv-export, head: "3333333333333333333333333333333333333333", pr_url: "https://github.com/o/r/pull/57", deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", pushed: [feat/issue-42-csv-export] }

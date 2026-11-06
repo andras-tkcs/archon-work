@@ -2,11 +2,11 @@
 // arrays and strips the guide comments. Fails on a missing value and on a leftover {{.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { NONE, NO_MANUAL_STEPS, SCHEMA, type DocKind } from "./doc-schema.ts";
+import { NONE, NO_MANUAL_STEPS, SCHEMA, type Kind } from "./doc-schema.ts";
 
 export type Values = Record<string, string | Record<string, string>[]>;
 
-export function templateText(kind: DocKind): string {
+export function templateText(kind: Kind): string {
   return readFileSync(join(import.meta.dir, "templates", `${kind}.md`), "utf8");
 }
 
@@ -19,7 +19,7 @@ function fill(text: string, values: Record<string, unknown>, where: string): str
 }
 
 // The body of <kind>.md (no front matter) from <values>.
-export function render(kind: DocKind, values: Values): string {
+export function render(kind: Kind, values: Values): string {
   const lines = templateText(kind).split("\n");
   const out: string[] = [];
   let i = 0;

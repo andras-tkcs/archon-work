@@ -1,0 +1,59 @@
+# PR #57 is open: the task phase commits on its branch, the definition of done and local CI run
+# again, deviations.md gets its F1 entry and is pushed to the PR, and the follow-up comment is edited.
+fixture:
+  expect: completed
+  reached: [work__record-outcome, dod-ci__result, wrap__push, wrap-final__followup-pr, end]
+preflight: &preflight
+  shared_dir: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
+setup: &setup '{"hooks":[],"env_file":"project-env.sh"}'
+resolve:
+  issue: 42
+  slug: issue-42
+  plans_ref: plans
+  plans_dir: plans
+  plan_path: plans/plans/issue-42/plan.md
+  title: CSV export
+  branch: feat/issue-42-csv-export
+  branch_on_origin: true
+  pr: { number: 57, url: "https://github.com/o/r/pull/57", state: open, merged: false }
+  pr_number: "57"
+  pr_open: true
+  plan_commit: 0123456789abcdef0123456789abcdef01234567
+  deviations_present: true
+  mode: continue-branch
+  task: rename the flag
+  fk: "1"
+  review_comments: ""
+  doc_errors: []
+  refusal: ""
+start__start: { ok: true, refusal: "", branch: feat/issue-42-csv-export, head: "1111111111111111111111111111111111111111", plan_commit: 0123456789abcdef0123456789abcdef01234567, run_key: issue-42-f-111111111111 }
+trace-start__trace: { ok: true, skipped: false, url: "https://github.com/o/r/issues/42#issuecomment-1" }
+brief: { task_file: /stub/followup-task.md }
+work__deps-check: { ready: true }
+work__preflight: *preflight
+work__setup: *setup
+work__load-plan: { slug: issue-42, branch: feat/issue-42-csv-export, title: CSV export, done: false, model: medium }
+implement-medium: { status: complete, phase: f1, summary: renamed the flag }
+implement: { status: complete, phase: f1, summary: renamed the flag }
+check: { green: true, failed: [], unavailable: [], report: /stub/verify-fast.md }
+work__gate: { head: "2222222222222222222222222222222222222222", phase: f1, skipped: false, status: done, stuck_reason: "", partial_head: "" }
+work__record-outcome: { phase: f1, status: done, head: "2222222222222222222222222222222222222222", summary: renamed the flag, stuck_reason: "", decisions: [], cases: [], partial_head: "", skipped: false }
+dod: { green: true, failed: [], unavailable: [], report: /stub/verify-dod.md }
+ci-local: { status: green, reason: "", ran: [], failed: [], skipped: [], dirty: [] }
+record-fix: { rounds: 0 }
+dod-ci__ci-local-final: { status: green, reason: "", ran: [], failed: [], skipped: [], dirty: [] }
+dod-ci__result: { ok: true, dod: { green: true, failed: [], unavailable: [] }, ci_local: { status: green, rounds: 0, ran: [], failed: [], skipped: [] }, ci_status: green }
+wrap__probe: { stage: first, pr_number: "57" }
+wrap__deviations: { complete: true, changed: true, stuck_phases: [], deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", problems: [], skipped: false }
+wrap__stage: { committed: true, head: "3333333333333333333333333333333333333333" }
+wrap__push: { ok: true, pushed: [feat/issue-42-csv-export], head: "3333333333333333333333333333333333333333", problems: [] }
+wrap__result: { complete: false, deliverable: false, stuck_phases: [], branch: feat/issue-42-csv-export, head: "3333333333333333333333333333333333333333", pr_url: "https://github.com/o/r/pull/57", deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", pushed: [feat/issue-42-csv-export] }
+wrap-final__probe: { stage: final, pr_number: "57" }
+wrap-final__deviations-final: { complete: true, changed: false, stuck_phases: [], deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", problems: [], skipped: false }
+wrap-final__stage-final: { committed: false, head: "3333333333333333333333333333333333333333" }
+wrap-final__push-final: { ok: true, pushed: [], head: "3333333333333333333333333333333333333333", problems: [] }
+wrap-final__followup-pr: { ok: true, comment_url: "https://github.com/o/r/pull/57#issuecomment-9", ready: true, problems: [] }
+wrap-final__result: { complete: true, deliverable: false, stuck_phases: [], branch: feat/issue-42-csv-export, head: "3333333333333333333333333333333333333333", pr_url: "https://github.com/o/r/pull/57", deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md", pushed: [feat/issue-42-csv-export] }
+end: { done: true, issue: 42, branch: feat/issue-42-csv-export, pr_url: "https://github.com/o/r/pull/57", deviations_url: "https://github.com/o/r/blob/feat/issue-42-csv-export/plans/issue-42/deviations.md" }

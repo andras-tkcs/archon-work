@@ -1,0 +1,16 @@
+# Stage first of a build with a stuck phase: deviations.md is written, committed and pushed with the
+# phase's partial ref; the build is not deliverable.
+fixture:
+  expect: completed
+  reached: [deviations, stage, push, result]
+  inputs:
+    stage: first
+    issue: "7"
+    branch: feat/issue-7-csv-export
+    plan_commit: 0123456789abcdef0123456789abcdef01234567
+    run_key: issue-7-111111111111
+probe: { stage: first, pr_number: "" }
+deviations: { complete: false, changed: true, stuck_phases: [p1-export-tests, verify], deviations_url: "https://github.com/o/r/blob/feat/issue-7-csv-export/plans/issue-7/deviations.md", problems: [], skipped: false }
+stage: { committed: true, head: "3333333333333333333333333333333333333333" }
+push: { ok: true, pushed: [feat/issue-7-csv-export, feat/issue-7-csv-export-partial-p1-export-tests], head: "3333333333333333333333333333333333333333", problems: [] }
+result: { complete: false, deliverable: false, stuck_phases: [p1-export-tests, verify], branch: feat/issue-7-csv-export, head: "3333333333333333333333333333333333333333", pr_url: "", deviations_url: "https://github.com/o/r/blob/feat/issue-7-csv-export/plans/issue-7/deviations.md", pushed: [feat/issue-7-csv-export, feat/issue-7-csv-export-partial-p1-export-tests] }

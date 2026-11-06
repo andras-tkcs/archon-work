@@ -1,0 +1,17 @@
+# Stage final after a deliver that opened no PR: deviations.md records it, is pushed, and the issue
+# comment shows the build as stopped.
+fixture:
+  expect: completed
+  reached: [deviations-final, stage-final, push-final, result, trace-end__trace]
+  inputs:
+    stage: final
+    issue: "7"
+    branch: feat/issue-7-csv-export
+    plan_commit: 0123456789abcdef0123456789abcdef01234567
+    run_key: issue-7-111111111111
+probe: { stage: final, pr_number: "" }
+deviations-final: { complete: false, changed: true, stuck_phases: [], deviations_url: "", problems: [], skipped: false }
+stage-final: { committed: true, head: "4444444444444444444444444444444444444444" }
+push-final: { ok: true, pushed: [feat/issue-7-csv-export], head: "4444444444444444444444444444444444444444", problems: [] }
+result: { complete: false, deliverable: false, stuck_phases: [], branch: feat/issue-7-csv-export, head: "4444444444444444444444444444444444444444", pr_url: "", deviations_url: "https://github.com/o/r/blob/feat/issue-7-csv-export/plans/issue-7/deviations.md", pushed: [feat/issue-7-csv-export] }
+trace-end__trace: { ok: true, skipped: false, url: "https://github.com/o/r/issues/7#issuecomment-1" }

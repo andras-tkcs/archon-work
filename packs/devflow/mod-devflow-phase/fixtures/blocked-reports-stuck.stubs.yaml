@@ -1,8 +1,13 @@
-# RED: the implementer is blocked and the checks are red; the real gate-phase fails on green.
+# The implementer is blocked and the checks are red: the real gate-phase reports the phase as
+# stuck and the real record-outcome records it; the block completes, so the build carries on.
 exec-code: true
 fixture:
-  expect: failed
-  fail-node: gate
+  expect: completed
+  reached: [gate, record-outcome]
+  inputs:
+    phase: p1-x
+    base: HEAD
+deps-check: { ready: true }
 preflight:
   shared_dir: /stub/devflow
   main_branch: main

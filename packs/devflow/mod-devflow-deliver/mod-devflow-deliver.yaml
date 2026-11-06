@@ -33,6 +33,12 @@ inputs:
   issue:
     default: ""
     description: The issue the build belongs to, for its devflow comment; empty for plans without an issue.
+  run_key:
+    default: ""
+    description: The build's run key from mod-devflow-start, so the tail's results reach the build's shared outcomes.
+  phases:
+    default: plan
+    description: plan (every manifest phase must have its Plan-Phase merge) or none (a follow-up, judged on its commits alone).
 returns: tail
 outcome_field: merged
 
@@ -61,6 +67,8 @@ nodes:
     with:
       mode: deliver
       shared_dir: "$preflight.output.shared_dir"
+      branch: "$INPUTS.branch"
+      run_key: "$INPUTS.run_key"
     output_format:
       type: object
       properties:
@@ -108,7 +116,7 @@ nodes:
       slug: "$load-plan.output.slug"
       main_branch: "$preflight.output.main_branch"
       green: "$fast-loop.output.green"
-      phases: plan
+      phases: "$INPUTS.phases"
 
   - id: tail
     include: mod-devflow-tail
@@ -116,3 +124,4 @@ nodes:
     with:
       review_model: "$load-plan.output.review_model"
       issue: "$INPUTS.issue"
+      run_key: "$INPUTS.run_key"

@@ -2,6 +2,7 @@
 exec-code: true
 fixture:
   expect: completed
+deps-check: { ready: true }
 preflight:
   shared_dir: /stub/devflow
   main_branch: main
@@ -22,4 +23,5 @@ check:
   failed: []
   unavailable: []
   report: /stub/verify-fast.md
-gate: '{"head":"abc","phase":"p1-x","skipped":false}'
+gate: { head: abc, phase: p1-x, skipped: false, status: done, stuck_reason: "", partial_head: "" }
+record-outcome: { phase: p1-x, status: done, head: abc, summary: stub, stuck_reason: "", decisions: [], cases: [], partial_head: "", skipped: false }

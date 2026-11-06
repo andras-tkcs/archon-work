@@ -1,0 +1,14 @@
+# The answer makes the profile invalid (verify.dod empty, an unknown key): the real write-profile
+# lists every error and fails; nothing is written, scaffolded or pushed.
+exec-code: true
+fixture:
+  expect: failed
+  fail-node: write
+preflight: { shared_dir: /stub/devflow, main_branch: main, branch_regex: "", has_profile: false, has_legacy: false }
+scan: { scan_file: /stub/scan.json, source: none, stacks: [], leftovers: [] }
+propose: { profile: { version: 1, project: { name: demo }, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>", branch_types: [feat, fix, chore] }, verify: { fast: ["ruff check ."], dod: [pytest] }, stacks: [python] }, provenance: { version: default, project.name: detected, docs.must_read: detected, git.main_branch: detected, git.branch_pattern: detected, git.branch_types: detected, verify.fast: detected, verify.dod: detected, stacks: detected }, questions: [{ id: Q1, title: Definition of done, context: "No full test command was found beside pytest. Which command proves the change is done?", options: [{ key: a, text: pytest }, { key: b, text: make test-all }], recommendation: { key: a, why: the only test command in the repository }, why_a_person: no_doc_settles_it }], question_count: 1, summary: drafted }
+format-1: { message: "devflow-init — round 1 of max 2" }
+ask-1: { text: "1: none, colour: blue" }
+record-1: { stop: false }
+apply-1: { profile: { version: 1, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>" }, verify: { fast: [], dod: [] }, stacks: [], colour: blue }, provenance: { version: default, project.name: detected, docs.must_read: detected, git.main_branch: detected, git.branch_pattern: detected, git.branch_types: detected, verify.fast: detected, verify.dod: detected, stacks: detected }, followups: [], followup_count: 0, summary: applied }
+final: { profile: { version: 1, docs: { must_read: [README.md] }, git: { main_branch: main, branch_pattern: "<type>/<kebab-case>" }, verify: { fast: [], dod: [] }, stacks: [], colour: blue }, provenance: { version: default, project.name: detected, docs.must_read: detected, git.main_branch: detected, git.branch_pattern: detected, git.branch_types: detected, verify.fast: detected, verify.dod: detected, stacks: detected } }

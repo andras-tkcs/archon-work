@@ -1,0 +1,68 @@
+name: mod-devflow-start
+description: |
+  Building block, not a workflow to run alone. Use when: a build-issue-<n> or devflow-follow-up run
+  starts its feature branch. NOT for: starting it directly.
+
+  Build mode: validates the issue's documents on the plans branch (validate-docs, the check
+  devflow-plan ran when it published them), refuses when the feature branch already exists in
+  another worktree or on origin, creates it from origin/<main>, and commits and pushes a stub
+  deviations.md (build_outcome running), so the branch carries the file from its first commit.
+  Follow-up mode: checks out the build's branch from origin, or creates the follow-up branch from
+  origin/<main>. Never waits for anyone; a refusal changes nothing and cancels the run.
+model: medium
+worktree:
+  enabled: true
+inputs:
+  branch:
+    default: ""
+    description: The feature branch of the plan (build mode).
+  main_branch:
+    description: The default branch the feature branch starts from.
+  plans_ref:
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
+  plans_dir:
+    default: ""
+    description: The plans directory on it; empty means the profile's plans.dir, else plans.
+  issue:
+    description: The issue number.
+  mode:
+    default: build
+    description: build or follow-up.
+  task_branch:
+    default: ""
+    description: Follow-up mode, the branch to check out or create.
+  followup_mode:
+    default: ""
+    description: Follow-up mode, continue-branch or new-branch.
+returns: start
+outcome_field: ok
+
+nodes:
+  - id: start
+    script: start-build
+    runtime: bun
+    with:
+      branch: "$INPUTS.branch"
+      main_branch: "$INPUTS.main_branch"
+      plans_ref: "$INPUTS.plans_ref"
+      plans_dir: "$INPUTS.plans_dir"
+      issue: "$INPUTS.issue"
+      mode: "$INPUTS.mode"
+      task_branch: "$INPUTS.task_branch"
+      followup_mode: "$INPUTS.followup_mode"
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+        refusal: { type: string }
+        branch: { type: string }
+        head: { type: string }
+        plan_commit: { type: string }
+        run_key: { type: string }
+      required: [ok, refusal, branch, head, plan_commit, run_key]
+
+  - id: refuse
+    depends_on: [start]
+    when: "$start.output.ok == false"
+    cancel: "$start.output.refusal"

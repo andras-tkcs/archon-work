@@ -1,0 +1,17 @@
+# before.md has two items: one is met, the other cannot be told read-only; the block completes.
+fixture:
+  expect: completed
+  reached: [record]
+  inputs:
+    plan_commit: 0123456789abcdef0123456789abcdef01234567
+    issue: "7"
+load-before:
+  items: [{ n: 1, title: Add the API key secret }, { n: 2, title: Enable the webhook }]
+before-check:
+  items:
+    - { n: 1, title: Add the API key secret, status: met, evidence: "gh secret list: API_KEY  Updated 2026-11-01" }
+    - { n: 2, title: Enable the webhook, status: unknown, evidence: "the hooks API needs admin rights" }
+record:
+  items:
+    - { n: 1, title: Add the API key secret, status: met, evidence: "gh secret list: API_KEY  Updated 2026-11-01" }
+    - { n: 2, title: Enable the webhook, status: unknown, evidence: "the hooks API needs admin rights" }

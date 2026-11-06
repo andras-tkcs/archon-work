@@ -35,15 +35,33 @@ if (r.ok) {
 
     const doc: any = Bun.YAML.parse(readFileSync(r.file, "utf8"));
     const stubs: Record<string, unknown> = {};
+    // One output that serves every building block the build calls: a complete, deliverable build.
+    const child = {
+      ok: true,
+      refusal: "",
+      head: "0".repeat(40),
+      branch: "",
+      plan_commit: "0".repeat(40),
+      run_key: "k",
+      merged: [],
+      conflicts: [],
+      not_done: [],
+      complete: true,
+      deliverable: true,
+      stuck_phases: [],
+      pr_url: "",
+      deviations_url: "",
+      pushed: [],
+      status: "done",
+      items: [],
+    };
     for (const n of doc.nodes ?? []) {
-      if (n.wait !== undefined) stubs[n.id] = { decision: "approve", text: "ok" };
-      else if (n.workflow !== undefined) stubs[n.id] = { head: "0".repeat(40), merged: true };
-      else if (n.cancel !== undefined) continue;
+      if (n.workflow !== undefined) stubs[n.id] = child;
       else if (n.bash !== undefined || n.script !== undefined) {
         if (n.output_format?.properties) {
           const o: Record<string, unknown> = {};
           for (const [k, p] of Object.entries<any>(n.output_format.properties)) {
-            o[k] = p?.type === "boolean" ? true : p?.type === "integer" || p?.type === "number" ? 0 : "";
+            o[k] = p?.type === "boolean" ? true : p?.type === "integer" || p?.type === "number" ? 0 : p?.type === "array" ? [] : "";
           }
           stubs[n.id] = o;
         } else stubs[n.id] = "ok";
@@ -67,7 +85,7 @@ if (r.ok) {
     const problems: string[] = [];
     if (j.outcome !== "completed") problems.push(`outcome is ${j.outcome ?? "missing"}`);
     for (const id of j.missingStubs ?? []) if (!tolerated.includes(id)) problems.push(`missing stub: ${id}`);
-    const need = [...(doc.nodes ?? []).filter((n: any) => n.workflow !== undefined).map((n: any) => n.id), "result"];
+    const need = [...(doc.nodes ?? []).filter((n: any) => n.workflow !== undefined).map((n: any) => n.id), "end"];
     for (const id of need) {
       const t = trace.find((e) => e.nodeId === id);
       if (!t || t.state !== "stubbed") problems.push(`node ${id} is not stubbed (${t?.state ?? "not in the trace"})`);

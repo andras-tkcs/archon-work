@@ -2,7 +2,8 @@ name: mod-devflow-tail
 description: |
   Building block, not a workflow to run alone. The delivery tail every devflow workflow shares:
   a review (large tier unless the includer passes `review_model: medium`) with fix rounds until no blocking finding is left, the non-blocking findings fixed
-  or declined, the definition of done (verify.dod), one ready PR, then a watch that hands
+  or declined, the definition of done (verify.dod) and local CI (mod-devflow-dod), one PR (a draft
+  when local CI stays red), then a watch that hands
   conflicts, red checks and review threads to a steward until a person merges or closes it.
   Never merges.
 
@@ -17,6 +18,9 @@ inputs:
   issue:
     default: ""
     description: The issue whose devflow comment records the PR and its end; empty for work without an issue (the trace nodes then do nothing).
+  run_key:
+    default: ""
+    description: A build's run key from mod-devflow-start, so local CI and the PR reach the build's shared outcomes; empty outside a build.
 
 nodes:
   - id: review-tier
@@ -92,43 +96,21 @@ nodes:
     model: medium
     context: fresh
 
-  # ---- Definition of done: verify.dod must be green before the PR opens ------------------
-  - id: dod-loop
+  # ---- Definition of done: verify.dod, then local CI (mod-devflow-dod) ---------------------
+  - id: dod-ci
+    include: mod-devflow-dod
     depends_on: [fix-nonblocking]
-    loop_group:
-      nodes:
-        - id: dod-fix
-          when: "$LOOP_PREV.dod.output.green == false"
-          command: dod-fix
-          model: medium
-          context: fresh
-        - id: dod
-          depends_on: [dod-fix]
-          trigger_rule: all_done
-          script: verify
-          runtime: bun
-          timeout: 3600000
-          with:
-            mode: dod
-          output_format:
-            type: object
-            properties:
-              green: { type: boolean }
-              failed: { type: array, items: { type: string } }
-              unavailable: { type: array, items: { type: string } }
-              report: { type: string }
-            required: [green, failed, unavailable, report]
-      until_bash: 'g=$dod.output.green; [ "$g" = true ]'
-      max_iterations: 3
+    with:
+      run_key: "$INPUTS.run_key"
 
   - id: dod-gate
-    depends_on: [dod-loop]
-    when: "$dod-loop.output.green == false"
+    depends_on: [dod-ci]
+    when: "$dod-ci.output.ok == false"
     bash: 'echo "devflow: the definition of done is still red after its last fix; no PR was opened (see verify-dod.md in the run artifacts)" >&2; exit 1'
 
   # ---- Open the one PR ---------------------------------------------------------------------
   - id: open-pr
-    depends_on: [dod-loop, dod-gate]
+    depends_on: [dod-ci, dod-gate]
     trigger_rule: none_failed_min_one_success
     command: open-pr
     model: medium
@@ -140,9 +122,78 @@ nodes:
         url: { type: string }
       required: [number, url]
 
+  # ---- A build's final deviations.md reaches the PR before the watch (no-ops without an issue) --
+  - id: deviations-final
+    depends_on: [open-pr]
+    script: write-deviations
+    runtime: bun
+    with:
+      mode: final
+      where: tail
+      issue: "$INPUTS.issue"
+      run_key: "$INPUTS.run_key"
+      pr_url: "$open-pr.output.url"
+    output_format:
+      type: object
+      properties:
+        complete: { type: boolean }
+        changed: { type: boolean }
+        stuck_phases: { type: array, items: { type: string } }
+        deviations_url: { type: string }
+        problems: { type: array, items: { type: string } }
+        skipped: { type: boolean }
+      required: [complete, changed, stuck_phases, deviations_url, problems, skipped]
+
+  - id: stage-final
+    depends_on: [deviations-final]
+    script: stage-docs
+    runtime: bun
+    with:
+      issue: "$INPUTS.issue"
+      mode: final
+      changed: "$deviations-final.output.changed"
+    output_format:
+      type: object
+      properties:
+        committed: { type: boolean }
+        head: { type: string }
+      required: [committed, head]
+
+  - id: push-final
+    depends_on: [stage-final]
+    script: push-all
+    runtime: bun
+    with:
+      final: "true"
+      run_key: "$INPUTS.run_key"
+      changed: "$stage-final.output.committed"
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+        pushed: { type: array, items: { type: string } }
+        head: { type: string }
+        problems: { type: array, items: { type: string } }
+      required: [ok, pushed, head, problems]
+
+  - id: record-pr
+    depends_on: [push-final]
+    script: record-pr
+    runtime: bun
+    with:
+      number: "$open-pr.output.number"
+      url: "$open-pr.output.url"
+      run_key: "$INPUTS.run_key"
+    output_format:
+      type: object
+      properties:
+        number: { type: integer }
+        url: { type: string }
+      required: [number, url]
+
   - id: trace-pr
     include: mod-devflow-trace
-    depends_on: [open-pr]
+    depends_on: [open-pr, record-pr]
     with:
       issue: "$INPUTS.issue"
       event: pr_open
@@ -151,7 +202,8 @@ nodes:
 
   # ---- 6. watch the PR until it merges: conflicts, red CI, review threads ------------------
   - id: watch
-    depends_on: [open-pr]
+    depends_on: [open-pr, record-pr]
+    trigger_rule: none_failed_min_one_success
     loop_group:
       nodes:
         - id: pr-state

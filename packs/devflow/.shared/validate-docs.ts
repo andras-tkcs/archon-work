@@ -2,7 +2,10 @@
 // file and the step that reads it run this same check, so a reader never rejects what a writer published.
 //
 //   bun validate-docs.ts --issue <n> (--dir <folder> | --ref <commit-or-branch> [--plans-dir <dir>])
-//       [--kinds design,plan,plan-test,before,after | all] [--with-design] [--warn]
+//       [--kinds design,plan,plan-test,before,after,deviations | all] [--with-design] [--warn]
+//
+// `all` is the five documents with --ref (the plans branch never holds deviations.md) and all six
+// with --dir (an issue folder on a feature branch or on main).
 //
 // Prints one JSON line { ok, checked, errors: [{ file, line, rule, message }], warnings } and exits 1
 // when there are errors, unless --warn. Every error is listed, never only the first.
@@ -14,20 +17,29 @@ import {
   DESIGN_ASSUMPTION_RE,
   DESIGN_LINE,
   DOC_KINDS,
+  FOLLOWUP_LINES,
+  FOLLOWUP_RE,
+  KINDS,
   LEFTOVER_RE,
   LINK_RE,
   LEVELS,
   LINK_TARGETS,
   NONE,
   NO_MANUAL_STEPS,
+  OUTCOME_RE,
+  PHASE_STATES,
   PLAN_LINE,
   RELATED_RE,
   REVISION_RE,
   RULING_RE,
   SCHEMA,
   SOURCE_FORMS,
+  STUCK_STATES,
+  TABLE_HEAD,
+  TABLE_SEP,
   WARNING_LINE,
-  type DocKind,
+  type Blocks,
+  type Kind,
 } from "./doc-schema.ts";
 import { parse as parseFrontMatter, validate as validateFrontMatter, type FrontMatter } from "./frontmatter.ts";
 import { fileOf, slugOf, workflowFile } from "./layout.ts";
@@ -53,7 +65,7 @@ export interface Options {
   dir?: string; // a folder holding <kind>.md files
   ref?: string; // a commit or branch of the plans branch
   plansDir?: string; // with ref: the plans_dir (default plans)
-  kinds: DocKind[];
+  kinds: Kind[];
   withDesign?: boolean; // also read design.md for the cross-file rules (its own rules are not run)
 }
 
@@ -70,7 +82,7 @@ interface Section {
 }
 
 interface Doc {
-  kind: DocKind;
+  kind: Kind;
   file: string;
   fm: FrontMatter;
   lines: Line[]; // the body
@@ -83,7 +95,14 @@ interface Doc {
   cases?: { id: string; line: number; covers: string[]; phase: string }[];
 }
 
-const KIND_RULE: Record<DocKind, string> = { design: "DESIGN", plan: "PLAN", "plan-test": "PLAN-TEST", before: "BEFORE", after: "AFTER" };
+const KIND_RULE: Record<Kind, string> = {
+  design: "DESIGN",
+  plan: "PLAN",
+  "plan-test": "PLAN-TEST",
+  before: "BEFORE",
+  after: "AFTER",
+  deviations: "DEVIATIONS",
+};
 const nonBlank = (ls: Line[]) => ls.filter((l) => l.text.trim() !== "");
 const isContinuation = (l: Line) => /^\s+\S/.test(l.text);
 
@@ -93,7 +112,7 @@ export function validateDocs(opts: Options): Result {
   const checked: string[] = [];
   const add = (file: string, line: number, rule: string, message: string) => errors.push({ file, line, rule, message });
   const plansDir = opts.plansDir || "plans";
-  const pathOf = (kind: DocKind) => (opts.ref !== undefined ? fileOf(plansDir, opts.issue, kind) : join(opts.dir ?? ".", `${kind}.md`));
+  const pathOf = (kind: Kind) => (opts.ref !== undefined ? fileOf(plansDir, opts.issue, kind) : join(opts.dir ?? ".", `${kind}.md`));
   const read = (path: string): string | null => {
     if (opts.ref !== undefined) {
       const r = run(["git", "show", `${opts.ref}:${path}`]);
@@ -106,7 +125,7 @@ export function validateDocs(opts: Options): Result {
   const load = [...own];
   if (opts.withDesign && !load.includes("design")) load.unshift("design");
   const cross = own.length > 1 || !!opts.withDesign;
-  const docs = new Map<DocKind, Doc>();
+  const docs = new Map<Kind, Doc>();
 
   for (const kind of load) {
     const file = pathOf(kind);
@@ -131,7 +150,7 @@ export function validateDocs(opts: Options): Result {
 type Add = (file: string, line: number, rule: string, message: string) => void;
 
 // Rules V1–V7 for any file; returns the parsed document, or null when its front matter is unreadable.
-function parseDoc(kind: DocKind, file: string, text: string, add: Add): Doc | null {
+function parseDoc(kind: Kind, file: string, text: string, add: Add): Doc | null {
   const cr = text.indexOf("\r");
   if (cr >= 0) add(file, text.slice(0, cr).split("\n").length, "V6", "the file has CR line endings; use LF only");
   if (!text.endsWith("\n")) add(file, text.split("\n").length, "V6", "the file does not end with a newline");
@@ -237,11 +256,13 @@ function checkRevisionLog(doc: Doc, add: Add) {
 }
 
 // `### <prefix><n>. <title>` blocks, each with exactly the labels in order.
-function checkBlocks(doc: Doc, add: Add): { id: string; line: number; values: string[] }[] {
+function checkBlocks(doc: Doc, add: Add, def: Blocks = SCHEMA[doc.kind].blocks![0]): { id: string; line: number; values: string[] }[] {
   const rule = KIND_RULE[doc.kind];
-  const def = SCHEMA[doc.kind].blocks!;
   const s = section(doc, def.section);
   if (!s) return [];
+  const sdef = SCHEMA[doc.kind].sections.find((x) => x.title === def.section);
+  const content = nonBlank(s.lines);
+  if (sdef?.none && content.length === 1 && content[0].text.trim() === NONE) return [];
   const out: { id: string; line: number; values: string[] }[] = [];
   let cur: { id: string; line: number; labels: Line[] } | null = null;
   const close = () => {
@@ -424,10 +445,67 @@ function checkItems(doc: Doc, add: Add) {
   });
 }
 
+// The Outcome line agrees with the front matter and the table; V, K and F blocks are numbered.
+function checkDeviations(doc: Doc, add: Add) {
+  const rule = "DEVIATIONS";
+  for (const def of SCHEMA.deviations.blocks!) checkBlocks(doc, add, def);
+
+  let stuck = 0;
+  let skipped = 0;
+  const table = section(doc, "Stuck and skipped phases");
+  const rows = table ? nonBlank(table.lines) : [];
+  if (table && !(rows.length === 1 && rows[0].text.trim() === NONE)) {
+    if (rows[0]?.text.trim() !== TABLE_HEAD || rows[1]?.text.trim() !== TABLE_SEP) {
+      add(doc.file, table.line, rule, `the table must start with '${TABLE_HEAD}' and '${TABLE_SEP}'`);
+    }
+    for (const l of rows.slice(2)) {
+      const cells = l.text.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      if (cells.length !== 4 || !cells[0]) {
+        add(doc.file, l.no, rule, "a table row must be '| <phase> | <state> | <reason> | <partial branch> |'");
+        continue;
+      }
+      if (!PHASE_STATES.includes(cells[1])) add(doc.file, l.no, rule, `state '${cells[1]}' must be one of ${PHASE_STATES.join(", ")}`);
+      if (STUCK_STATES.includes(cells[1])) stuck++;
+      if (cells[1] === "skipped") skipped++;
+    }
+  }
+
+  const outcome = section(doc, "Outcome");
+  if (outcome) {
+    const lines = nonBlank(outcome.lines);
+    const m = lines.length === 1 ? OUTCOME_RE.exec(lines[0].text) : null;
+    if (!m) {
+      add(doc.file, outcome.line, rule, "'## Outcome' must be one line '<running|completed|stopped> — phases: <n> done, <n> stuck, <n> skipped. Branch: <branch>. PR: <url or no PR>. Run: <run>.'");
+    } else {
+      if (m[1] !== doc.fm.build_outcome) add(doc.file, lines[0].no, rule, `the Outcome says '${m[1]}', the front matter's build_outcome is '${doc.fm.build_outcome}'`);
+      if (Number(m[3]) !== stuck) add(doc.file, lines[0].no, rule, `the Outcome counts ${m[3]} stuck, the table has ${stuck} rows in state ${STUCK_STATES.join(", ")}`);
+      if (Number(m[4]) !== skipped) add(doc.file, lines[0].no, rule, `the Outcome counts ${m[4]} skipped, the table has ${skipped} skipped rows`);
+    }
+  }
+
+  const fu = section(doc, "Follow-ups");
+  const fl = fu ? nonBlank(fu.lines) : [];
+  if (fu && !(fl.length === 1 && fl[0].text.trim() === NONE)) {
+    let n = 0;
+    for (const l of fl) {
+      const m = FOLLOWUP_RE.exec(l.text);
+      if (m) {
+        n++;
+        if (Number(m[1]) !== n) add(doc.file, l.no, rule, `F${m[1]} should be F${n} (numbered from 1 without gaps)`);
+      } else if (l.text.startsWith("### ")) {
+        add(doc.file, l.no, rule, "a follow-up heading must be '### F<n> (<YYYY-MM-DD>, run <id>): <task> → <done|stuck>'");
+      } else if (n === 0 || !FOLLOWUP_LINES.some((p) => l.text.startsWith(p))) {
+        add(doc.file, l.no, rule, `a follow-up line must follow its heading and start with ${FOLLOWUP_LINES.map((p) => `'${p.trim()}'`).join(", ")}`);
+      }
+    }
+  }
+}
+
 function checkKind(doc: Doc, issue: number, add: Add, warnings: string[]) {
   if (doc.kind === "design") checkDesign(doc, add);
   else if (doc.kind === "plan") checkPlan(doc, issue, add, warnings);
   else if (doc.kind === "plan-test") checkPlanTest(doc, add);
+  else if (doc.kind === "deviations") checkDeviations(doc, add);
   else checkItems(doc, add);
 }
 
@@ -441,7 +519,7 @@ function dependsOnAll(m: Manifest, id: string): string[] {
   return m.phases.map((p) => p.id).filter((p) => p !== id && !reach.has(p));
 }
 
-function crossRules(docs: Map<DocKind, Doc>, opts: Options, plansDir: string, add: Add, read: (p: string) => string | null) {
+function crossRules(docs: Map<Kind, Doc>, opts: Options, plansDir: string, add: Add, read: (p: string) => string | null) {
   const own = new Set(opts.kinds);
   const design = docs.get("design");
   const plan = docs.get("plan");
@@ -450,9 +528,14 @@ function crossRules(docs: Map<DocKind, Doc>, opts: Options, plansDir: string, ad
     if (own.has(d.kind) && d.fm.issue !== opts.issue) add(d.file, 1, "X1", `front matter issue ${d.fm.issue} is not issue ${opts.issue}`);
   }
   for (const d of docs.values()) {
-    if (d.kind === "design" || !own.has(d.kind)) continue;
+    if (d.kind === "design" || d.kind === "deviations" || !own.has(d.kind)) continue;
     if (design && d.fm.design_revision !== design.fm.revision) add(d.file, 1, "X2", `design_revision ${d.fm.design_revision} is not the design's revision ${design.fm.revision}`);
     if (plan && d.kind !== "plan" && d.fm.revision !== plan.fm.revision) add(d.file, 1, "X3", `revision ${d.fm.revision} is not the plan's revision ${plan.fm.revision}`);
+  }
+
+  const deviations = docs.get("deviations");
+  if (plan && deviations && own.has("deviations") && deviations.fm.plan_revision !== plan.fm.revision) {
+    add(deviations.file, 1, "X7", `plan_revision ${deviations.fm.plan_revision} is not the plan's revision ${plan.fm.revision}`);
   }
 
   if (design && planTest?.cases) {
@@ -520,8 +603,9 @@ function parseArgs(argv: string[]): { opts: Options; warn: boolean } {
   if (!Number.isInteger(issue) || issue < 1) throw new Error("--issue <n> is required");
   if ((flags.dir === undefined) === (flags.ref === undefined)) throw new Error("pass exactly one of --dir <folder> and --ref <commit>");
   const k = flags.kinds ?? "all";
-  const kinds = (k === "all" ? DOC_KINDS : k.split(",").map((x) => x.trim())) as DocKind[];
-  for (const x of kinds) if (!DOC_KINDS.includes(x)) throw new Error(`unknown kind '${x}' (known: ${DOC_KINDS.join(", ")})`);
+  const all: readonly Kind[] = flags.ref !== undefined ? DOC_KINDS : KINDS;
+  const kinds = (k === "all" ? [...all] : k.split(",").map((x) => x.trim())) as Kind[];
+  for (const x of kinds) if (!KINDS.includes(x)) throw new Error(`unknown kind '${x}' (known: ${KINDS.join(", ")})`);
   return { opts: { issue, dir: flags.dir, ref: flags.ref, plansDir: flags["plans-dir"], kinds, withDesign: bools.has("with-design") }, warn: bools.has("warn") };
 }
 

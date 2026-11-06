@@ -1,8 +1,8 @@
 // The machine form of the document scheme: one entry per kind, matching templates/<kind>.md.
 // validate-docs.ts checks files against it; part 11 of the shared tests checks the templates against it.
-import { KINDS, type DocKind } from "./layout.ts";
+import { KINDS, type Kind } from "./layout.ts";
 
-export { DOC_KINDS, type DocKind } from "./layout.ts";
+export { DOC_KINDS, KINDS, type DocKind, type Kind } from "./layout.ts";
 
 export interface Section {
   title: string;
@@ -21,7 +21,7 @@ export interface Schema {
   h1: string; // the H1 is `# <h1><title>`
   fixed: RegExp[]; // the lines under the H1, before the first H2 (blank lines aside)
   sections: Section[]; // the H2s in order; empty for item kinds
-  blocks?: Blocks;
+  blocks?: Blocks[];
   items?: { labels: string[] }; // item kinds: `## <n>. <title>` blocks, the last label ends each
 }
 
@@ -37,6 +37,15 @@ export const RULING_RE = /^- \*\*Q:\*\* .+ \*\*A:\*\* .+ \*\*Source:\*\* \S/;
 export const RELATED_RE = /^- \S+ — \S/;
 export const SOURCE_FORMS = [/^answer Q\d+ round [12]$/, /^ADR \S+$/, /^code \S+$/, /^rulings\.md$/, /^issue comment https?:\/\/\S+$/];
 export const LEVELS = ["unit", "integration", "e2e"];
+// deviations.md: the Outcome line, the table of phases that are not done, and the follow-up blocks.
+export const OUTCOME_RE = /^(running|completed|stopped) — phases: (\d+) done, (\d+) stuck, (\d+) skipped\. Branch: \S+\. PR: .+\. Run: .+\.$/;
+export const TABLE_HEAD = "| phase | state | reason | partial branch |";
+export const TABLE_SEP = "|---|---|---|---|";
+export const PHASE_STATES = ["stuck", "failed", "skipped", "conflict"];
+export const STUCK_STATES = ["stuck", "failed", "conflict"];
+export const FOLLOWUP_RE = /^### F(\d+) \(\d{4}-\d{2}-\d{2}, run [^\s)]+\): .+ → (done|stuck)$/;
+export const FOLLOWUP_LINES = ["- Summary: ", "- Stuck: ", "- Decision: ", "- Deviation: "];
+export const AFTER_POINTER = "See after.md; these steps are always yours.";
 // Rule V2: a template or draft leftover anywhere in a file.
 export const LEFTOVER_RE = /\{\{|<!-- guide|<!-- repeat|\bTODO\b|\bTBD\b/;
 // Rule V7: a markdown link; its target is the capture.
@@ -54,7 +63,7 @@ export const LINK_TARGETS = KINDS.map((k) => `${k}.md`);
 
 const revisionLog: Section = { title: "Revision log", required: true };
 
-export const SCHEMA: Record<DocKind, Schema> = {
+export const SCHEMA: Record<Kind, Schema> = {
   design: {
     h1: "",
     fixed: [],
@@ -71,7 +80,7 @@ export const SCHEMA: Record<DocKind, Schema> = {
       revisionLog,
       { title: "Proposed rulings", required: false },
     ],
-    blocks: { section: "Decisions", prefix: "D", labels: ["- Choice:", "- Rejected:", "- Why:", "- Source:"] },
+    blocks: [{ section: "Decisions", prefix: "D", labels: ["- Choice:", "- Rejected:", "- Why:", "- Source:"] }],
   },
   plan: {
     h1: "",
@@ -102,8 +111,27 @@ export const SCHEMA: Record<DocKind, Schema> = {
       { title: "Not tested", required: true, none: true },
       revisionLog,
     ],
-    blocks: { section: "Cases", prefix: "T", labels: ["- Covers:", "- Level:", "- Phase:", "- Check:"] },
+    blocks: [{ section: "Cases", prefix: "T", labels: ["- Covers:", "- Level:", "- Phase:", "- Check:"] }],
   },
   before: { h1: "Before implementing ", fixed: [], sections: [], items: { labels: ["Why:", "Steps:", "Secret:", "**Done when:**"] } },
   after: { h1: "After implementing ", fixed: [], sections: [], items: { labels: ["Why:", "Steps:", "**Report:**"] } },
+  deviations: {
+    h1: "Deviations and decisions: ",
+    fixed: [],
+    sections: [
+      { title: "Outcome", required: true },
+      { title: "Stuck and skipped phases", required: true, none: true },
+      { title: "Deviations from design and plan", required: true, none: true },
+      { title: "Decisions taken", required: true, none: true },
+      { title: "Tests", required: true },
+      { title: "Before steps", required: true, none: true },
+      { title: "After steps", required: true },
+      { title: "Review and CI", required: true, none: true },
+      { title: "Follow-ups", required: true, none: true },
+    ],
+    blocks: [
+      { section: "Deviations from design and plan", prefix: "V", labels: ["- Phase:", "- Planned:", "- Done:", "- Why:"] },
+      { section: "Decisions taken", prefix: "K", labels: ["- Phase:", "- Choice:", "- Alternatives:", "- Why:"] },
+    ],
+  },
 };
