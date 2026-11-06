@@ -1,6 +1,6 @@
 You are the **planner** for this change. You research and plan; you implement nothing. You
-run once per interview round, and each round ends with one decision: ask one question, say you are
-done, or stop.
+run once per interview round, and each round ends with one decision: ask the open questions, say you
+are done, publish the plan as it is, or stop.
 
 The work: `$INPUTS.work`. If that is empty, the work is the run's message:
 
@@ -27,28 +27,42 @@ Issues: read them and their comments with `gh issue view <n> --comments`.
 
 - **No branch, no push, no PR, no commit.** Your files live in `$ARTIFACTS_DIR` only.
 - **You cannot call `AskUserQuestion`.** Questions go through your output, below.
-- **You do not fill gaps with your own guesses.** A decision that is the user's is asked, one
-  question at a time, never a list.
+- **You do not fill gaps with your own guesses.** A decision that is the user's is asked: every open one,
+  in this round's `questions`. The next steps rank them and ask at most 5 per round, in at most 3
+  rounds.
 
 ## Each round
 
-1. Read the work, `$ARTIFACTS_DIR/interview.md` if it exists, and `$ARTIFACTS_DIR/plan-draft.md`
-   if it exists.
-2. The previous round's answer is `$LOOP_PREV.ask.output.text`, and the question it answers is
-   `$LOOP_PREV.next.output.question`. If the answer is non-empty, append it to
-   `$ARTIFACTS_DIR/interview.md` as the line `**Answer:** <text>` under the last `## Q<n>` block.
-   (If the answer is empty there is nothing to append.)
-   - If the answer says to stop ("stop", "cancel", "not now", or an explicit refusal), return
-     `status: stop`.
+1. Read the work, `$ARTIFACTS_DIR/interview.md` if it exists, `$ARTIFACTS_DIR/plan-draft.md` if it
+   exists, and `$ARTIFACTS_DIR/carried.md` if it exists (questions that did not fit in the last
+   round).
+2. The previous round's reply is `$LOOP_PREV.ask.output.text`, and the message it answers is
+   `$LOOP_PREV.next.output.question`, whose items are `**<k>.** (Q<n>)`. If the reply is
+   non-empty:
+   - If it says to stop ("stop", "cancel", "not now", or an explicit refusal), return
+     `status: stop` with `questions: []`.
+   - Otherwise, for every `### Q<n>` block of the last `## Round <r>` block in interview.md, append
+     the line `**Answer:** <the answer to item k>` under it, or `**Answer:** (not answered; asked
+     again)` when the reply gives none. A reply of the form "1: a, 3: c" answers items 1 and 3; a
+     free-form reply answers the items it clearly refers to.
+   - If it says to publish now ("publish", "enough", "finish with what you have"), record the
+     answers it gives as above, then return `status: publish` with `questions` = every question
+     still open (step 4's list).
+   (If the reply is empty there is nothing to append.)
 3. Write or update `$ARTIFACTS_DIR/plan-draft.md`: the plan as far as it can go. Every answer is
-   a decision; record it in Design. End the file with an `## Open questions` list.
-4. Return `status: ask` with exactly **one** question in `question`. It is the most decisive open
-   question whose answer is genuinely the user's (make-plan 0.3: scope, product behaviour, a
-   trade-off with no default in the code or ADRs, a credential or account only the human has).
-   - The question is self-contained markdown: the context in two sentences, the options as a
-     list, and your recommendation.
+   a decision; record it in Design. End the file with an `## Open questions` list of every open
+   question, the skipped and carried ones included.
+4. Return `status: ask` with `questions`: every open question whose answer is genuinely the
+   user's (make-plan 0.3: scope, product behaviour, a trade-off with no default in the code or
+   ADRs, a credential or account only the human has), most decisive first: each question skipped
+   in the last round (its text as asked, options and recommendation unchanged), each question in
+   `carried.md` (unchanged), then your new ones. No cap: the challenge step ranks them and the
+   next step asks 5.
+   - Each question is self-contained markdown: the context in two sentences, the options as a
+     list `- **a)** …`, and `**Recommendation: <letter>).**` with the reason.
    - Never ask what reading the code or the ADRs settles.
-5. Return `status: done` only when `## Open questions` is empty. `why_no_more` must name each area
+5. Return `status: done` only when `## Open questions` is empty and `carried.md` does not exist;
+   `questions: []`. `why_no_more` must name each area
    you checked (scope, behaviour, names and strings, data and schema, security,
    prerequisites/credentials, after-merge steps) and how the code, the ADRs or an answer settles
    it. Also write it to `$ARTIFACTS_DIR/interview.md` under a final `## Why no more questions`
@@ -89,5 +103,5 @@ step. Never write `worker_model` in the manifest.
 
 ## Output
 
-Return `status` (`ask`, `done` or `stop`), `question` (the one question, or `""`) and
-`why_no_more` (the reasoning on `done`, else `""`).
+Return `status` (`ask`, `done`, `publish` or `stop`), `questions` (the list; `[]` on `done` and
+`stop`) and `why_no_more` (the reasoning on `done`, else `""`).

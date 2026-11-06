@@ -191,6 +191,15 @@ cp_script="$repo_root/packs/devflow/.shared/check-plan.ts"
   vm='{"ok":false,"findings":[{"id":"T1","source":"validate_manifest","kind":"mechanical","phase":"","problem":"bad","fix":"f"}]}'
   if tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with a manifest finding did not fail" >&2; exit 1; fi
   grep -q 'after 2 fix rounds' "$scratch/cp.err"
+  cp "$fx/serial.md" "$chk/plan.md"
+  fin='{"scope":"large","slug":"serial","branch":"feat/serial","title":"S","prerequisites":false,"after":false}' tst="$vm" cp_run "" 2 | grep -q '"done":true'
+  grep -q '"withheld":true' "$chk/tested.json"
+  grep -q '"workflow":"devflow-run-serial"' "$chk/tested.json"
+  grep -q 'would break the generated' "$chk/unresolved.md"
+  sed 's/plan_slug: serial/plan_slug: other/' "$fx/serial.md" > "$chk/plan.md"
+  if fin='{"scope":"large","slug":"serial","branch":"feat/serial","title":"S","prerequisites":false,"after":false}' tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "a plan with a wrong plan_slug did not fail" >&2; exit 1; fi
+  grep -q 'no usable manifest' "$scratch/cp.err"
+  rm -f "$chk/plan.md"
   cp_run "" "" >/dev/null
   test ! -e "$chk/unresolved.md"
   echo "check-plan: ok"
@@ -207,6 +216,60 @@ for spec in 'bad-model|phase '"'"'p2'"'"': model must be small, medium or large 
   grep -qF "$want" "$scratch/$name.err" || { echo "$name: expected '$want', got:" >&2; cat "$scratch/$name.err" >&2; exit 1; }
 done
 echo "models: ok"
+
+# d7. next-question.ts
+nq="$repo_root/packs/devflow/.shared/next-question.ts"
+(
+  nq_run() { ARTIFACTS_DIR="$1" INPUTS_DRAFT="$2" INPUTS_CHALLENGE="$3" bun "$nq"; }
+  A="$scratch/nqA"; B="$scratch/nqB"; C="$scratch/nqC"; D="$scratch/nqD"
+  mkdir -p "$A" "$B" "$C" "$D"
+  ask='{"status":"ask","questions":["p"],"why_no_more":""}'
+  # a. round 1: 7 candidates, 5 asked, 2 carried
+  ch='{"questions":[{"question":"p1","by":"planner"},{"question":"p2","by":"planner"},{"question":"c1","by":"challenger"},{"question":"c2","by":"challenger"},{"question":"c3","by":"challenger"},{"question":"c4","by":"challenger"},{"question":"c5","by":"challenger"}],"reason":"r"}'
+  out="$(nq_run "$A" '{"status":"ask","questions":["p1","p2"],"why_no_more":""}' "$ch")"
+  echo "$out" | grep -q '"done":false'
+  echo "$out" | grep -q '"incomplete":false'
+  echo "$out" | grep -q 'Round 1 of 3'
+  echo "$out" | grep -qF '**5.** (Q5)'
+  if echo "$out" | grep -qF '**6.**'; then echo "next-question asked a 6th question" >&2; exit 1; fi
+  grep -q '^## Round 1' "$A/interview.md"
+  grep -q '^### Q5 (asked by: challenger)' "$A/interview.md"
+  test "$(grep -c '^### (asked by:' "$A/carried.md")" = 2
+  # b. round 2
+  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c6","by":"challenger"}],"reason":"r"}')"
+  echo "$out" | grep -q 'Round 2 of 3'
+  echo "$out" | grep -q '1 question\.'
+  grep -q '^### Q6 (asked by:' "$A/interview.md"
+  test ! -e "$A/carried.md"
+  # c. round 3
+  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c7","by":"challenger"}],"reason":"r"}')"
+  echo "$out" | grep -q 'Round 3 of 3'
+  echo "$out" | grep -q 'This is the last round'
+  # d. out of rounds
+  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c8","by":"challenger"},{"question":"c9","by":"planner"}],"reason":"r"}')"
+  echo "$out" | grep -q '"done":true'
+  echo "$out" | grep -q '"incomplete":true'
+  echo "$out" | grep -q '"stop":false'
+  grep -q '^### Q8 (asked by:' "$A/open-questions.md"
+  grep -q '^### Q9 (asked by:' "$A/open-questions.md"
+  grep -q '^## Interview ended incomplete' "$A/interview.md"
+  grep -q 'The interview ended after 3 rounds' "$A/interview.md"
+  # e. stop touches nothing
+  out="$(nq_run "$B" '{"status":"stop","questions":[],"why_no_more":""}' "")"
+  echo "$out" | grep -q '"stop":true'
+  test -z "$(ls -A "$B")"
+  # f. publish
+  out="$(nq_run "$C" '{"status":"publish","questions":["x"],"why_no_more":""}' "")"
+  echo "$out" | grep -q '"incomplete":true'
+  grep -qF 'You said "publish"' "$C/interview.md"
+  grep -q '^### Q1 (asked by: planner)' "$C/open-questions.md"
+  # g. done
+  out="$(nq_run "$D" '{"status":"done","questions":[],"why_no_more":"w"}' '{"questions":[],"reason":"none"}')"
+  echo "$out" | grep -q '"done":true'
+  echo "$out" | grep -q '"incomplete":false'
+  test ! -e "$D/open-questions.md"
+  echo "next-question: ok"
+)
 
 # e. load-plan against a local bare origin
 origin="$scratch/origin.git"
@@ -315,6 +378,42 @@ publish >/dev/null
 test "$(git -C "$porigin" show plans:plans/s/plan.md | grep -c '^### Unresolved validation findings$')" -eq 1
 rm -f "$pub_art/unresolved.md"
 echo "publish-plan unresolved: ok"
+# incomplete: open interview questions, workflow published
+cp "$fx/serial.md" "$pub_art/plan.md"
+printf '### Q4 (asked by: planner)\n\n**Q?** a or b. **Recommendation: a).**\n\n### Q5 (asked by: challenger)\n\n**Q?** c or d. **Recommendation: c).**\n' > "$pub_art/open-questions.md"
+out="$(publish)"
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+test "$(echo "$pub_plan" | sed -n 3p)" = '> [!WARNING]'
+echo "$pub_plan" | grep -q '^> Incomplete plan: 2 interview questions are still open'
+echo "$pub_plan" | grep -qF 'Running `devflow-run-s` now accepts the recommended defaults'
+test "$(echo "$pub_plan" | grep -c '^## Open questions$')" -eq 1
+git -C "$porigin" cat-file -e plans:plans/workflows/devflow-run-s.yaml
+echo "$out" | grep -q 'incomplete: 2 open questions'
+echo "$pub_plan" > "$pub_art/plan.md"
+publish >/dev/null
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+test "$(echo "$pub_plan" | grep -c '^> Incomplete plan:')" -eq 1
+test "$(echo "$pub_plan" | grep -c '^## Open questions$')" -eq 1
+# withheld: the workflow is removed
+rm "$pub_art/open-questions.md"
+cp "$fx/serial.md" "$pub_art/plan.md"
+printf '### Unresolved validation findings\n\nThe plan test still reported these after its last fix round. They would break the generated\nworkflow, so it was not published.\n\n- F1 [validate_manifest, mechanical] plan: bad\n' > "$pub_art/unresolved.md"
+echo '{"withheld":true}' > "$pub_art/tested.json"
+out="$(publish)"
+if git -C "$porigin" cat-file -e plans:plans/workflows/devflow-run-s.yaml 2>/dev/null; then echo "withheld workflow was not removed" >&2; exit 1; fi
+pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
+echo "$pub_plan" | grep -q '1 validation findings would break the generated workflow'
+echo "$pub_plan" | grep -q 'There is no runnable'
+if echo "$pub_plan" | grep -qF 'Running `devflow-run-s`'; then echo "withheld note promises a run" >&2; exit 1; fi
+if echo "$pub_plan" | grep -q 'This plan was published with'; then echo "withheld plan has the review warning" >&2; exit 1; fi
+grep -q 'was removed from the plans branch' "$pub_art/published.md"
+grep -q 'Continue with devflow-refine' "$pub_art/published.md"
+echo "$out" | grep -q '"workflow":""'
+# clean up: republish the complete plan (restores the workflow file)
+rm "$pub_art/unresolved.md" "$pub_art/tested.json"
+cp "$fx/serial.md" "$pub_art/plan.md"
+publish >/dev/null
+echo "publish-plan incomplete: ok"
 echo "publish-plan: ok"
 if ARTIFACTS_DIR="$scratch" bun "$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts" 2>"$scratch/rp.err"; then echo "render-run without inputs succeeded" >&2; exit 1; fi
 grep -q "input 'slug' is empty" "$scratch/rp.err"
@@ -350,6 +449,19 @@ if lp2 env USER_MESSAGE="refine the plan please" >/dev/null 2>"$scratch/lp2.err"
 grep -q "no plan named" "$scratch/lp2.err"
 if lp2 env USER_MESSAGE="refine serial" >/dev/null 2>"$scratch/lp2.err"; then echo "no change succeeded" >&2; exit 1; fi
 grep -q "say what to change in the plan serial" "$scratch/lp2.err"
+printf '### Q1 (asked by: planner)\n\nA or b? **Recommendation: a).**\n' > "$pub_art/open-questions.md"
+cp "$fx/serial.md" "$pub_art/plan.md"
+PSLUG=serial PWF=devflow-run-serial publish >/dev/null
+out="$(lp2 env USER_MESSAGE="refine serial")"
+echo "$out" | grep -q '"slug":"serial"'
+echo "$out" | grep -q 'Continue the incomplete plan serial'
+out="$(lp2 env USER_MESSAGE="refine serial: add a phase")"
+echo "$out" | grep -q '"work":"refine serial: add a phase"'
+rm "$pub_art/open-questions.md"
+cp "$fx/serial.md" "$pub_art/plan.md"
+PSLUG=serial PWF=devflow-run-serial publish >/dev/null
+if lp2 env USER_MESSAGE="refine serial" >/dev/null 2>"$scratch/lp2.err"; then echo "bare slug on a complete plan succeeded" >&2; exit 1; fi
+echo "load-published incomplete: ok"
 out="$(lp2 env INPUTS_PLAN=three-wide USER_MESSAGE="refine serial: add a phase")"
 echo "$out" | grep -q '"slug":"three-wide"'
 if lp2 env INPUTS_PLAN=nope USER_MESSAGE="x" >/dev/null 2>"$scratch/lp2.err"; then echo "unknown plan succeeded" >&2; exit 1; fi

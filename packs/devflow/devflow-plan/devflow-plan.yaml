@@ -1,8 +1,10 @@
 name: devflow-plan
 description: |
-  The first half of the devflow toolkit's ship workflow: plans only. It interviews you one
-  question at a time (the planner asks the most decisive open question, and before it stops a
-  fresh reviewer tries to find one more), writes the plan, tests it (the manifest validator, a
+  The first half of the devflow toolkit's ship workflow: plans only. It interviews you in up
+  to 3 rounds of up to 5 questions (the planner's and a fresh reviewer's questions, ranked
+  together; say "publish" to stop asking and publish the plan as it is, or "stop" to abandon it),
+  and when questions are still open at the end it publishes an incomplete plan that
+  devflow-refine continues. It writes the plan, tests it (the manifest validator, a
   dry run of the generated workflow, and a fresh reviewer who checks every phase against the
   code; up to two fix rounds), publishes the plan and the steps you must do by hand as run
   artifacts, and publishes a devflow-run-<slug> workflow that implements the plan's phases up to
@@ -50,11 +52,13 @@ nodes:
     runtime: bun
     timeout: 1800000
 
-  # ---- 1. The interview: one question at a time -------------------------------------------
+  # ---- 1. The interview: up to 5 questions a round, at most 3 rounds ----------------------
   - id: interview
     depends_on: [setup]
     loop_group:
-      max_iterations: 15
+      # next-question.ts ends the interview by the 4th iteration (3 asking rounds + 1 that records
+      # the last answers); 5 leaves one spare.
+      max_iterations: 5
       nodes:
         - id: draft
           command: draft
@@ -63,23 +67,30 @@ nodes:
           output_format:
             type: object
             properties:
-              status: { type: string, enum: [ask, done, stop] }
-              question: { type: string }
+              status: { type: string, enum: [ask, done, stop, publish] }
+              questions: { type: array, items: { type: string } }
               why_no_more: { type: string }
-            required: [status, question, why_no_more]
+            required: [status, questions, why_no_more]
 
         - id: challenge
           depends_on: [draft]
-          when: "$draft.output.status == 'done'"
+          when: "$draft.output.status == 'ask' || $draft.output.status == 'done'"
           command: challenge
           model: medium
           context: fresh
           output_format:
             type: object
             properties:
-              question: { type: string }
+              questions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    question: { type: string }
+                    by: { type: string, enum: [planner, challenger] }
+                  required: [question, by]
               reason: { type: string }
-            required: [question, reason]
+            required: [questions, reason]
 
         - id: next
           depends_on: [draft, challenge]
@@ -94,8 +105,9 @@ nodes:
             properties:
               done: { type: boolean }
               stop: { type: boolean }
+              incomplete: { type: boolean }
               question: { type: string }
-            required: [done, stop, question]
+            required: [done, stop, incomplete, question]
 
         - id: ask
           depends_on: [next]
@@ -111,7 +123,7 @@ nodes:
   - id: stop-at-interview
     depends_on: [interview]
     when: "$interview.output.stop == true"
-    cancel: "Stopped while planning: the interview ended without a plan (stopped by the answer, or 14 questions without converging). The questions and answers are interview.md in the run artifacts."
+    cancel: "Stopped while planning: you said stop, so the interview ended without a plan. The questions and answers are interview.md in the run artifacts."
 
   # ---- 2. The final plan, the generated workflow, the publication ------------------------
   - id: plan-loop

@@ -1,5 +1,4 @@
-# RED: the manifest validator keeps rejecting the plan; the loop ends without a passing test, so the run fails and nothing is published.
-# The dry run runs plan-loop once, so check-plan's round-3 split is tested in scripts/test-render-run.sh (d5, f), not here.
+# RED: the manifest validator rejects the plan in the first round; the dry run runs plan-loop once, so plan-result finds no tested.json and the run fails.
 exec-code: true
 fixture:
   expect: failed
@@ -13,14 +12,15 @@ ask:
   text: "x"
 draft:
   status: done
-  question: ""
+  questions: []
   why_no_more: all settled
 challenge:
-  question: ""
+  questions: []
   reason: none
 next:
   done: true
   stop: false
+  incomplete: false
   question: ""
 finalize:
   scope: large
