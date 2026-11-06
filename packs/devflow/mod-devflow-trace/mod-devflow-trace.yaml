@@ -1,10 +1,11 @@
 name: mod-devflow-trace
 description: |
   Building block, not a workflow to run alone. Use when: a build reaches a state worth showing on
-  its issue (building, PR open, finished). NOT for: starting it directly.
+  its issue (building, PR open, finished, stopped). NOT for: starting it directly.
 
   Updates the one devflow comment on the issue with the build's state (building with the run
-  and branch, PR open, merged or closed). Does nothing when issue is empty. A failed comment
+  and branch, PR open with the local CI result, merged or closed, stopped with the link to
+  deviations.md). Does nothing when issue is empty. A failed comment
   write never fails the build: it leaves trace-error.md in the run artifacts and returns ok false.
 model: medium
 worktree:
@@ -14,10 +15,10 @@ inputs:
     default: ""
     description: The issue number; empty when the build has no issue.
   event:
-    description: building, pr_open or finished.
+    description: building, pr_open, finished or stopped.
   branch:
     default: ""
-    description: The feature branch (event building).
+    description: The feature branch (events building and stopped).
   pr_number:
     default: ""
     description: The PR number (events pr_open and finished).
@@ -27,6 +28,15 @@ inputs:
   state:
     default: ""
     description: The PR's final state (event finished); MERGED is merged, anything else closed.
+  deviations_url:
+    default: ""
+    description: The URL of deviations.md on the branch; empty means the one this run recorded in outcomes/deviations.json.
+  ci_local:
+    default: ""
+    description: The local CI status (green, red or skipped); empty means the one in outcomes/ci-local.json.
+  ci_failed_job:
+    default: ""
+    description: The first failed local CI job; empty means the one in outcomes/ci-local.json.
 returns: trace
 
 nodes:
@@ -40,6 +50,9 @@ nodes:
       pr_number: "$INPUTS.pr_number"
       pr_url: "$INPUTS.pr_url"
       state: "$INPUTS.state"
+      deviations_url: "$INPUTS.deviations_url"
+      ci_local: "$INPUTS.ci_local"
+      ci_failed_job: "$INPUTS.ci_failed_job"
     output_format:
       type: object
       properties:
