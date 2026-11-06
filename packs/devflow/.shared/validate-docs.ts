@@ -15,6 +15,7 @@ import {
   DESIGN_LINE,
   DOC_KINDS,
   LEFTOVER_RE,
+  LINK_RE,
   LEVELS,
   LINK_TARGETS,
   NONE,
@@ -201,7 +202,7 @@ function parseDoc(kind: DocKind, file: string, text: string, add: Add): Doc | nu
 
   for (const l of lines) {
     if (l.fence) continue;
-    for (const m of l.text.matchAll(/\]\(([^)\s]+)\)/g)) {
+    for (const m of l.text.matchAll(LINK_RE)) {
       const target = m[1];
       if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue;
       const name = target.replace(/#.*$/, "").replace(/^\.\//, "");

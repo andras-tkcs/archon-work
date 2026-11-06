@@ -243,10 +243,18 @@ cp_script="$repo_root/packs/devflow/mod-devflow-plan-block/scripts/check-plan.ts
   grep -q '"unresolved":1' "$chk/tested.json"
   grep -q '### Unresolved validation findings' "$chk/unresolved.md"
   grep -qF -- '- F1 [review, mechanical] p1-export: p' "$chk/unresolved.md"
-  # The review's text is quoted into plan.md, so its template leftovers are made harmless.
-  todo='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1-export","problem":"TODO in {{x}}, TBD","fix":"f"}]}'
+  # The review's text is quoted into plan.md, so its template leftovers and links are made harmless.
+  todo='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1-export","problem":"TODO in {{x}}, TBD, see [x](src/y.ts)","fix":"f"}]}'
   cp_run "$todo" 2 >/dev/null
-  grep -qF -- 'p1-export: todo in { {x}}, tbd' "$chk/unresolved.md"
+  grep -qF -- 'p1-export: todo in { {x}}, tbd, see [x] (src/y.ts)' "$chk/unresolved.md"
+  (cd "$scratch" && bun -e '
+    import { markUnresolved } from "'"$repo_root"'/packs/devflow/.shared/publish-plan.ts";
+    import { readFileSync, writeFileSync } from "node:fs";
+    const f = process.argv[1] + "/final/plan.md";
+    writeFileSync(f, markUnresolved(readFileSync(f, "utf8"), readFileSync(process.argv[1] + "/unresolved.md", "utf8")).text);
+  ' "$chk")
+  grep -qF '> [!WARNING]' "$chk/final/plan.md"
+  bun "$repo_root/packs/devflow/.shared/validate-docs.ts" --issue 7 --dir "$chk/final" --kinds plan >/dev/null
   # A drafted file that breaks the scheme is a finding the next round fixes, listed in validation.json.
   reset
   sed -i '/^- r1 (2026-11-06, run run-7): first test plan$/d' "$chk/plan-test.md"

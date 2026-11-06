@@ -5,7 +5,7 @@
 // A draft that ended with needs_refine ends the loop at once and validates nothing.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { defuseLeftovers } from "./doc-schema.ts";
+import { defuseQuoted } from "./doc-schema.ts";
 import { serialize } from "./frontmatter.ts";
 import { PLAN_KINDS } from "./layout.ts";
 import { artifactsDir, fail, input } from "./util.ts";
@@ -134,7 +134,7 @@ writeFileSync(
 The large-tier review still reported these after its last round. The plan was published anyway.
 The full findings are \`test-findings.md\` in the planning run's artifacts.
 
-${lines.map(defuseLeftovers).join("\n")}
+${lines.map(defuseQuoted).join("\n")}
 `,
 );
 out(true, findings.length);

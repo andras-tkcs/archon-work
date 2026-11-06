@@ -39,9 +39,14 @@ export const SOURCE_FORMS = [/^answer Q\d+ round [12]$/, /^ADR \S+$/, /^code \S+
 export const LEVELS = ["unit", "integration", "e2e"];
 // Rule V2: a template or draft leftover anywhere in a file.
 export const LEFTOVER_RE = /\{\{|<!-- guide|<!-- repeat|\bTODO\b|\bTBD\b/;
-// Quoted text (a reviewer's finding) with every V2 leftover made harmless, so quoting it cannot fail V2.
-export const defuseLeftovers = (s: string) =>
-  s.replace(new RegExp(LEFTOVER_RE.source, "g"), (m) => (m.startsWith("{") ? "{ {" : m.startsWith("<") ? `< ${m.slice(1)}` : m.toLowerCase()));
+// Rule V7: a markdown link; its target is the capture.
+export const LINK_RE = /\]\(([^)\s]+)\)/g;
+// Quoted text (a reviewer's finding) made harmless for the rules that scan every line: V2 leftovers
+// are broken up, and links become plain text, so quoting it cannot fail V2 or V7.
+export const defuseQuoted = (s: string) =>
+  s
+    .replace(new RegExp(LEFTOVER_RE.source, "g"), (m) => (m.startsWith("{") ? "{ {" : m.startsWith("<") ? `< ${m.slice(1)}` : m.toLowerCase()))
+    .replace(LINK_RE, "] ($1)");
 export const LINK_TARGETS = KINDS.map((k) => `${k}.md`);
 
 const revisionLog: Section = { title: "Revision log", required: true };
