@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# publish-design.ts and publish-plan.ts end to end, against a local bare origin and the stub gh:
-# paths, commit messages and trailers, revision increments, one comment created then edited, the
-# read-back validation before any comment call, and the published plan passing the --ref check the
-# build's start runs.
+# publish-design.ts and publish-plan.ts end to end, through the wrappers the workflows run, against a
+# local bare origin and the stub gh: paths, commit messages and trailers, revision increments, one
+# comment created then edited, the validation of the commit before its push, and the published plan
+# passing the --ref check the build's start runs. Then the refine and plan joins (format-round,
+# record-answers, refine-block-result, plan-result, plan-block-result, refine-result), each through
+# its wrapper.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 docs="$REPO_ROOT/scripts/fixtures/docs/valid"
+REFINE="$REPO_ROOT/packs/devflow/mod-devflow-refine-block/scripts"
+PLAN="$REPO_ROOT/packs/devflow/mod-devflow-plan-block/scripts"
 
 mk_clone
 repo="$REPO"
@@ -13,9 +17,9 @@ use_stub_gh
 art="$(mk_tmp)"
 mkdir -p "$art/final"
 pub() { (cd "$repo" && ARTIFACTS_DIR="$art" INPUTS_ISSUE=7 INPUTS_TITLE="Export reports as CSV" "$@" 2>&1); }
-design() { pub env INPUTS_REVISION="$1" bun "$SHARED/publish-design.ts"; }
+design() { pub env INPUTS_REVISION="$1" bun "$REFINE/publish-design.ts"; }
 plan() {
-  pub env INPUTS_PLAN_REVISION="$1" INPUTS_DESIGN_REVISION="$2" INPUTS_WORKFLOW=build-issue-7 INPUTS_MAIN_BRANCH=main bun "$SHARED/publish-plan.ts"
+  pub env INPUTS_PLAN_REVISION="$1" INPUTS_DESIGN_REVISION="$2" INPUTS_WORKFLOW=build-issue-7 INPUTS_MAIN_BRANCH=main bun "$PLAN/publish-plan.ts"
 }
 # bump <file> <revision>: the fixture file at another revision, with its Revision log line.
 bump() {
@@ -44,13 +48,15 @@ eq "$(git -C "$ORIGIN" rev-list --count plans)" "2" "r2 is a second commit"
 contains "$(branch_file plans/plans/issue-7/design.md)" "revision: 2" "design.md is r2"
 eq "$(gh_calls '^POST ')|$(gh_calls '^PATCH issues/comments/101')" "1|1" "r2 edits the comment, creates none"
 
-# --- a hand-broken design is refused after the push, before any comment call
+# --- a hand-broken design is refused before the push and before any comment call
 calls="$(wc -l < "$GH_STUB_DIR/calls.log")"
+tip="$(git -C "$ORIGIN" rev-parse plans)"
 sed '/^## Risks$/,/^None\.$/d' "$art/final/design.md" | sed 's/^revision: 2$/revision: 3/' > "$art/broken.md" && mv "$art/broken.md" "$art/final/design.md"
 out="$(design 3)"; code=$?
 eq "$code" "1" "an invalid published design fails"
-contains "$out" "does not validate; the issue comment is unchanged" "the failure says the comment is unchanged"
+contains "$out" "does not validate; nothing was pushed and the issue comment is unchanged" "the failure says nothing was pushed"
 contains "$out" "[V4] '## Risks' is missing" "every error is listed"
+eq "$(git -C "$ORIGIN" rev-parse plans)" "$tip" "the invalid design is not pushed"
 eq "$(wc -l < "$GH_STUB_DIR/calls.log")" "$calls" "no comment call after the failed check"
 
 # Back to a valid design r1 for the plan (a reset of the test origin, not of the code under test).
@@ -100,7 +106,18 @@ bump "$docs/design.md" 2 > "$art/final/design.md"
 design 2 >/dev/null
 contains "$(comment_body)" "**stale: built from design r1**" "a newer design marks the plan stale"
 
-# --- a hand-broken plan is refused after the push, before any comment call
+# --- review text with a template leftover, marked into plan.md, is refused before the push
+tip="$(git -C "$ORIGIN" rev-parse plans)"
+for k in plan plan-test before after; do bump "$docs/$k.md" 3 | sed 's/^design_revision: 1$/design_revision: 2/' > "$art/final/$k.md"; done
+sed -i 's/^Design: design.md r1$/Design: design.md r2/' "$art/final/plan.md" "$art/final/plan-test.md"
+workflow 2 3
+printf '### Unresolved validation findings\n\n- F1 [review, mechanical] p1-export: the brief says TODO\n' > "$art/unresolved.md"
+out="$(plan 3 2)"; code=$?
+eq "$code" "1" "a marked plan that does not validate fails"
+contains "$out" "[V2] leftover 'TODO'" "the marked text is checked"
+eq "$(git -C "$ORIGIN" rev-parse plans)" "$tip" "the invalid plan is not pushed"
+
+# --- a hand-broken plan is refused before the push and before any comment call
 calls="$(wc -l < "$GH_STUB_DIR/calls.log")"
 for k in plan plan-test before after; do bump "$docs/$k.md" 3 | sed 's/^design_revision: 1$/design_revision: 2/' > "$art/final/$k.md"; done
 sed -i 's/^Design: design.md r1$/Design: design.md r2/' "$art/final/plan.md" "$art/final/plan-test.md"
@@ -110,5 +127,44 @@ workflow 2 3
 out="$(plan 3 2)"; code=$?
 eq "$code" "1" "an invalid published plan fails"
 contains "$out" "[V4] '## Not tested' is missing" "the failure lists the error"
+eq "$(git -C "$ORIGIN" rev-parse plans)" "$tip" "the broken plan is not pushed"
 eq "$(wc -l < "$GH_STUB_DIR/calls.log")" "$calls" "no comment call after the failed check"
+
+# --- the refine and plan joins, each through the wrapper its workflow runs
+q='[{"id":"Q1","title":"Format","context":"Which format costs $5?","options":[{"key":"a","text":"CSV"},{"key":"b","text":"XLSX"}],"recommendation":{"key":"a","why":"simplest"}}]'
+out="$(ARTIFACTS_DIR="$art" INPUTS_ROUND=1 INPUTS_ISSUE=7 INPUTS_TITLE=T INPUTS_QUESTIONS="$q" bun "$REFINE/format-round.ts" 2>&1)"; code=$?
+eq "$code" "0" "format-round succeeds"
+contains "$out" 'round 1 of max 2' "format-round builds the message"
+contains "$out" 'costs ＄5' "format-round keeps a dollar sign literal"
+out="$(ARTIFACTS_DIR="$art" INPUTS_ROUND=3 INPUTS_ISSUE=7 INPUTS_QUESTIONS="$q" bun "$REFINE/format-round.ts" 2>&1)"; code=$?
+eq "$code" "1" "format-round refuses round 3"
+
+rm -f "$art/interview.md"
+ra() { ARTIFACTS_DIR="$art" INPUTS_ROUND=1 INPUTS_QUESTIONS="$q" INPUTS_ANSWER="$1" bun "$REFINE/record-answers.ts"; }
+eq "$(ra '1: b')" '{"stop":false}' "an answer does not stop"
+eq "$(ra 'Stop, not now')" '{"stop":true}' "stop stops"
+contains "$(cat "$art/interview.md")" $'## Round 1\n\nQ1: Format (recommended: a)\n\nA: 1: b' "the round is recorded"
+
+out="$(ARTIFACTS_DIR="$art" INPUTS_ISSUE=7 INPUTS_REVISION=2 INPUTS_DESIGN_URL=https://x/design.md bun "$REFINE/refine-block-result.ts")"
+contains "$out" '"designed":true,"issue":7,"revision":2,"design_url":"https://x/design.md","questions_asked":2' "refine-block-result reads the interview"
+
+printf '{"issue":7,"revision":2,"branch":"feat/x","title":"T","workflow":"build-issue-7","scope":"small","waves":1}' > "$art/tested.json"
+eq "$(ARTIFACTS_DIR="$art" bun "$PLAN/plan-result.ts")" '{"issue":7,"revision":2,"branch":"feat/x","title":"T","workflow":"build-issue-7"}' "plan-result hands the stamped revision to publish"
+rm "$art/tested.json"
+out="$(ARTIFACTS_DIR="$art" bun "$PLAN/plan-result.ts" 2>&1)"; code=$?
+eq "$code" "1" "plan-result fails without a tested plan"
+
+pbr() { INPUTS_ISSUE=7 INPUTS_DESIGN_REVISION=2 INPUTS_PUBLISH="$1" INPUTS_NEEDS_REFINE="$2" bun "$PLAN/plan-block-result.ts" 2>&1; }
+eq "$(pbr '{"commit":"c","workflow":"build-issue-7","revision":2,"unresolved":1,"message":"m"}' '')" '{"planned":true,"issue":7,"plan_revision":2,"design_revision":2,"workflow":"build-issue-7","needs_refine":false,"unresolved_findings":1}' "plan-block-result: published"
+eq "$(pbr '' '{"planned":false,"needs_refine":true,"comment_url":"u"}')" '{"planned":false,"issue":7,"plan_revision":0,"design_revision":2,"workflow":"","needs_refine":true,"unresolved_findings":0}' "plan-block-result: needs_refine"
+
+RR="$REPO_ROOT/packs/devflow/devflow-refine/scripts/refine-result.ts"
+o1='{"choice":"revise","outcome":{"designed":true,"issue":7,"revision":1,"design_url":"u1"}}'
+o2='{"choice":"plan","outcome":{"designed":true,"issue":7,"revision":2,"design_url":"u2"}}'
+choice="$(INPUTS_MODE=choice INPUTS_ATTEND_1="$o1" INPUTS_ATTEND_2="$o2" bun "$RR")"
+eq "$choice" '{"choice":"plan","issue":7,"outcome":{"designed":true,"issue":7,"revision":2,"design_url":"u2"}}' "refine-result choice: the last pass decides"
+out="$(INPUTS_MODE=choice bun "$RR" 2>&1)"; code=$?
+eq "$code" "1" "refine-result choice fails when no pass paused"
+eq "$(INPUTS_MODE=result INPUTS_CHOICE="$choice" INPUTS_PLAN='{"planned":true,"needs_refine":false}' bun "$RR")" '{"designed":true,"issue":7,"revision":2,"design_url":"u2","planned":true,"needs_refine":false}' "refine-result result: planned"
+eq "$(INPUTS_MODE=result INPUTS_CHOICE="$choice" INPUTS_PLAN= bun "$RR")" '{"designed":true,"issue":7,"revision":2,"design_url":"u2","planned":false,"needs_refine":false}' "refine-result result: not planned"
 finish

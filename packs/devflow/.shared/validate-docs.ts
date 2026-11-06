@@ -14,6 +14,7 @@ import {
   DESIGN_ASSUMPTION_RE,
   DESIGN_LINE,
   DOC_KINDS,
+  LEFTOVER_RE,
   LEVELS,
   LINK_TARGETS,
   NONE,
@@ -154,7 +155,7 @@ function parseDoc(kind: DocKind, file: string, text: string, add: Add): Doc | nu
   if (lines.length && lines[lines.length - 1].text === "") lines.pop();
 
   for (const l of lines) {
-    const m = /\{\{|<!-- guide|<!-- repeat|\bTODO\b|\bTBD\b/.exec(l.text);
+    const m = LEFTOVER_RE.exec(l.text);
     if (m) add(file, l.no, "V2", `leftover '${m[0]}' from the template or a draft`);
   }
 

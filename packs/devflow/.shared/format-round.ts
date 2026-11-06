@@ -1,6 +1,6 @@
 // Builds the question message of a refine round. Env: INPUTS_ROUND (1|2), INPUTS_ISSUE, INPUTS_TITLE,
 // INPUTS_QUESTIONS (the agent's questions, JSON). Output: { message }.
-import { fail, input } from "./util.ts";
+import { fail, input, isEntry } from "./util.ts";
 
 export interface Question {
   id: string;
@@ -33,7 +33,7 @@ export function formatRound(round: number, issue: string, title: string, questio
   );
 }
 
-if (import.meta.main) {
+if (isEntry(import.meta)) {
   const round = Number(input("round"));
   if (round !== 1 && round !== 2) fail(`input 'round' must be 1 or 2, got '${input("round")}'`);
   let qs: unknown;

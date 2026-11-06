@@ -145,7 +145,7 @@ nodes:
             branch: "$draft-plan.output.branch"
             existing_branch: "$resolve.output.existing_branch"
             design_revision: "$load-design.output.design_revision"
-            plan_revision: "$resolve.output.plan_revision"
+            plan_revision_base: "$resolve.output.plan_revision"
             main_branch: "$preflight.output.main_branch"
             branch_regex: "$preflight.output.branch_regex"
             plans_ref: "$INPUTS.plans_ref"
@@ -255,10 +255,11 @@ nodes:
       type: object
       properties:
         issue: { type: integer }
+        revision: { type: integer }
         branch: { type: string }
         title: { type: string }
         workflow: { type: string }
-      required: [issue, branch, title, workflow]
+      required: [issue, revision, branch, title, workflow]
 
   - id: publish
     depends_on: [preflight, resolve, load-design, plan-result]
@@ -267,7 +268,7 @@ nodes:
     with:
       issue: "$resolve.output.issue"
       title: "$plan-result.output.title"
-      plan_revision: "$resolve.output.plan_revision"
+      plan_revision: "$plan-result.output.revision"
       design_revision: "$load-design.output.design_revision"
       workflow: "$plan-result.output.workflow"
       main_branch: "$preflight.output.main_branch"

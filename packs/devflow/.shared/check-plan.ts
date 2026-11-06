@@ -5,12 +5,13 @@
 // A draft that ended with needs_refine ends the loop at once and validates nothing.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { defuseLeftovers } from "./doc-schema.ts";
 import { serialize } from "./frontmatter.ts";
+import { PLAN_KINDS } from "./layout.ts";
 import { artifactsDir, fail, input } from "./util.ts";
 import { validateDocs } from "./validate-docs.ts";
 
 const MAX_ROUNDS = 3;
-const PLAN_KINDS = ["plan", "plan-test", "before", "after"] as const;
 
 function parse(name: string, required = true): any {
   const text = input(name, required);
@@ -53,6 +54,7 @@ const test = parse("test");
 const review = parse("review", false);
 const render = parse("render");
 const issue = Number(resolve.issue);
+const revision = Number(resolve.plan_revision) + 1;
 
 // 1. Front matter, then the same check the publish step and the build's start run.
 const final = join(art, "final");
@@ -62,7 +64,7 @@ const fm = (kind: string) => ({
   issue,
   kind,
   title: String(draft.title),
-  revision: Number(resolve.plan_revision) + 1,
+  revision,
   design_revision: Number(design.design_revision),
   run: process.env.WORKFLOW_ID || "run",
   updated: new Date().toISOString().slice(0, 10),
@@ -91,7 +93,7 @@ const findings = [
 const tested = (extra: Record<string, unknown> = {}) =>
   writeFileSync(
     testedFile,
-    JSON.stringify({ issue, branch: draft.branch, title: draft.title, scope: draft.scope, workflow: render.workflow, waves: render.waves, ...extra }),
+    JSON.stringify({ issue, revision, branch: draft.branch, title: draft.title, scope: draft.scope, workflow: render.workflow, waves: render.waves, ...extra }),
   );
 
 if (findings.length === 0) {
@@ -132,7 +134,7 @@ writeFileSync(
 The large-tier review still reported these after its last round. The plan was published anyway.
 The full findings are \`test-findings.md\` in the planning run's artifacts.
 
-${lines.join("\n")}
+${lines.map(defuseLeftovers).join("\n")}
 `,
 );
 out(true, findings.length);

@@ -27,11 +27,13 @@ export interface CommitSpec {
   files: Record<string, string>; // path from the branch root -> content
   message: string;
   trailers: Record<string, string>;
+  // Runs on the local commit before the push; a non-empty result is the failure, and nothing is pushed.
+  check?: (commit: string) => string;
 }
 
-// Commits <files> on top of origin/<ref> (a new orphan branch when it is absent) and pushes. Returns the
-// commit; when the files are already there it returns the tip unchanged.
-export function commitFiles({ ref, files, message, trailers }: CommitSpec): string {
+// Commits <files> on top of origin/<ref> (a new orphan branch when it is absent), runs `check` on that
+// commit and pushes it. Returns the commit; when the files are already there it returns the tip unchanged.
+export function commitFiles({ ref, files, message, trailers, check }: CommitSpec): string {
   const paths = Object.keys(files);
   if (paths.length === 0) fail("commitFiles: no files to commit");
   const base = fetchPlans(ref);
@@ -53,8 +55,11 @@ export function commitFiles({ ref, files, message, trailers }: CommitSpec): stri
     const msg = trailerText ? ["-m", message, "-m", trailerText] : ["-m", message];
     must(["git", ...ident, "-C", tmp, "commit", "-q", ...msg]);
     commit = must(["git", "-C", tmp, "rev-parse", "HEAD"]);
-    const push = run(["git", "-C", tmp, "push", "-q", "origin", `HEAD:refs/heads/${ref}`]);
-    if (push.code !== 0) problem = `the push to ${ref} was rejected:\n${tail(push.err + push.out, 20)}`;
+    problem = check?.(commit) ?? "";
+    if (!problem) {
+      const push = run(["git", "-C", tmp, "push", "-q", "origin", `HEAD:refs/heads/${ref}`]);
+      if (push.code !== 0) problem = `the push to ${ref} was rejected:\n${tail(push.err + push.out, 20)}`;
+    }
   } finally {
     run(["git", "worktree", "remove", tmp]);
     rmSync(dirname(tmp), { recursive: true, force: true });

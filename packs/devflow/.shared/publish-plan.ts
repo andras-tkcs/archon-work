@@ -1,5 +1,5 @@
 // Publishes the checked plan files ($ARTIFACTS_DIR/final/) and the generated build workflow to the
-// plans branch in one commit, checks the published files with validate-docs, then updates the issue
+// plans branch in one commit, checked with validate-docs before it is pushed, then updates the issue
 // comment. Never syncs and never forces a push. Env: INPUTS_ISSUE, INPUTS_TITLE, INPUTS_PLAN_REVISION,
 // INPUTS_DESIGN_REVISION, INPUTS_WORKFLOW, INPUTS_MAIN_BRANCH, INPUTS_PLANS_REF, INPUTS_PLANS_DIR.
 // Output: { commit, workflow, revision, unresolved, message }.
@@ -7,12 +7,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { repoSlug } from "./gh.ts";
 import { upsertComment } from "./issue-comment.ts";
-import { fileOf, workflowFile } from "./layout.ts";
+import { fileOf, PLAN_KINDS, workflowFile } from "./layout.ts";
 import { commitFiles } from "./plans-branch.ts";
-import { artifactsDir, fail, input, plansConfig, run } from "./util.ts";
+import { artifactsDir, fail, input, isEntry, plansConfig, run } from "./util.ts";
 import { formatErrors, validateDocs } from "./validate-docs.ts";
 
-const PLAN_KINDS = ["plan", "plan-test", "before", "after"] as const;
 // The load step is a person's command and is never run here; it is only quoted in published.md.
 const LOAD = "archon workflow sync";
 
@@ -52,7 +51,7 @@ function assumptionsOf(plan: string): string[] {
   return m ? m[1].split("\n").filter((l) => l.startsWith("- ")) : [];
 }
 
-if (import.meta.main) {
+if (isEntry(import.meta)) {
   const art = artifactsDir();
   const n = Number(input("issue"));
   const title = input("title");
@@ -81,10 +80,11 @@ if (import.meta.main) {
     files,
     message: `Plan issue-${n} r${revision}: ${title}`,
     trailers: { Issue: `#${n}`, Design: `r${designRevision}`, Run: runId },
+    check: (c) => {
+      const r = validateDocs({ issue: n, ref: c, plansDir: plans.dir, kinds: [...PLAN_KINDS], withDesign: true });
+      return r.ok ? "" : `the plan does not validate; nothing was pushed and the issue comment is unchanged:\n${formatErrors(r.errors)}`;
+    },
   });
-
-  const back = validateDocs({ issue: n, ref: commit, plansDir: plans.dir, kinds: [...PLAN_KINDS], withDesign: true });
-  if (!back.ok) fail(`the published plan (commit ${commit}) does not validate; the issue comment is unchanged:\n${formatErrors(back.errors)}`);
 
   let repo: string;
   try {

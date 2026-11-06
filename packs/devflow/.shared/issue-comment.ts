@@ -1,7 +1,7 @@
 // The one marked comment per issue: a state block (machine) and a table (people), edited in place.
 // Every writer merges its patch into the state and re-renders the whole body.
 import { repoSlug } from "./gh.ts";
-import { commentMarker, fileOf, workflowName, type Kind } from "./layout.ts";
+import { commentMarker, fileOf, PLAN_KINDS, workflowName, type Kind } from "./layout.ts";
 import { fail, plansConfig } from "./util.ts";
 
 export type State = Record<string, any>;
@@ -59,7 +59,7 @@ export function renderComment(n: number, s: State): string {
   rows.push(s.design ? `| Design | ready | r${s.design.revision} | ${link("design")} |` : "| Design | not started | — | — |");
   if (s.plan) {
     const stale = planStale(s) ? ` · **stale: built from design r${s.plan.design_revision}**` : "";
-    const links = (["plan", "plan-test", "before", "after"] as const).map(link).join(" · ");
+    const links = PLAN_KINDS.map(link).join(" · ");
     rows.push(`| Plan | ready${stale} | r${s.plan.revision} | ${links} |`);
   } else rows.push("| Plan | not started | — | — |");
   const pr = s.build?.pr;
@@ -124,7 +124,10 @@ export function upsertComment(n: number, patch: State, pushed = ""): { url: stri
     die((e as Error).message);
   }
   const stamp = { updated_at: new Date().toISOString().replace(/\.\d+Z$/, "Z"), updated_by: process.env.WORKFLOW_ID || "run" };
-  const state = mergeState(mergeState(mergeState(defaults, stateOf(found[0]) ?? {}), patch), stamp);
+  const prior = found[0] ? stateOf(found[0]) : {};
+  // A hand-edited comment whose state no longer parses: rewriting it would drop the design and plan rows.
+  if (prior === null) die(`the devflow comment on issue #${n} has no readable state; restore its devflow-state line or delete the comment: ${found[0].html_url}`);
+  const state = mergeState(mergeState(mergeState(defaults, prior), patch), stamp);
   const payload = JSON.stringify({ body: renderComment(n, state) });
   const w = found[0]
     ? gh(["api", "--method", "PATCH", `repos/{owner}/{repo}/issues/comments/${found[0].id}`, "--input", "-"], payload)

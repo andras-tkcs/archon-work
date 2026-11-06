@@ -2,13 +2,12 @@
 // it. It never writes anything. Env: INPUTS_WORK (free text, else USER_MESSAGE), INPUTS_CHANGE,
 // INPUTS_PLANS_REF, INPUTS_PLANS_DIR, INPUTS_MAIN_BRANCH, INPUTS_MODE (refine|plan), INPUTS_PACK.
 // User text and issue content are untrusted: they only ever reach git and gh as single argv entries.
-import { basename } from "node:path";
 import { extractManifest } from "./render-run.ts";
 import { parse, validate } from "./frontmatter.ts";
 import { fetchPlans, readAt } from "./plans-branch.ts";
 import { repoSlug } from "./gh.ts";
-import { fileOf, folderOf, slugOf } from "./layout.ts";
-import { fail, input, plansConfig, run, tail } from "./util.ts";
+import { DOC_KINDS, fileOf, folderOf, slugOf } from "./layout.ts";
+import { fail, input, isEntry, plansConfig, run, tail } from "./util.ts";
 
 export const COMMENTS_LIMIT = 200 * 1024;
 export const TRUNCATED = "…[truncated]";
@@ -22,18 +21,19 @@ interface Hit {
 }
 
 // Each form, in the order of the spec's step 1. A matched span is consumed, so later forms never see its digits.
+const KIND_NAMES = DOC_KINDS.join("|");
 const FORMS: RegExp[] = [
   // (b) a URL or path naming the issue folder or the build workflow
   /\S*(?<![\w.-])plans\/issue-([0-9]+)\/\S*/g,
   /\S*(?<![\w.-])workflows\/build-issue-([0-9]+)\.ya?ml\S*/g,
   // (c) issue-<n>, issue-<n>/plan.md (and the other kinds)
-  /(?<![\w-])issue-([0-9]+)(?:\/(?:design|plan|plan-test|before|after)\.md)?(?![\w-])/g,
+  new RegExp(`(?<![\\w-])issue-([0-9]+)(?:\\/(?:${KIND_NAMES})\\.md)?(?![\\w-])`, "g"),
   // (d) #<n>
   /(?<![\w&#])#([0-9]+)(?![\w])/g,
 ];
 const ISSUE_URL = /https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/([0-9]+)(?![0-9])\S*/g;
 const BARE_INT = /(?<![\w.\/#&-])([0-9]+)(?![\w.\/-])/g;
-const KIND_FILE = /(?<![\w-])(?:design|plan|plan-test|before|after)\.md(?![\w-])/;
+const KIND_FILE = new RegExp(`(?<![\\w-])(?:${KIND_NAMES})\\.md(?![\\w-])`);
 const COMMAND_WORDS = /^(?:[\s:;,]*(?:devflow-refine|devflow-plan|refine|plan)(?![\w-]))+/i;
 
 function blank(text: string, h: Hit): string {
@@ -286,5 +286,4 @@ function main(): void {
   );
 }
 
-// Runs as a node script (directly or through a workflow's scripts/resolve-input.ts wrapper), not when a test imports it.
-if (basename(Bun.main) === "resolve-input.ts") main();
+if (isEntry(import.meta)) main();

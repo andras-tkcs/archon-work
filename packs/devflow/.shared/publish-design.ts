@@ -1,5 +1,5 @@
-// Publishes $ARTIFACTS_DIR/final/design.md to the plans branch, checks the published file with
-// validate-docs, then updates the issue comment. Env: INPUTS_ISSUE, INPUTS_TITLE, INPUTS_REVISION,
+// Publishes $ARTIFACTS_DIR/final/design.md to the plans branch: the commit is checked with
+// validate-docs before it is pushed, then the issue comment is updated. Env: INPUTS_ISSUE, INPUTS_TITLE, INPUTS_REVISION,
 // INPUTS_PLANS_REF, INPUTS_PLANS_DIR. Output: { commit, revision, design_url, comment_url }.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,7 +7,7 @@ import { repoSlug } from "./gh.ts";
 import { upsertComment } from "./issue-comment.ts";
 import { fileOf } from "./layout.ts";
 import { commitFiles } from "./plans-branch.ts";
-import { artifactsDir, fail, input, plansConfig } from "./util.ts";
+import { artifactsDir, fail, input, isEntry, plansConfig } from "./util.ts";
 import { formatErrors, validateDocs } from "./validate-docs.ts";
 
 // The entries of the design's `## Proposed rulings` section, one `- **Q:** …` line each.
@@ -16,7 +16,7 @@ export function proposedRulings(text: string): string[] {
   return m ? m[1].split("\n").filter((l) => l.startsWith("- **Q:**")) : [];
 }
 
-if (import.meta.main) {
+if (isEntry(import.meta)) {
   const n = Number(input("issue"));
   const revision = Number(input("revision"));
   const title = input("title");
@@ -24,10 +24,16 @@ if (import.meta.main) {
   const text = readFileSync(join(artifactsDir(), "final", "design.md"), "utf8");
   const path = fileOf(plans.dir, n, "design");
   const run = process.env.WORKFLOW_ID || "run";
-  const commit = commitFiles({ ref: plans.ref, files: { [path]: text }, message: `Design issue-${n} r${revision}: ${title}`, trailers: { Issue: `#${n}`, Run: run } });
-
-  const back = validateDocs({ issue: n, ref: commit, plansDir: plans.dir, kinds: ["design"] });
-  if (!back.ok) fail(`the published design.md (commit ${commit}) does not validate; the issue comment is unchanged:\n${formatErrors(back.errors)}`);
+  const commit = commitFiles({
+    ref: plans.ref,
+    files: { [path]: text },
+    message: `Design issue-${n} r${revision}: ${title}`,
+    trailers: { Issue: `#${n}`, Run: run },
+    check: (c) => {
+      const r = validateDocs({ issue: n, ref: c, plansDir: plans.dir, kinds: ["design"] });
+      return r.ok ? "" : `design.md does not validate; nothing was pushed and the issue comment is unchanged:\n${formatErrors(r.errors)}`;
+    },
+  });
 
   let repo: string;
   try {

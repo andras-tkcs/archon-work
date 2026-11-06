@@ -53,6 +53,13 @@ eq "$code" "1" "two marked comments fail"
 contains "$out" "remove the duplicate: https://x/dup" "the failure names the duplicate"
 contains "$out" "already pushed in commit abc123" "the failure names the pushed commit"
 eq "$(gh_calls '^PATCH issues/comments/101')" "2" "the first marked comment is still updated"
+
+# A hand-broken state line is never replaced by an empty state.
+bun -e "const f='$GH_STUB_DIR/comments-42.json';const a=JSON.parse(require('fs').readFileSync(f,'utf8')).filter(c=>c.id===101);a[0].body=a[0].body.replace(/devflow-state: \{/,'devflow-state: {oops');require('fs').writeFileSync(f,JSON.stringify(a))"
+out="$(ic "C.upsertComment(42,{})" 2>&1)"; code=$?
+eq "$code" "1" "an unreadable state fails"
+contains "$out" "has no readable state; restore its devflow-state line or delete the comment: https://github.com/o/r/issues/42#issuecomment-101" "the failure names the comment"
+eq "$(gh_calls '^PATCH issues/comments/101')" "2" "the broken comment is not rewritten"
 touch "$GH_STUB_DIR/fail-api"
 out="$(ic "C.upsertComment(42,{})" 2>&1)"; code=$?
 eq "$code" "1" "a gh failure fails"

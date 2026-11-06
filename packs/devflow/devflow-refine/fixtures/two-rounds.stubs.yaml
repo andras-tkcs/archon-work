@@ -140,6 +140,6 @@ render: { ok: true, error: "", workflow: build-issue-7, file: /stub/art/build-is
 plan-test: { ok: true, findings: [] }
 plan-review: { clean: true, summary: every phase checked, findings: [] }
 plan-check: { done: true, round: 1, findings: 0, needs_refine_present: false, needs_refine_question: "", needs_refine_why: "" }
-plan__plan-result: { issue: 7, branch: feat/issue-7-csv-export, title: Export reports as CSV, workflow: build-issue-7 }
+plan__plan-result: { issue: 7, revision: 1, branch: feat/issue-7-csv-export, title: Export reports as CSV, workflow: build-issue-7 }
 plan__publish: { commit: 89abcdef0123456789abcdef0123456789abcdef, workflow: build-issue-7, revision: 1, unresolved: 0, message: published build-issue-7 }
 plan__result: { planned: true, issue: 7, plan_revision: 1, design_revision: 1, workflow: build-issue-7, needs_refine: false, unresolved_findings: 0 }

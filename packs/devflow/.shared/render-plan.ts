@@ -13,7 +13,8 @@ const branch = input("branch");
 const existingBranch = input("existing_branch", false);
 const title = input("title");
 const designRevision = Number(input("design_revision"));
-const planRevision = Number(input("plan_revision"));
+// The published plan is revision plan_revision_base (0 when there is none); this run writes the next one.
+const planRevision = Number(input("plan_revision_base")) + 1;
 const mainBranch = input("main_branch");
 const branchRegex = input("branch_regex");
 const plans = plansConfig();

@@ -124,7 +124,7 @@ STUB
   rr_run() {
     PATH="$scratch/rstub:$PATH" STUB_LIST="$1" WORKFLOW_ID="${RR_WORKFLOW_ID-wf-test}" STUB_GET="${STUB_GET-}" ARTIFACTS_DIR="$rart" \
       INPUTS_ISSUE="$2" INPUTS_BRANCH="${RR_BRANCH:-feat/serial}" INPUTS_EXISTING_BRANCH="${RR_EXISTING-}" INPUTS_TITLE=S \
-      INPUTS_DESIGN_REVISION=1 INPUTS_PLAN_REVISION=1 INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' \
+      INPUTS_DESIGN_REVISION=1 INPUTS_PLAN_REVISION_BASE=0 INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' \
       INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_PACK="${3-test/devflow}" INPUTS_SOFT_ERRORS=true bun "$rr"
   }
   cd "$repo"
@@ -132,6 +132,8 @@ STUB
   echo "$out" | grep -q '"ok":true'
   echo "$out" | grep -q '"workflow":"build-issue-2"'
   test -f "$rart/build-issue-2.yaml"
+  # the published plan is r0 (none): the rendered workflow is plan r1, the revision check-plan stamps
+  grep -q 'design r1, plan r1, planned by run' "$rart/build-issue-2.yaml"
   out="$(rr_run "$list_ok" 9)"
   echo "$out" | grep -q '"ok":false'
   echo "$out" | grep -q "plan_slug 'issue-2' must be 'issue-9'"
@@ -227,7 +229,8 @@ cp_script="$repo_root/packs/devflow/mod-devflow-plan-block/scripts/check-plan.ts
   echo "$out" | grep -q '"done":true'
   echo "$out" | grep -q '"needs_refine_present":false'
   grep -q '"workflow":"build-issue-7"' "$chk/tested.json"
-  grep -q '"issue":7' "$chk/tested.json"
+  grep -q '"issue":7,"revision":1,' "$chk/tested.json"
+  head -8 "$chk/final/plan.md" | grep -q '^revision: 1$'
   test ! -e "$chk/test-findings.md" && test ! -e "$chk/validation.json"
   head -8 "$chk/final/plan.md" | grep -q '^design_revision: 1$'
   head -8 "$chk/final/plan-test.md" | grep -q '^kind: plan-test$'
@@ -240,6 +243,10 @@ cp_script="$repo_root/packs/devflow/mod-devflow-plan-block/scripts/check-plan.ts
   grep -q '"unresolved":1' "$chk/tested.json"
   grep -q '### Unresolved validation findings' "$chk/unresolved.md"
   grep -qF -- '- F1 [review, mechanical] p1-export: p' "$chk/unresolved.md"
+  # The review's text is quoted into plan.md, so its template leftovers are made harmless.
+  todo='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1-export","problem":"TODO in {{x}}, TBD","fix":"f"}]}'
+  cp_run "$todo" 2 >/dev/null
+  grep -qF -- 'p1-export: todo in { {x}}, tbd' "$chk/unresolved.md"
   # A drafted file that breaks the scheme is a finding the next round fixes, listed in validation.json.
   reset
   sed -i '/^- r1 (2026-11-06, run run-7): first test plan$/d' "$chk/plan-test.md"

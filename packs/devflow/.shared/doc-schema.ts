@@ -1,9 +1,8 @@
 // The machine form of the document scheme: one entry per kind, matching templates/<kind>.md.
 // validate-docs.ts checks files against it; part 11 of the shared tests checks the templates against it.
-import type { Kind } from "./layout.ts";
+import { KINDS, type DocKind } from "./layout.ts";
 
-export type DocKind = Exclude<Kind, "deviations">;
-export const DOC_KINDS: DocKind[] = ["design", "plan", "plan-test", "before", "after"];
+export { DOC_KINDS, type DocKind } from "./layout.ts";
 
 export interface Section {
   title: string;
@@ -38,7 +37,12 @@ export const RULING_RE = /^- \*\*Q:\*\* .+ \*\*A:\*\* .+ \*\*Source:\*\* \S/;
 export const RELATED_RE = /^- \S+ — \S/;
 export const SOURCE_FORMS = [/^answer Q\d+ round [12]$/, /^ADR \S+$/, /^code \S+$/, /^rulings\.md$/, /^issue comment https?:\/\/\S+$/];
 export const LEVELS = ["unit", "integration", "e2e"];
-export const LINK_TARGETS = ["design.md", "plan.md", "plan-test.md", "before.md", "after.md", "deviations.md"];
+// Rule V2: a template or draft leftover anywhere in a file.
+export const LEFTOVER_RE = /\{\{|<!-- guide|<!-- repeat|\bTODO\b|\bTBD\b/;
+// Quoted text (a reviewer's finding) with every V2 leftover made harmless, so quoting it cannot fail V2.
+export const defuseLeftovers = (s: string) =>
+  s.replace(new RegExp(LEFTOVER_RE.source, "g"), (m) => (m.startsWith("{") ? "{ {" : m.startsWith("<") ? `< ${m.slice(1)}` : m.toLowerCase()));
+export const LINK_TARGETS = KINDS.map((k) => `${k}.md`);
 
 const revisionLog: Section = { title: "Revision log", required: true };
 

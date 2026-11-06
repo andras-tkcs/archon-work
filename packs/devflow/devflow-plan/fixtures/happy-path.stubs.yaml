@@ -59,6 +59,7 @@ plan-check:
   needs_refine_why: ""
 stage__plan-result:
   issue: 7
+  revision: 1
   branch: feat/issue-7-csv-export
   title: Export reports as CSV
   workflow: build-issue-7

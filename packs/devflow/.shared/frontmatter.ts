@@ -1,10 +1,9 @@
 // Front matter of the issue-folder files: parse, serialize (canonical key order), validate.
-import { KINDS } from "./layout.ts";
+import { KINDS, PLAN_KINDS } from "./layout.ts";
 
 export type FrontMatter = Record<string, unknown>;
 
 export const KEY_ORDER = ["issue", "kind", "title", "revision", "design_revision", "run", "updated"] as const;
-const PLAN_KINDS = ["plan", "plan-test", "before", "after"];
 
 // Throws when the block is missing or is not a YAML mapping.
 export function parse(text: string): { fm: FrontMatter; body: string } {
@@ -42,7 +41,7 @@ const isPosInt = (v: unknown) => typeof v === "number" && Number.isInteger(v) &&
 export function validate(fm: FrontMatter, kind: string): string[] {
   if (kind === "deviations") return ["kind deviations is not supported yet"];
   if (!(KINDS as readonly string[]).includes(kind)) return [`unknown file kind '${kind}'`];
-  const expected = KEY_ORDER.filter((k) => k !== "design_revision" || PLAN_KINDS.includes(kind));
+  const expected = KEY_ORDER.filter((k) => k !== "design_revision" || (PLAN_KINDS as readonly string[]).includes(kind));
   const errs: string[] = [];
   for (const k of expected) if (fm[k] === undefined || fm[k] === null || fm[k] === "") errs.push(`front matter key '${k}' is missing`);
   for (const k of Object.keys(fm)) {

@@ -1,6 +1,11 @@
 // Shared helpers for the devflow pack's scripts. Diagnostics go to stderr; stdout is the node's JSON.
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+
+// True when the process runs this module as a node script: directly, or through a workflow's
+// scripts/<same name>.ts wrapper, which imports it (so import.meta.main is false there). False when a
+// test imports it. Pass the module's own import.meta.
+export const isEntry = (meta: ImportMeta) => basename(Bun.main) === basename(meta.path);
 
 export interface Run {
   code: number;
