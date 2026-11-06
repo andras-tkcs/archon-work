@@ -1,0 +1,331 @@
+name: devflow-run-devflow-v2-refine-plan-build
+description: "Implementation of the devflow plan devflow-v2-refine-plan-build (\"devflow v2: refine → plan → build with deterministic issue-<n> names and traceable issue folders\") from run 139dc0da-493e-4cb3-8dd1-2ca3a25abbcb.\nThe plan is plans/devflow-v2-refine-plan-build/plan.md on the plans branch.\nPhases run up to 3 at a time in their own worktrees, then tkcs-lab/devflow:mod-devflow-deliver reviews, opens the PR and watches it."
+worktree:
+  enabled: true
+returns: result
+outcome_field: merged
+nodes:
+  - id: after-steps
+    bash: "printf '%s' 'IyBBZnRlciBpbXBsZW1lbnRpbmcgZGV2ZmxvdyB2MjogcmVmaW5lIOKGkiBwbGFuIOKGkiBidWlsZAoKIyMgMS4gUnVuIGRldmZsb3ctcmVmaW5lIG9uIGEgcmVhbCBpc3N1ZSBpbiBhIHNjcmF0Y2ggcHJvamVjdAoKV2h5OiBmaXh0dXJlcyBjYW5ub3QgcHJvdmUgdGhlIGxpdmUgZW5naW5lIGFuZCBHaXRIdWIgYmVoYXZpb3VyIG9mIHRoZSBmb2xkZXIsIHRoZSBpc3N1ZSBjb21tZW50IGFuZCB0aGUgcGF1c2UuCgoxLiBJbiBhIHNjcmF0Y2ggcHJvamVjdCB3aXRoIHRoZSBkZXZmbG93IHBhY2sgaW5zdGFsbGVkIGFuZCBhIGBwbGFuc2AgYnJhbmNoIChvciBub25lKSwgb3BlbiBhIHNtYWxsIGlzc3VlIHdpdGggb25lIHJlYWwgb3BlbiBxdWVzdGlvbi4KMi4gUnVuOiBgYXJjaG9uIHdvcmtmbG93IHJ1biB0a2NzLWxhYi9kZXZmbG93OmRldmZsb3ctcmVmaW5lICIjPGlzc3VlPiJgLgozLiBBbnN3ZXIgcm91bmQgMSAoYW5kIHJvdW5kIDIgaWYgYXNrZWQpLiBDb25maXJtOiBhdCBtb3N0IDUgcXVlc3Rpb25zIGluIHJvdW5kIDEsIGF0IG1vc3QgMyBpbiByb3VuZCAyLCBvbmUgcGF1c2UgZWFjaC4KNC4gT3BlbiB0aGUgYHBsYW5zYCBicmFuY2g6IGBwbGFucy9wbGFucy9pc3N1ZS08bj4vZGVzaWduLm1kYCBleGlzdHMgd2l0aCB0aGUgZnJvbnQgbWF0dGVyIGFuZCBhbGwgdGVuIHNlY3Rpb25zLgo1LiBPcGVuIHRoZSBpc3N1ZTogZXhhY3RseSBvbmUgY29tbWVudCBzdGFydGluZyB3aXRoIGA8IS0tIGRldmZsb3c6aXNzdWUtPG4+IC0tPmAsIERlc2lnbiByb3cgYHJlYWR5YC4KNi4gQXQgdGhlIGZpbmFsIHBhdXNlIGFuc3dlciBgcmV2aXNlOiA8bm90ZT5gIGFuZCBjb25maXJtIHJldmlzaW9uIDIgd2l0aCBhIFJldmlzaW9uIGxvZyBsaW5lOyB0aGVuIGFuc3dlciBgcGxhbmAuCgoqKlJlcG9ydDoqKiBgbWExIHJlZmluZSBvbiBhIHJlYWwgaXNzdWU6IHBhc3MvZmFpbCDigJQgPHdoYXQgZGlmZmVyZWQ+YAoKIyMgMi4gUnVuIGRldmZsb3ctcGxhbiwgYXJjaG9uIHdvcmtmbG93IHN5bmMsIHRoZW4gYnVpbGQtaXNzdWUtTiBvbiBhIHR3by1waGFzZSBwbGFuCgpXaHk6IHRoZSBjaGlsZCB3b3JrZmxvd3MgYW5kIHRoZSBpc3N1ZSB0cmFjaW5nIGluIHRoZSBnZW5lcmF0ZWQgd29ya2Zsb3cgb25seSB3b3JrIGluIGEgcmVhbCBydW4uCgoxLiBSdW4gYGFyY2hvbiB3b3JrZmxvdyBydW4gdGtjcy1sYWIvZGV2ZmxvdzpkZXZmbG93LXBsYW4gIiM8aXNzdWU+ImAgKGFsc28gdHJ5IGl0IHdpdGggdGhlIGRlc2lnbiBVUkwpLiBJdCBtdXN0IG5vdCBwYXVzZSBmb3IgcXVlc3Rpb25zLgoyLiBDb25maXJtIG9uZSBjb21taXQgb24gYHBsYW5zYCB3aXRoIGBwbGFuLm1kYCwgYGJlZm9yZS5tZGAsIGBhZnRlci5tZGAgYW5kIGB3b3JrZmxvd3MvYnVpbGQtaXNzdWUtPG4+LnlhbWxgLgozLiBSdW4gYGFyY2hvbiB3b3JrZmxvdyBzeW5jYCwgdGhlbiBgYXJjaG9uIHdvcmtmbG93IHJ1biBidWlsZC1pc3N1ZS08bj4gLS1kZXRhY2hgLgo0LiBDb25maXJtIHRoZSBpc3N1ZSBjb21tZW50IG1vdmVzOiBidWlsZGluZyDihpIgUFIgb3BlbiDihpIgbWVyZ2VkL2Nsb3NlZCwgYW5kIHRoZSBQUiBib2R5IGhhcyBgQ2xvc2VzICM8bj5gIGFuZCBhIFRyYWNlYWJpbGl0eSBzZWN0aW9uLgo1LiBDb25maXJtIHRoZSBmZWF0dXJlIGJyYW5jaCBob2xkcyBhIGBQbGFuLVBoYXNlOiBpc3N1ZS08bj4vPGlkPmAgbWVyZ2UgY29tbWl0IHBlciBwaGFzZS4KCioqUmVwb3J0OioqIGBtYTIgcGxhbiBhbmQgYnVpbGQ6IHBhc3MvZmFpbCDigJQgPHdoYXQgZGlmZmVyZWQ+YAo=' | base64 -d > \"$ARTIFACTS_DIR/after.md\"\necho \"after.md written\"\n"
+  - id: worktree-check
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nB='feat/devflow-v2-refine-plan-build'\ngit fetch origin \"$B\" 2>/dev/null || true\nHELD=$(awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}' <(git worktree list --porcelain))\nQ=\"\"\nif [ -n \"$HELD\" ]; then\n  AHEAD=$(git rev-list --count \"origin/$B..refs/heads/$B\" 2>/dev/null || echo unknown)\n  Q=\"The branch $B is already checked out in another worktree, probably left by an earlier run. Approving removes these worktrees (git worktree remove, never forced; a worktree with uncommitted changes is refused and the run fails). Do not approve if another run is still using one.\\n\\nCommits on the branch not on origin: $AHEAD\"\n  while IFS= read -r w; do Q=\"$Q\\n\\n$w\\nuncommitted paths: $(git -C \"$w\" status --porcelain | wc -l | tr -d ' ')\"; done <<< \"$HELD\"\nfi\nH=\"$HELD\" Q=\"$Q\" python3 -c 'import json,os; print(json.dumps({\"held\": os.environ[\"H\"], \"question\": os.environ[\"Q\"].replace(\"\\\\n\", \"\\n\")}))' >&3\n"
+    output_format:
+      type: object
+      properties:
+        held:
+          type: string
+        question:
+          type: string
+      required:
+        - held
+        - question
+  - id: confirm-worktree-removal
+    depends_on:
+      - worktree-check
+    when: "$worktree-check.output.held != ''"
+    wait:
+      attention: $worktree-check.output.question
+      form: approval
+      labels:
+        workflow: devflow-run
+        stage: worktree-removal
+  - id: stop-at-worktrees
+    depends_on:
+      - confirm-worktree-removal
+    when: "$confirm-worktree-removal.output.decision == 'reject'"
+    cancel: "Stopped before implementation: the worktree holding the feature branch was not removed."
+  - id: remove-worktrees
+    depends_on:
+      - confirm-worktree-removal
+    when: "$confirm-worktree-removal.output.decision == 'approve'"
+    bash: "set -euo pipefail\nB='feat/devflow-v2-refine-plan-build'\nHELD=$(awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}' <(git worktree list --porcelain))\nwhile IFS= read -r w; do [ -n \"$w\" ] && git worktree remove \"$w\" && echo \"removed $w\" >&2; done <<< \"$HELD\"\n"
+  - id: start
+    depends_on:
+      - worktree-check
+      - confirm-worktree-removal
+      - stop-at-worktrees
+      - remove-worktrees
+    trigger_rule: none_failed_min_one_success
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nB='feat/devflow-v2-refine-plan-build'; M='main'; PR='plans'\ngit fetch origin \"$M\"\ngit fetch origin \"$PR\"\nPC=$(git rev-parse FETCH_HEAD)\nHELD=$(git worktree list --porcelain | awk -v b=\"refs/heads/$B\" -v me=\"$(git rev-parse --show-toplevel)\" '$1==\"worktree\"{w=$2} $1==\"branch\" && $2==b && w!=me{print w}')\nif [ -n \"$HELD\" ]; then echo \"devflow: branch $B is already checked out in another worktree: $HELD\" >&2; echo \"devflow: if no run is using it and it has nothing unpushed, remove it with: git worktree remove $HELD\" >&2; exit 1; fi\nif git ls-remote --exit-code --heads origin \"$B\" >/dev/null 2>&1; then\n  git fetch origin \"$B\"\n  if git rev-parse --verify --quiet \"refs/heads/$B\" >/dev/null; then git switch \"$B\"; git merge --ff-only \"origin/$B\"; else git switch -c \"$B\" --track \"origin/$B\"; fi\nelif git rev-parse --verify --quiet \"refs/heads/$B\" >/dev/null; then git switch \"$B\"\nelse git switch -c \"$B\" \"origin/$M\"; fi\nprintf '{\"head\":\"%s\",\"plan_commit\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" \"$PC\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+        plan_commit:
+          type: string
+      required:
+        - head
+        - plan_commit
+  - id: phase-p1-core
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - start
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p1-core
+      base: $start.output.head
+  - id: merge-1
+    depends_on:
+      - phase-p1-core
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p1-core.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p1-core already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p1-core: layout, frontmatter, model-rules, test runner and stub gh' -m 'Plan-Phase: devflow-v2-refine-plan-build/p1-core' || { git merge --abort; echo \"devflow: merging p1-core conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p2-comment-branch
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-1
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p2-comment-branch
+      base: $merge-1.output.head
+  - id: phase-p4-attention
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-1
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p4-attention
+      base: $merge-1.output.head
+  - id: merge-2
+    depends_on:
+      - phase-p2-comment-branch
+      - phase-p4-attention
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p2-comment-branch.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p2-comment-branch already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p2-comment-branch: issue-comment and plans-branch with tests' -m 'Plan-Phase: devflow-v2-refine-plan-build/p2-comment-branch' || { git merge --abort; echo \"devflow: merging p2-comment-branch conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p4-attention.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p4-attention already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-v2-refine-plan-build p4-attention: mod-devflow-attention and settle' -m 'Plan-Phase: devflow-v2-refine-plan-build/p4-attention' || { git merge --abort; echo \"devflow: merging p4-attention conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p3-resolve
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-2
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p3-resolve
+      base: $merge-2.output.head
+  - id: phase-p5-design-scripts
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-2
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p5-design-scripts
+      base: $merge-2.output.head
+  - id: phase-p6a-render
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-2
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p6a-render
+      base: $merge-2.output.head
+  - id: merge-3
+    depends_on:
+      - phase-p3-resolve
+      - phase-p5-design-scripts
+      - phase-p6a-render
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p3-resolve.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p3-resolve already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p3-resolve: resolve-input with tests' -m 'Plan-Phase: devflow-v2-refine-plan-build/p3-resolve' || { git merge --abort; echo \"devflow: merging p3-resolve conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p5-design-scripts.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p5-design-scripts already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-v2-refine-plan-build p5-design-scripts: check-design, record-answers, format-round, publish-design with tests' -m 'Plan-Phase: devflow-v2-refine-plan-build/p5-design-scripts' || { git merge --abort; echo \"devflow: merging p5-design-scripts conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh3=$phase-p6a-render.output.head\nif git merge-base --is-ancestor \"$h3\" HEAD; then echo \"p6a-render already merged\" >&2\nelse git merge --no-ff \"$h3\" -m 'Merge devflow-v2-refine-plan-build p6a-render: render-run, render-plan and check-plan changes, render tests' -m 'Plan-Phase: devflow-v2-refine-plan-build/p6a-render' || { git merge --abort; echo \"devflow: merging p6a-render conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p6b-trace
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-3
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p6b-trace
+      base: $merge-3.output.head
+  - id: phase-p7a-plan-scripts
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-3
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p7a-plan-scripts
+      base: $merge-3.output.head
+  - id: phase-p8-refine-block
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-3
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p8-refine-block
+      base: $merge-3.output.head
+  - id: merge-4
+    depends_on:
+      - phase-p6b-trace
+      - phase-p7a-plan-scripts
+      - phase-p8-refine-block
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p6b-trace.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p6b-trace already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p6b-trace: trace block, tail/deliver/load-plan/open-pr changes' -m 'Plan-Phase: devflow-v2-refine-plan-build/p6b-trace' || { git merge --abort; echo \"devflow: merging p6b-trace conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p7a-plan-scripts.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p7a-plan-scripts already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-v2-refine-plan-build p7a-plan-scripts: publish-plan, load-design, publish-needs-refine, plan-block-result with tests' -m 'Plan-Phase: devflow-v2-refine-plan-build/p7a-plan-scripts' || { git merge --abort; echo \"devflow: merging p7a-plan-scripts conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh3=$phase-p8-refine-block.output.head\nif git merge-base --is-ancestor \"$h3\" HEAD; then echo \"p8-refine-block already merged\" >&2\nelse git merge --no-ff \"$h3\" -m 'Merge devflow-v2-refine-plan-build p8-refine-block: refine block and its prompts' -m 'Plan-Phase: devflow-v2-refine-plan-build/p8-refine-block' || { git merge --abort; echo \"devflow: merging p8-refine-block conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p7b-plan-block
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-4
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p7b-plan-block
+      base: $merge-4.output.head
+  - id: phase-p10-blocks
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-4
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p10-blocks
+      base: $merge-4.output.head
+  - id: merge-5
+    depends_on:
+      - phase-p7b-plan-block
+      - phase-p10-blocks
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p7b-plan-block.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p7b-plan-block already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p7b-plan-block: plan block, devflow-plan entry, prompts, fixtures' -m 'Plan-Phase: devflow-v2-refine-plan-build/p7b-plan-block' || { git merge --abort; echo \"devflow: merging p7b-plan-block conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nh2=$phase-p10-blocks.output.head\nif git merge-base --is-ancestor \"$h2\" HEAD; then echo \"p10-blocks already merged\" >&2\nelse git merge --no-ff \"$h2\" -m 'Merge devflow-v2-refine-plan-build p10-blocks: mod-devflow-start and mod-devflow-merge, render-run switch' -m 'Plan-Phase: devflow-v2-refine-plan-build/p10-blocks' || { git merge --abort; echo \"devflow: merging p10-blocks conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p9-refine-entry
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-5
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p9-refine-entry
+      base: $merge-5.output.head
+  - id: merge-6
+    depends_on:
+      - phase-p9-refine-entry
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p9-refine-entry.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p9-refine-entry already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p9-refine-entry: devflow-refine entry, result script, fixtures, loop verification' -m 'Plan-Phase: devflow-v2-refine-plan-build/p9-refine-entry' || { git merge --abort; echo \"devflow: merging p9-refine-entry conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p11-aliases
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-6
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p11-aliases
+      base: $merge-6.output.head
+  - id: merge-7
+    depends_on:
+      - phase-p11-aliases
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p11-aliases.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p11-aliases already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p11-aliases: model aliases in the new workflows, README Models' -m 'Plan-Phase: devflow-v2-refine-plan-build/p11-aliases' || { git merge --abort; echo \"devflow: merging p11-aliases conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: phase-p12-retire
+    workflow: tkcs-lab/devflow:mod-devflow-phase
+    isolation: worktree
+    depends_on:
+      - merge-7
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      phase: p12-retire
+      base: $merge-7.output.head
+  - id: merge-8
+    depends_on:
+      - phase-p12-retire
+    bash: "set -euo pipefail\nexec 3>&1 1>&2\nh1=$phase-p12-retire.output.head\nif git merge-base --is-ancestor \"$h1\" HEAD; then echo \"p12-retire already merged\" >&2\nelse git merge --no-ff \"$h1\" -m 'Merge devflow-v2-refine-plan-build p12-retire: delete old files, README rewrite, plugin entrypoints, quick refusal text, changelog line' -m 'Plan-Phase: devflow-v2-refine-plan-build/p12-retire' || { git merge --abort; echo \"devflow: merging p12-retire conflicts; its touches overlap another phase\" >&2; exit 1; }\nfi\nprintf '{\"head\":\"%s\"}\\n' \"$(git rev-parse HEAD)\" >&3\n"
+    output_format:
+      type: object
+      properties:
+        head:
+          type: string
+      required:
+        - head
+  - id: deliver
+    workflow: tkcs-lab/devflow:mod-devflow-deliver
+    depends_on:
+      - merge-8
+      - after-steps
+    with:
+      plan_ref: plans
+      plan_path: plans/devflow-v2-refine-plan-build/plan.md
+      plan_commit: $start.output.plan_commit
+      slug: devflow-v2-refine-plan-build
+      branch: feat/devflow-v2-refine-plan-build
+      title: "devflow v2: refine → plan → build with deterministic issue-<n> names and traceable issue folders"
+      head: $merge-8.output.head
+  - id: result
+    depends_on:
+      - deliver
+    bash: "m=$deliver.output.merged; printf '{\"merged\":%s}\\n' \"$m\"\n"
+    output_format:
+      type: object
+      properties:
+        merged:
+          type: boolean
+      required:
+        - merged
