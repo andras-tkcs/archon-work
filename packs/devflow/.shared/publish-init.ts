@@ -8,9 +8,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { commitFiles, fetchPlans } from "./plans-branch.ts";
 import { ARCHON_CONFIG, RULINGS_PATH } from "./scaffold-repo.ts";
-import { PROFILE_PATH, artifactsDir, fail, input, isEntry, jsonInput, must, plansConfig, profile, run, tail } from "./util.ts";
+import { LEGACY_PROFILE_PATH, PROFILE_PATH, artifactsDir, fail, input, isEntry, jsonInput, must, plansConfig, profile, run, tail } from "./util.ts";
 
-export const INIT_PATHS = [PROFILE_PATH, RULINGS_PATH, ARCHON_CONFIG, ".gitignore", ".claude/toolkit.yaml"];
+export const INIT_PATHS = [PROFILE_PATH, RULINGS_PATH, ARCHON_CONFIG, ".gitignore", LEGACY_PROFILE_PATH];
 export const PLANS_README = "Managed by the devflow workflows; do not edit by hand.\n";
 
 // The init paths git sees as changed (added, modified or deleted, staged or not).

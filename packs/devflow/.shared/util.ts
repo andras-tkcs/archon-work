@@ -84,6 +84,8 @@ export function projectEnv(): Record<string, string> {
 }
 
 export const PROFILE_PATH = ".devflow/devflow.yaml";
+// The retired toolkit's profile: read only by devflow-init, which converts and removes it.
+export const LEGACY_PROFILE_PATH = ".claude/toolkit.yaml";
 export const MISSING_PROFILE = `${PROFILE_PATH} not found: run devflow-init first`;
 
 // The raw profile; preflight has already validated it with validate-profile.py.

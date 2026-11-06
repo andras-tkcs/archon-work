@@ -5,12 +5,11 @@
 // Env: INPUTS_PLANS_REF, INPUTS_PLANS_DIR (the profile's plans key, else plans). Prints { changed }.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { PROFILE_PATH, isEntry, must, plansConfig, run } from "./util.ts";
+import { LEGACY_PROFILE_PATH as LEGACY_PATH, PROFILE_PATH, isEntry, must, plansConfig, run } from "./util.ts";
 
 export const RULINGS_PATH = ".archon/devflow/policy/rulings.md";
 export const ARCHON_CONFIG = ".archon/config.yaml";
 export const WORKTREES_IGNORE = ".archon/worktrees/";
-const LEGACY_PATH = ".claude/toolkit.yaml";
 
 export const RULINGS = `# Rulings
 

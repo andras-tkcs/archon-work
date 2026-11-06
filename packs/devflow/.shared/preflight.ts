@@ -2,10 +2,10 @@
 // resolved profile to $ARTIFACTS_DIR/profile.json for every later node, and copies the pack's
 // knowledge files, templates and model rules into $ARTIFACTS_DIR, where the prompts read them.
 // INPUTS_PROFILE=optional (devflow-init): a missing or invalid profile is not an error; the main
-// branch then comes from GitHub. Prints has_profile and has_legacy (.claude/toolkit.yaml) as well.
+// branch then comes from GitHub. Prints has_profile and has_legacy (the retired toolkit's profile) as well.
 import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { MISSING_PROFILE, PROFILE_PATH, artifactsDir, fail, input, must, run } from "./util.ts";
+import { LEGACY_PROFILE_PATH, MISSING_PROFILE, PROFILE_PATH, artifactsDir, fail, input, must, run } from "./util.ts";
 
 function branchRegex(pattern: string, types: string[] | undefined): string {
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -20,7 +20,7 @@ const shared = import.meta.dir;
 const art = artifactsDir();
 const optional = input("profile", false) === "optional";
 const hasProfile = existsSync(PROFILE_PATH);
-const hasLegacy = existsSync(".claude/toolkit.yaml");
+const hasLegacy = existsSync(LEGACY_PROFILE_PATH);
 let resolved: any = null;
 if (!hasProfile && !optional) fail(MISSING_PROFILE);
 if (hasProfile) {

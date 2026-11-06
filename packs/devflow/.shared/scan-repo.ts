@@ -7,9 +7,8 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { listJobs } from "./ci-local.ts";
-import { PROFILE_PATH, artifactsDir, input, isEntry, run } from "./util.ts";
+import { LEGACY_PROFILE_PATH as LEGACY_PATH, PROFILE_PATH, artifactsDir, input, isEntry, run } from "./util.ts";
 
-export const LEGACY_PATH = ".claude/toolkit.yaml";
 export type Source = "existing" | "detected" | "default";
 type Provenance = Record<string, Source>;
 
