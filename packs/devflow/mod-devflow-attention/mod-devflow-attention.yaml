@@ -36,7 +36,7 @@ nodes:
       properties:
         done: { type: boolean }
         choice: { type: string }
-        outcome: { type: object }
+        outcome: { type: [object, "null"] }
         message: { type: string }
         options:
           type: array
@@ -66,5 +66,5 @@ nodes:
     trigger_rule: all_done
     with:
       previous: "$settle.output"
-      answer: "$ask.output"
+      answer: { from: $ask.output, if_skipped: "" }
     output_format: *settle
