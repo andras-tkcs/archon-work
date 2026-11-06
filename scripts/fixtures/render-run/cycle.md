@@ -3,7 +3,7 @@
 ## Implementation manifest
 
 ```yaml
-plan_slug: cyc
+plan_slug: issue-6
 feature_branch: feat/cyc
 review_model: medium
 review_model_reason: two phases

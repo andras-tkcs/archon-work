@@ -1,265 +1,62 @@
 name: devflow-plan
 description: |
-  The first half of the devflow toolkit's ship workflow: plans only. It interviews you in up
-  to 3 rounds of up to 5 questions (the planner's and a fresh reviewer's questions, ranked
-  together; say "publish" to stop asking and publish the plan as it is, or "stop" to abandon it),
-  and when questions are still open at the end it publishes an incomplete plan that
-  devflow-refine continues. It writes the plan, tests it (the manifest validator, a
-  dry run of the generated workflow, and a fresh reviewer who checks every phase against the
-  code; up to two fix rounds), publishes the plan and the steps you must do by hand as run
-  artifacts, and publishes a devflow-run-<slug> workflow that implements the plan's phases up to
-  three at a time and then reviews, opens the PR and watches it. Nothing is implemented by this
-  run.
+  Plans an issue whose design devflow-refine published: writes plan.md (the implementation),
+  plan-test.md (the test plan), before.md and after.md (the steps only a person can do), tests the
+  plan (validate-docs, the manifest validator, a dry run of the generated workflow and a fresh
+  reviewer; up to two fix rounds) and publishes the four files with the build workflow
+  build-issue-<n> to the plans branch in one commit, then updates the issue's devflow comment.
+  It never pauses and implements nothing.
 
-  Use when: a change should be planned with you in the loop, so you can start its implementation
-  when you are ready, "plan this issue with devflow".
-  NOT for: confidential security work (devflow-audit keeps its plans off the plans branch), a
-  quick edit (devflow-quick), or implementing a plan that already exists.
+  Accepts an issue number or URL, a plan or design URL, or a file name such as issue-42/plan.md.
+  Refuses an issue without a design (run devflow-refine first), a closed issue, one whose build
+  has started, or a design.md that does not validate (every error listed). When the design leaves
+  a gap the planner cannot decide, it ends planned: false, needs_refine: true and puts the
+  question on the issue comment; nothing is committed.
+
+  Use when: a refined issue should get its plan and build workflow, "plan issue 42 with devflow".
+  NOT for: an issue without a design (devflow-refine), confidential security work (devflow-audit
+  keeps its plans off the plans branch), or a quick edit (devflow-quick).
 model: medium
 worktree:
   enabled: true
 inputs:
   work:
     default: ""
-    description: What to plan (an issue number or URL, a /review document URL, or a description). Empty means the run's message is the work.
+    description: The issue to plan (a number, #number or URL, a plan or design URL, or issue-<n>/plan.md). Empty means the run's message.
   plans_ref:
-    default: plans
-    description: The branch the plan and the generated workflow are pushed to.
+    default: ""
+    description: The plans branch; empty means the profile's plans.ref, else plans.
   plans_dir:
-    default: plans
-    description: The directory on that branch that holds plans/<slug>/ and workflows/.
+    default: ""
+    description: The directory on that branch holding plans/issue-<n>/ and workflows/; empty means the profile's plans.dir, else plans.
   pack:
     default: ""
     description: The installed pack's qualified name the generated workflow starts its phases from, for example tkcs-lab/devflow. Empty means the pack this workflow was started from.
-returns: publish
+returns: result
+outcome_field: planned
 
 nodes:
-  # ---- Setup: profile, toolkit, environment ----------------------------------------------
-  - id: preflight
-    script: preflight
-    runtime: bun
-    output_format:
-      type: object
-      properties:
-        shared_dir: { type: string }
-        main_branch: { type: string }
-        branch_regex: { type: string }
-      required: [shared_dir, main_branch, branch_regex]
-
-  - id: setup
-    depends_on: [preflight]
-    script: setup-env
-    runtime: bun
-    timeout: 1800000
-
-  # ---- 1. The interview: up to 5 questions a round, at most 3 rounds ----------------------
-  - id: interview
-    depends_on: [setup]
-    loop_group:
-      # next-question.ts ends the interview by the 4th iteration (3 asking rounds + 1 that records
-      # the last answers); 5 leaves one spare.
-      max_iterations: 5
-      nodes:
-        - id: draft
-          command: draft
-          model: medium
-          context: fresh
-          output_format:
-            type: object
-            properties:
-              status: { type: string, enum: [ask, done, stop, publish] }
-              questions: { type: array, items: { type: string } }
-              why_no_more: { type: string }
-            required: [status, questions, why_no_more]
-
-        - id: challenge
-          depends_on: [draft]
-          when: "$draft.output.status == 'ask' || $draft.output.status == 'done'"
-          command: challenge
-          model: medium
-          context: fresh
-          output_format:
-            type: object
-            properties:
-              questions:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    question: { type: string }
-                    by: { type: string, enum: [planner, challenger] }
-                  required: [question, by]
-              reason: { type: string }
-            required: [questions, reason]
-
-        - id: next
-          depends_on: [draft, challenge]
-          trigger_rule: all_done
-          script: next-question
-          runtime: bun
-          with:
-            draft: "$draft.output"
-            challenge: { from: "$challenge.output", if_skipped: "" }
-          output_format:
-            type: object
-            properties:
-              done: { type: boolean }
-              stop: { type: boolean }
-              incomplete: { type: boolean }
-              question: { type: string }
-            required: [done, stop, incomplete, question]
-
-        - id: ask
-          depends_on: [next]
-          when: "$next.output.done == false"
-          wait:
-            attention: "$next.output.question"
-            form: message
-            labels:
-              workflow: devflow-plan
-              stage: interview
-      until_bash: 'd=$next.output.done; [ "$d" = true ]'
-
-  - id: stop-at-interview
-    depends_on: [interview]
-    when: "$interview.output.stop == true"
-    cancel: "Stopped while planning: you said stop, so the interview ended without a plan. The questions and answers are interview.md in the run artifacts."
-
-  # ---- 2. The final plan, the generated workflow, the publication ------------------------
-  - id: plan-loop
-    depends_on: [interview]
-    when: "$interview.output.stop == false"
-    loop_group:
-      max_iterations: 3
-      until_bash: 'd=$plan-check.output.done; [ "$d" = true ]'
-      nodes:
-        - id: finalize
-          command: finalize
-          model: medium
-          context: fresh
-          output_format:
-            type: object
-            properties:
-              scope: { type: string, enum: [small, large] }
-              slug: { type: string }
-              branch: { type: string }
-              title: { type: string }
-              prerequisites: { type: boolean }
-              after: { type: boolean }
-            required: [scope, slug, branch, title, prerequisites, after]
-
-        - id: render
-          depends_on: [finalize]
-          script: render-run
-          runtime: bun
-          with:
-            slug: "$finalize.output.slug"
-            branch: "$finalize.output.branch"
-            title: "$finalize.output.title"
-            main_branch: "$preflight.output.main_branch"
-            branch_regex: "$preflight.output.branch_regex"
-            plans_ref: "$INPUTS.plans_ref"
-            plans_dir: "$INPUTS.plans_dir"
-            pack: "$INPUTS.pack"
-            soft_errors: "true"
-          output_format:
-            type: object
-            properties:
-              ok: { type: boolean }
-              error: { type: string }
-              workflow: { type: string }
-              file: { type: string }
-              waves: { type: integer }
-            required: [ok, error, workflow, file, waves]
-
-        - id: plan-test
-          depends_on: [render]
-          script: test-plan
-          runtime: bun
-          timeout: 600000
-          with:
-            render: "$render.output"
-            shared_dir: "$preflight.output.shared_dir"
-          output_format:
-            type: object
-            properties:
-              ok: { type: boolean }
-              findings: { type: array, items: { type: object } }
-            required: [ok, findings]
-
-        - id: plan-review
-          depends_on: [plan-test]
-          when: "$plan-test.output.ok == true"
-          command: review-plan
-          model: large
-          context: fresh
-          denied_tools: [Write, Edit, NotebookEdit]
-          output_format:
-            type: object
-            properties:
-              clean: { type: boolean }
-              summary: { type: string }
-              findings:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: string }
-                    source: { type: string, enum: [review] }
-                    kind: { type: string, enum: [mechanical, open-decision] }
-                    phase: { type: string }
-                    problem: { type: string }
-                    fix: { type: string }
-                  required: [id, source, kind, phase, problem, fix]
-            required: [clean, summary, findings]
-
-        - id: plan-check
-          depends_on: [plan-test, plan-review]
-          trigger_rule: all_done
-          script: check-plan
-          runtime: bun
-          with:
-            test: "$plan-test.output"
-            review: { from: "$plan-review.output", if_skipped: "" }
-            round: "$LOOP_PREV.plan-check.output.round"
-            finalize: "$finalize.output"
-            render: "$render.output"
-          output_format:
-            type: object
-            properties:
-              done: { type: boolean }
-              round: { type: integer }
-              findings: { type: integer }
-            required: [done, round, findings]
-
-  - id: plan-result
-    depends_on: [plan-loop]
-    script: plan-result
-    runtime: bun
-    output_format:
-      type: object
-      properties:
-        slug: { type: string }
-        branch: { type: string }
-        title: { type: string }
-        workflow: { type: string }
-      required: [slug, branch, title, workflow]
-
-  - id: publish
-    depends_on: [plan-result]
-    script: publish-plan
-    runtime: bun
+  - id: stage
+    include: mod-devflow-plan-block
     with:
-      slug: "$plan-result.output.slug"
-      title: "$plan-result.output.title"
-      workflow: "$plan-result.output.workflow"
+      work: "$INPUTS.work"
       plans_ref: "$INPUTS.plans_ref"
       plans_dir: "$INPUTS.plans_dir"
-      main_branch: "$preflight.output.main_branch"
+      pack: "$INPUTS.pack"
+
+  # A block's skipped refusal nodes are among its sinks, so a node after it needs this trigger rule.
+  - id: result
+    depends_on: [stage]
+    trigger_rule: none_failed_min_one_success
+    bash: "printf '%s\\n' $stage.output"
     output_format:
       type: object
       properties:
-        commit: { type: string }
+        planned: { type: boolean }
+        issue: { type: integer }
+        plan_revision: { type: integer }
+        design_revision: { type: integer }
         workflow: { type: string }
-        message: { type: string }
-      required: [commit, workflow, message]
+        needs_refine: { type: boolean }
+        unresolved_findings: { type: integer }
+      required: [planned, issue, plan_revision, design_revision, workflow, needs_refine, unresolved_findings]

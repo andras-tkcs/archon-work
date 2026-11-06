@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Tests packs/devflow/.shared/render-run.ts (the generated devflow-run-<slug> workflow) and
-# load-plan.ts. The rendered workflows are validated by `archon validate` in a scratch git repo.
+# Tests packs/devflow/.shared/render-run.ts (the generated build-issue-<n> workflow), the plan block's
+# render, test-plan and check-plan scripts, and load-plan.ts. The rendered workflows are validated by
+# `archon validate` in a scratch git repo.
 set -euo pipefail
 
-# Hermetic: an INPUTS_* variable from the calling workflow (e.g. INPUTS_PLAN_COMMIT) must not leak into the loaders.
+# Hermetic: a caller (a workflow run) may export INPUTS_* that the scripts under test read.
 while IFS= read -r v; do unset "$v"; done < <(compgen -e | grep "^INPUTS_" || true)
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,69 +13,96 @@ render="$repo_root/packs/devflow/.shared/render-run.ts"
 loader="$repo_root/packs/devflow/.shared/load-plan.ts"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
-# Hermetic: a caller (a workflow run) may export INPUTS_* that the scripts under test read.
-for v in $(compgen -e | grep '^INPUTS_' || true); do unset "$v"; done
 git_c=(git -c user.name=test -c user.email=test@example.invalid)
+# rend <plan.md> <issue> [flags...]: the CLI with the flags every call needs.
+rend() {
+  local plan="$1" issue="$2"; shift 2
+  bun "$render" "$plan" --issue "$issue" --design-revision 1 --plan-revision 1 --repo o/r --title "T" --main main --pack test/devflow "$@"
+}
 
 # a. render
-bun "$render" "$fx/three-wide.md" --slug three-wide --branch feat/three-wide --title "Three wide" \
-  --main main --pack test/devflow --after "$fx/after.md" --prerequisites "$fx/prereq.md" > "$scratch/three-wide.yaml"
-bun "$render" "$fx/serial.md" --slug serial --branch feat/serial --title "Serial" \
-  --main main --pack test/devflow > "$scratch/serial.yaml"
+bun "$render" "$fx/three-wide.md" --issue 3 --design-revision 2 --plan-revision 1 --repo o/r --title "Three wide" \
+  --main main --pack test/devflow --after "$fx/after.md" --before "$fx/before.md" > "$scratch/three-wide.yaml"
+rend "$fx/serial.md" 2 --title "Serial" --before "$fx/before.md" > "$scratch/serial.yaml"
 
 # b. archon validate accepts both
 repo="$scratch/repo"
 mkdir -p "$repo/.archon/workflows"
 git -C "$repo" init -q -b main
-cp "$scratch/three-wide.yaml" "$repo/.archon/workflows/devflow-run-three-wide.yaml"
-cp "$scratch/serial.yaml" "$repo/.archon/workflows/devflow-run-serial.yaml"
+cp "$scratch/three-wide.yaml" "$repo/.archon/workflows/build-issue-3.yaml"
+cp "$scratch/serial.yaml" "$repo/.archon/workflows/build-issue-2.yaml"
 git -C "$repo" add -A
 "${git_c[@]}" -C "$repo" commit -qm "rendered"
-for s in three-wide serial; do
-  (cd "$repo" && archon validate workflows "devflow-run-$s" --json > "$scratch/validate-$s.json") \
-    || { cat "$scratch/validate-$s.json"; echo "archon validate rejected devflow-run-$s" >&2; exit 1; }
-  echo "validate devflow-run-$s: ok"
+for n in 3 2; do
+  (cd "$repo" && archon validate workflows "build-issue-$n" --json > "$scratch/validate-$n.json") \
+    || { cat "$scratch/validate-$n.json"; echo "archon validate rejected build-issue-$n" >&2; exit 1; }
+  echo "validate build-issue-$n: ok"
 done
 
 # c. structure
 bun -e '
 const [wide, serial] = process.argv.slice(1).map((f) => Bun.YAML.parse(require("node:fs").readFileSync(f, "utf8")) as any);
 const eq = (a: unknown, b: unknown, what: string) => { if (JSON.stringify(a) !== JSON.stringify(b)) { console.error(`FAIL ${what}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`); process.exit(1); } };
+const has = (s: string, part: string, what: string) => { if (!s.includes(part)) { console.error(`FAIL ${what}: no ${JSON.stringify(part)} in ${JSON.stringify(s)}`); process.exit(1); } };
 const ids = (d: any) => d.nodes.map((n: any) => n.id);
 const node = (d: any, id: string) => d.nodes.find((n: any) => n.id === id);
-eq(ids(wide).sort(), ["phase-p1","phase-p2","phase-p3","phase-p4","phase-p5","start","merge-1","merge-2","deliver","result","prerequisites","stop-at-prerequisites","after-steps","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "three-wide node ids");
+eq(wide.name, "build-issue-3", "three-wide name");
+eq(serial.name, "build-issue-2", "serial name");
+eq(ids(wide).sort(), ["phase-p1","phase-p2","phase-p3","phase-p4","phase-p5","start","trace-start","merge-1","merge-2","deliver","result","prerequisites","stop-at-prerequisites","after-steps","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "three-wide node ids");
 for (const p of ["p1","p2","p3"]) eq(node(wide, `phase-${p}`).depends_on, ["start"], `phase-${p} deps`);
 for (const p of ["p4","p5"]) eq(node(wide, `phase-${p}`).depends_on, ["merge-1"], `phase-${p} deps`);
 for (const p of ["p1","p2","p3","p4","p5"]) eq(node(wide, `phase-${p}`).isolation, "worktree", `phase-${p} isolation`);
 eq(node(wide,"phase-p1").workflow, "test/devflow:mod-devflow-phase", "phase workflow");
+eq(node(wide,"phase-p1").with.plan_path, "plans/plans/issue-3/plan.md", "phase plan path");
 eq(node(wide,"deliver").workflow, "test/devflow:mod-devflow-deliver", "deliver workflow");
+eq(node(wide,"deliver").with.issue, "3", "deliver issue");
+eq(node(wide,"deliver").with.slug, "issue-3", "deliver slug");
+eq(node(wide,"deliver").with.branch, "feat/three-wide", "deliver branch from the manifest");
+eq(node(wide,"trace-start").workflow, "test/devflow:mod-devflow-trace", "trace-start workflow");
+eq(node(wide,"trace-start").depends_on, ["start"], "trace-start after start");
+eq(node(wide,"trace-start").with, { issue: "3", event: "building", branch: "feat/three-wide" }, "trace-start inputs");
 eq(wide.returns, "result", "returns");
 eq(ids(wide).includes("merge-3"), false, "no merge-3");
-if (!node(wide, "merge-1").bash.includes("Merge three-wide p1: it’s ＄x")) { console.error("FAIL title replacement"); process.exit(1); }
-eq(ids(serial).sort(), ["phase-p1","phase-p2","start","merge-1","merge-2","deliver","result","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "serial node ids");
+has(node(wide, "merge-1").bash, "Merge issue-3 p1: it’s ＄x", "title replacement");
+has(node(wide, "merge-1").bash, "Plan-Phase: issue-3/p1", "merge trailer");
+has(node(wide, "prerequisites").wait.attention, "plans/plans/issue-3/before.md on the plans branch", "prerequisites name before.md");
+has(wide.description, "#3 (https://github.com/o/r/issues/3)", "description names the issue");
+has(wide.description, "design r2, plan r1", "description names the revisions");
+has(wide.description, "plans/plans/issue-3/plan.md on the plans branch", "description names the plan path");
+// serial has a before.md but no manual_before and no manual_after: no prerequisites, no after-steps.
+eq(ids(serial).sort(), ["phase-p1","phase-p2","start","trace-start","merge-1","merge-2","deliver","result","worktree-check","confirm-worktree-removal","stop-at-worktrees","remove-worktrees"].sort(), "serial node ids");
+for (const d of [wide, serial]) if (JSON.stringify(d).includes("devflow-run")) { console.error("FAIL a rendered workflow names devflow-run"); process.exit(1); }
 ' "$scratch/three-wide.yaml" "$scratch/serial.yaml"
 echo "structure: ok"
 
 # d. a cycle is an error
-if bun "$render" "$fx/cycle.md" --slug cyc --branch feat/cyc --title C --main main --pack test/devflow >/dev/null 2>"$scratch/cycle.err"; then
+if rend "$fx/cycle.md" 6 >/dev/null 2>"$scratch/cycle.err"; then
   echo "cycle.md rendered without error" >&2; exit 1
 fi
 grep -q "dependency cycle" "$scratch/cycle.err"
 echo "cycle: ok"
 
-# d2. a phase id or slug that is not kebab-case is an error
-if bun "$render" "$fx/bad-id.md" --slug bad --branch feat/bad --title B --main main --pack test/devflow >/dev/null 2>"$scratch/badid.err"; then
+# d2. a phase id that is not kebab-case, an issue that is not a number, and a plan_slug of another issue are errors
+if rend "$fx/bad-id.md" 4 >/dev/null 2>"$scratch/badid.err"; then
   echo "bad-id.md rendered without error" >&2; exit 1
 fi
 grep -q "invalid phase id" "$scratch/badid.err"
-if bun "$render" "$fx/serial.md" --slug "x'y" --branch feat/bad --title B --main main --pack test/devflow >/dev/null 2>"$scratch/badslug.err"; then
-  echo "bad slug rendered without error" >&2; exit 1
+if rend "$fx/serial.md" "2'x" >/dev/null 2>"$scratch/badissue.err"; then
+  echo "a bad issue rendered without error" >&2; exit 1
 fi
-grep -q "invalid slug" "$scratch/badslug.err"
+grep -q "invalid issue" "$scratch/badissue.err"
+if rend "$fx/serial.md" 5 >/dev/null 2>"$scratch/otherissue.err"; then
+  echo "another issue's plan rendered without error" >&2; exit 1
+fi
+grep -q "the manifest's plan_slug 'issue-2' must be 'issue-5'" "$scratch/otherissue.err"
+if bun "$render" "$fx/serial.md" --issue 2 --title T --main main --pack test/devflow >/dev/null 2>"$scratch/flags.err"; then
+  echo "missing flags rendered without error" >&2; exit 1
+fi
+grep -q "missing --design-revision" "$scratch/flags.err"
 echo "bad-id: ok"
 
-# d3. render-run.ts, the devflow-plan node script: plan errors are output, environment errors fail
-rr="$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts"
+# d3. render-run, the plan block's node script: plan errors are output, environment errors fail
+rr="$repo_root/packs/devflow/mod-devflow-plan-block/scripts/render-run.ts"
 (
   real_archon="$(command -v archon)"
   mkdir -p "$scratch/rstub"
@@ -84,53 +112,61 @@ if [ "\$1 \$2 \$3" = "workflow list --json" ]; then printf '%s\n' "\$STUB_LIST";
 if [ "\$1 \$2" = "workflow get" ]; then if [ -n "\${STUB_GET_FAIL-}" ]; then echo "boom" >&2; exit 1; fi; printf '%s\\n' "\$STUB_GET"; exit 0; fi
 exec "$real_archon" "\$@"
 STUB
-  chmod +x "$scratch/rstub/archon"
+  printf '#!/bin/sh\necho o/r\n' > "$scratch/rstub/gh"
+  chmod +x "$scratch/rstub/archon" "$scratch/rstub/gh"
   rart="$scratch/rart"
   mkdir -p "$rart"
   cp "$fx/serial.md" "$rart/plan.md"
-  list_ok='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"}]}'
-  list_bad='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"}]}'
+  mods() { local p="$1"; printf '{"name":"%s:mod-devflow-phase"},{"name":"%s:mod-devflow-deliver"},{"name":"%s:mod-devflow-trace"},{"name":"%s:devflow-plan"}' "$p" "$p" "$p" "$p"; }
+  list_ok="{\"workflows\":[$(mods test/devflow)]}"
+  list_bad='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"}]}'
+  list_two="{\"workflows\":[$(mods test/devflow),$(mods other/devflow)]}"
   rr_run() {
-    PATH="$scratch/rstub:$PATH" STUB_LIST="$1" WORKFLOW_ID="${RR_WORKFLOW_ID-wf-test}" STUB_GET="${STUB_GET-}" ARTIFACTS_DIR="$rart" INPUTS_SLUG="$2" INPUTS_BRANCH=feat/serial INPUTS_TITLE=S \
-      INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' INPUTS_PLANS_REF=plans \
-      INPUTS_PLANS_DIR=plans INPUTS_PACK="${3-test/devflow}" INPUTS_SOFT_ERRORS=true bun "$rr"
+    PATH="$scratch/rstub:$PATH" STUB_LIST="$1" WORKFLOW_ID="${RR_WORKFLOW_ID-wf-test}" STUB_GET="${STUB_GET-}" ARTIFACTS_DIR="$rart" \
+      INPUTS_ISSUE="$2" INPUTS_BRANCH="${RR_BRANCH:-feat/serial}" INPUTS_EXISTING_BRANCH="${RR_EXISTING-}" INPUTS_TITLE=S \
+      INPUTS_DESIGN_REVISION=1 INPUTS_PLAN_REVISION=1 INPUTS_MAIN_BRANCH=main INPUTS_BRANCH_REGEX='^feat/[a-z0-9]+(-[a-z0-9]+)*$' \
+      INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_PACK="${3-test/devflow}" INPUTS_SOFT_ERRORS=true bun "$rr"
   }
   cd "$repo"
-  out="$(rr_run "$list_ok" serial)"
+  out="$(rr_run "$list_ok" 2)"
   echo "$out" | grep -q '"ok":true'
-  test -f "$rart/devflow-run-serial.yaml"
-  out="$(rr_run "$list_ok" other)"
+  echo "$out" | grep -q '"workflow":"build-issue-2"'
+  test -f "$rart/build-issue-2.yaml"
+  out="$(rr_run "$list_ok" 9)"
   echo "$out" | grep -q '"ok":false'
-  echo "$out" | grep -q 'differs from the slug'
-  if rr_run "$list_bad" serial >/dev/null 2>"$scratch/rr.err"; then echo "missing mod-devflow-deliver was accepted" >&2; exit 1; fi
-  grep -q 'has no test/devflow:mod-devflow-deliver' "$scratch/rr.err"
+  echo "$out" | grep -q "plan_slug 'issue-2' must be 'issue-9'"
+  out="$(RR_BRANCH=feat/other rr_run "$list_ok" 2)"
+  echo "$out" | grep -q "differs from the branch 'feat/other'"
+  out="$(RR_EXISTING=feat/kept rr_run "$list_ok" 2)"
+  echo "$out" | grep -q "a re-plan keeps the branch"
+  if rr_run "$list_bad" 2 >/dev/null 2>"$scratch/rr.err"; then echo "missing mod-devflow-trace was accepted" >&2; exit 1; fi
+  grep -q 'has no test/devflow:mod-devflow-trace' "$scratch/rr.err"
   # pack default: the pack this run was started from
-  list_two='{"workflows":[{"name":"test/devflow:devflow-plan"},{"name":"test/devflow:mod-devflow-phase"},{"name":"test/devflow:mod-devflow-deliver"},{"name":"other/devflow:devflow-plan"},{"name":"other/devflow:mod-devflow-phase"},{"name":"other/devflow:mod-devflow-deliver"}]}'
-  rm -f "$rart/devflow-run-serial.yaml"
-  out="$(STUB_GET='{"workflow_name":"test/devflow:devflow-plan"}' rr_run "$list_ok" serial "")"
+  rm -f "$rart/build-issue-2.yaml"
+  out="$(STUB_GET='{"workflow_name":"test/devflow:devflow-plan"}' rr_run "$list_ok" 2 "")"
   echo "$out" | grep -q '"ok":true'
-  grep -q 'test/devflow:mod-devflow-phase' "$rart/devflow-run-serial.yaml"
-  rm -f "$rart/devflow-run-serial.yaml"
-  out="$(STUB_GET='{"workflow_name":"test/devflow:devflow-refine"}' rr_run "$list_two" serial "")"
+  grep -q 'test/devflow:mod-devflow-phase' "$rart/build-issue-2.yaml"
+  rm -f "$rart/build-issue-2.yaml"
+  out="$(STUB_GET='{"workflow_name":"test/devflow:devflow-refine"}' rr_run "$list_two" 2 "")"
   echo "$out" | grep -q '"ok":true'
-  grep -q 'test/devflow:' "$rart/devflow-run-serial.yaml"
-  if grep -q 'other/devflow:' "$rart/devflow-run-serial.yaml"; then echo "wrong pack rendered" >&2; exit 1; fi
-  if STUB_GET='{"workflow_name":"devflow-plan"}' rr_run "$list_ok" serial "" >/dev/null 2>"$scratch/rr.err"; then echo "local workflow accepted" >&2; exit 1; fi
+  grep -q 'test/devflow:' "$rart/build-issue-2.yaml"
+  if grep -q 'other/devflow:' "$rart/build-issue-2.yaml"; then echo "wrong pack rendered" >&2; exit 1; fi
+  if STUB_GET='{"workflow_name":"devflow-plan"}' rr_run "$list_ok" 2 "" >/dev/null 2>"$scratch/rr.err"; then echo "local workflow accepted" >&2; exit 1; fi
   grep -q 'is not from an installed pack' "$scratch/rr.err"
-  rm -f "$rart/devflow-run-serial.yaml"
-  out="$(STUB_GET='{"workflow_name":"other/devflow:devflow-plan"}' rr_run "$list_two" serial test/devflow)"
+  rm -f "$rart/build-issue-2.yaml"
+  out="$(STUB_GET='{"workflow_name":"other/devflow:devflow-plan"}' rr_run "$list_two" 2 test/devflow)"
   echo "$out" | grep -q '"ok":true'
-  grep -q 'test/devflow:' "$rart/devflow-run-serial.yaml"
-  if grep -q 'other/devflow:' "$rart/devflow-run-serial.yaml"; then echo "input did not win" >&2; exit 1; fi
-  if RR_WORKFLOW_ID= rr_run "$list_ok" serial "" >/dev/null 2>"$scratch/rr.err"; then echo "unset WORKFLOW_ID accepted" >&2; exit 1; fi
+  grep -q 'test/devflow:' "$rart/build-issue-2.yaml"
+  if grep -q 'other/devflow:' "$rart/build-issue-2.yaml"; then echo "input did not win" >&2; exit 1; fi
+  if RR_WORKFLOW_ID= rr_run "$list_ok" 2 "" >/dev/null 2>"$scratch/rr.err"; then echo "unset WORKFLOW_ID accepted" >&2; exit 1; fi
   grep -q 'WORKFLOW_ID is not set' "$scratch/rr.err"
-  if STUB_GET_FAIL=1 rr_run "$list_ok" serial "" >/dev/null 2>"$scratch/rr.err"; then echo "failing workflow get accepted" >&2; exit 1; fi
+  if STUB_GET_FAIL=1 rr_run "$list_ok" 2 "" >/dev/null 2>"$scratch/rr.err"; then echo "failing workflow get accepted" >&2; exit 1; fi
   grep -q 'workflow get wf-test --json` failed' "$scratch/rr.err"
   echo "render-run node: ok"
 )
 
 # d4. test-plan.ts
-tp="$repo_root/packs/devflow/devflow-plan/scripts/test-plan.ts"
+tp="$repo_root/packs/devflow/mod-devflow-plan-block/scripts/test-plan.ts"
 (
   mkdir -p "$scratch/fakeflow" "$scratch/tpart"
   cat > "$scratch/fakeflow/validate-manifest.py" <<'PY'
@@ -141,11 +177,10 @@ if code:
 sys.exit(code)
 PY
   cp "$fx/serial.md" "$scratch/tpart/plan.md"
-  bun "$render" "$fx/serial.md" --slug serial --branch feat/serial --title "Serial" \
-    --main main --pack test/devflow > "$scratch/t-serial.yaml"
+  rend "$fx/serial.md" 2 > "$scratch/t-serial.yaml"
   cd "$repo"
   tp_run() { ARTIFACTS_DIR="$scratch/tpart" INPUTS_SHARED_DIR="$scratch/fakeflow" INPUTS_RENDER="$1" bun "$tp"; }
-  good='{"ok":true,"error":"","workflow":"devflow-run-serial","file":"'$scratch'/t-serial.yaml","waves":2}'
+  good='{"ok":true,"error":"","workflow":"build-issue-2","file":"'$scratch'/t-serial.yaml","waves":2}'
   tp_run "$good" | grep -q '"ok":true'
   VM_EXIT=1 tp_run "$good" | grep -q '"source":"validate_manifest"'
   VM_EXIT=1 tp_run "$good" | grep -q '"ok":false'
@@ -159,117 +194,88 @@ delete d.returns;
 delete d.outcome_field;
 fs.writeFileSync(dst, Bun.YAML.stringify(d));
 ' "$scratch/t-serial.yaml" "$scratch/t-broken.yaml"
-  broken='{"ok":true,"error":"","workflow":"devflow-run-serial","file":"'$scratch'/t-broken.yaml","waves":2}'
+  broken='{"ok":true,"error":"","workflow":"build-issue-2","file":"'$scratch'/t-broken.yaml","waves":2}'
   if tp_run "$broken" >/dev/null 2>"$scratch/tp.err"; then echo "a broken rendered workflow passed the dry run" >&2; exit 1; fi
   grep -q 'does not complete a dry run' "$scratch/tp.err"
   echo "test-plan: ok"
 )
 
-# d5. check-plan.ts
-cp_script="$repo_root/packs/devflow/.shared/check-plan.ts"
+
+# d5. check-plan.ts: stamps the drafted files, validates them with the design, decides the round
+cp_script="$repo_root/packs/devflow/mod-devflow-plan-block/scripts/check-plan.ts"
 (
+  docs="$repo_root/scripts/fixtures/docs/valid"
   chk="$scratch/chk"
-  mkdir -p "$chk"
-  fin='{"scope":"large","slug":"s","branch":"feat/s","title":"S","prerequisites":false,"after":false}'
-  ren='{"ok":true,"error":"","workflow":"devflow-run-s","file":"/x","waves":1}'
+  body() { awk 'f>=2{print} /^---$/{f++}' "$1" | sed '1{/^$/d}'; }
+  reset() {
+    rm -rf "$chk"; mkdir -p "$chk"
+    cp "$docs/design.md" "$chk/design.md"
+    for k in plan plan-test before after; do body "$docs/$k.md" > "$chk/$k.md"; done
+  }
+  draft='{"scope":"small","title":"Export reports as CSV","branch":"feat/issue-7-csv-export","before":false,"after":true,"needs_refine_present":false,"needs_refine_question":"","needs_refine_why":""}'
+  res='{"issue":7,"plan_revision":0}'
+  ld='{"design_revision":1,"refusal":""}'
+  ren='{"ok":true,"error":"","workflow":"build-issue-7","file":"/x","waves":3}'
   tst='{"ok":true,"findings":[]}'
-  rev='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1","problem":"p","fix":"f"}]}'
-  cp_run() { ARTIFACTS_DIR="$chk" INPUTS_FINALIZE="$fin" INPUTS_RENDER="$ren" INPUTS_TEST="$tst" INPUTS_REVIEW="$1" INPUTS_ROUND="$2" bun "$cp_script"; }
-  cp_run "" "" | grep -q '"done":true'
-  grep -q '"workflow":"devflow-run-s"' "$chk/tested.json"
-  test ! -e "$chk/test-findings.md"
+  rev='{"findings":[{"id":"R1","source":"review","kind":"mechanical","phase":"p1-export","problem":"p","fix":"f"}]}'
+  cp_run() {
+    (cd "$scratch" && ARTIFACTS_DIR="$chk" WORKFLOW_ID=run-7 INPUTS_DRAFT="${DRAFT:-$draft}" INPUTS_RESOLVE="$res" INPUTS_LOAD_DESIGN="$ld" \
+      INPUTS_RENDER="$ren" INPUTS_TEST="$tst" INPUTS_REVIEW="$1" INPUTS_ROUND="$2" bun "$cp_script")
+  }
+  reset
+  out="$(cp_run "" "")"
+  echo "$out" | grep -q '"done":true'
+  echo "$out" | grep -q '"needs_refine_present":false'
+  grep -q '"workflow":"build-issue-7"' "$chk/tested.json"
+  grep -q '"issue":7' "$chk/tested.json"
+  test ! -e "$chk/test-findings.md" && test ! -e "$chk/validation.json"
+  head -8 "$chk/final/plan.md" | grep -q '^design_revision: 1$'
+  head -8 "$chk/final/plan-test.md" | grep -q '^kind: plan-test$'
   out="$(cp_run "$rev" "")"
   echo "$out" | grep -q '"done":false'
   echo "$out" | grep -q '"round":1'
   grep -q '## F1. \[review, mechanical\]' "$chk/test-findings.md"
-  rm -f "$chk"/*
   out="$(cp_run "$rev" 2)"
   echo "$out" | grep -q '"done":true'
   grep -q '"unresolved":1' "$chk/tested.json"
   grep -q '### Unresolved validation findings' "$chk/unresolved.md"
-  grep -qF -- '- F1 [review, mechanical] p1: p' "$chk/unresolved.md"
+  grep -qF -- '- F1 [review, mechanical] p1-export: p' "$chk/unresolved.md"
+  # A drafted file that breaks the scheme is a finding the next round fixes, listed in validation.json.
+  reset
+  sed -i '/^- r1 (2026-11-06, run run-7): first test plan$/d' "$chk/plan-test.md"
+  out="$(cp_run "" "")"
+  echo "$out" | grep -q '"done":false'
+  grep -q '"rule": "V5"' "$chk/validation.json"
+  grep -q 'validate_docs, mechanical' "$chk/test-findings.md"
+  if cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "an invalid plan-test.md at the last round did not fail" >&2; exit 1; fi
+  grep -q 'nothing was published' "$scratch/cp.err"
+  grep -q 'plan-test.md:.* \[V5\]' "$scratch/cp.err"
+  reset
   vm='{"ok":false,"findings":[{"id":"T1","source":"validate_manifest","kind":"mechanical","phase":"","problem":"bad","fix":"f"}]}'
   if tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "round 3 with a manifest finding did not fail" >&2; exit 1; fi
   grep -q 'after 2 fix rounds' "$scratch/cp.err"
-  cp "$fx/serial.md" "$chk/plan.md"
-  fin='{"scope":"large","slug":"serial","branch":"feat/serial","title":"S","prerequisites":false,"after":false}' tst="$vm" cp_run "" 2 | grep -q '"done":true'
-  grep -q '"withheld":true' "$chk/tested.json"
-  grep -q '"workflow":"devflow-run-serial"' "$chk/tested.json"
-  grep -q 'would break the generated' "$chk/unresolved.md"
-  sed 's/plan_slug: serial/plan_slug: other/' "$fx/serial.md" > "$chk/plan.md"
-  if fin='{"scope":"large","slug":"serial","branch":"feat/serial","title":"S","prerequisites":false,"after":false}' tst="$vm" cp_run "" 2 >/dev/null 2>"$scratch/cp.err"; then echo "a plan with a wrong plan_slug did not fail" >&2; exit 1; fi
-  grep -q 'no usable manifest' "$scratch/cp.err"
-  rm -f "$chk/plan.md"
-  cp_run "" "" >/dev/null
-  test ! -e "$chk/unresolved.md"
+  # needs_refine ends the loop at once and validates nothing.
+  rm -rf "$chk"; mkdir -p "$chk"; echo '{}' > "$chk/tested.json"
+  out="$(DRAFT='{"scope":"small","title":"","branch":"","before":false,"after":false,"needs_refine_present":true,"needs_refine_question":"Which dialect?","needs_refine_why":"no doc"}' cp_run "" "")"
+  echo "$out" | grep -q '"done":true'
+  echo "$out" | grep -q '"needs_refine_present":true'
+  echo "$out" | grep -q '"needs_refine_question":"Which dialect?"'
+  test ! -e "$chk/tested.json" && test ! -e "$chk/final"
   echo "check-plan: ok"
 )
 
 # d6. model keys are required
-for spec in 'bad-model|phase '"'"'p2'"'"': model must be small, medium or large (got "haiku")' \
-            'no-reason|phase '"'"'p2'"'"': model medium needs a model_reason' \
-            'no-review-model|review_model must be medium or large (got nothing)'; do
-  name="${spec%%|*}"; want="${spec#*|}"
-  if bun "$render" "$fx/$name.md" --slug "$name" --branch "feat/$name" --title M --main main --pack test/devflow >/dev/null 2>"$scratch/$name.err"; then
+for spec in '5|bad-model|phase '"'"'p2'"'"': model must be small, medium or large (got "haiku")' \
+            '8|no-reason|phase '"'"'p2'"'"': model medium needs a model_reason' \
+            '9|no-review-model|review_model must be medium or large (got nothing)'; do
+  issue="${spec%%|*}"; rest="${spec#*|}"; name="${rest%%|*}"; want="${rest#*|}"
+  if bun "$render" "$fx/$name.md" --issue "$issue" --design-revision 1 --plan-revision 1 --repo o/r --title M --main main --pack test/devflow >/dev/null 2>"$scratch/$name.err"; then
     echo "$name.md rendered without error" >&2; exit 1
   fi
   grep -qF "$want" "$scratch/$name.err" || { echo "$name: expected '$want', got:" >&2; cat "$scratch/$name.err" >&2; exit 1; }
 done
 echo "models: ok"
 
-# d7. next-question.ts
-nq="$repo_root/packs/devflow/.shared/next-question.ts"
-(
-  nq_run() { ARTIFACTS_DIR="$1" INPUTS_DRAFT="$2" INPUTS_CHALLENGE="$3" bun "$nq"; }
-  A="$scratch/nqA"; B="$scratch/nqB"; C="$scratch/nqC"; D="$scratch/nqD"
-  mkdir -p "$A" "$B" "$C" "$D"
-  ask='{"status":"ask","questions":["p"],"why_no_more":""}'
-  # a. round 1: 7 candidates, 5 asked, 2 carried
-  ch='{"questions":[{"question":"p1","by":"planner"},{"question":"p2","by":"planner"},{"question":"c1","by":"challenger"},{"question":"c2","by":"challenger"},{"question":"c3","by":"challenger"},{"question":"c4","by":"challenger"},{"question":"c5","by":"challenger"}],"reason":"r"}'
-  out="$(nq_run "$A" '{"status":"ask","questions":["p1","p2"],"why_no_more":""}' "$ch")"
-  echo "$out" | grep -q '"done":false'
-  echo "$out" | grep -q '"incomplete":false'
-  echo "$out" | grep -q 'Round 1 of 3'
-  echo "$out" | grep -qF '**5.** (Q5)'
-  if echo "$out" | grep -qF '**6.**'; then echo "next-question asked a 6th question" >&2; exit 1; fi
-  grep -q '^## Round 1' "$A/interview.md"
-  grep -q '^### Q5 (asked by: challenger)' "$A/interview.md"
-  test "$(grep -c '^### (asked by:' "$A/carried.md")" = 2
-  # b. round 2
-  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c6","by":"challenger"}],"reason":"r"}')"
-  echo "$out" | grep -q 'Round 2 of 3'
-  echo "$out" | grep -q '1 question\.'
-  grep -q '^### Q6 (asked by:' "$A/interview.md"
-  test ! -e "$A/carried.md"
-  # c. round 3
-  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c7","by":"challenger"}],"reason":"r"}')"
-  echo "$out" | grep -q 'Round 3 of 3'
-  echo "$out" | grep -q 'This is the last round'
-  # d. out of rounds
-  out="$(nq_run "$A" "$ask" '{"questions":[{"question":"c8","by":"challenger"},{"question":"c9","by":"planner"}],"reason":"r"}')"
-  echo "$out" | grep -q '"done":true'
-  echo "$out" | grep -q '"incomplete":true'
-  echo "$out" | grep -q '"stop":false'
-  grep -q '^### Q8 (asked by:' "$A/open-questions.md"
-  grep -q '^### Q9 (asked by:' "$A/open-questions.md"
-  grep -q '^## Interview ended incomplete' "$A/interview.md"
-  grep -q 'The interview ended after 3 rounds' "$A/interview.md"
-  # e. stop touches nothing
-  out="$(nq_run "$B" '{"status":"stop","questions":[],"why_no_more":""}' "")"
-  echo "$out" | grep -q '"stop":true'
-  test -z "$(ls -A "$B")"
-  # f. publish
-  out="$(nq_run "$C" '{"status":"publish","questions":["x"],"why_no_more":""}' "")"
-  echo "$out" | grep -q '"incomplete":true'
-  grep -qF 'You said "publish"' "$C/interview.md"
-  grep -q '^### Q1 (asked by: planner)' "$C/open-questions.md"
-  # g. done
-  out="$(nq_run "$D" '{"status":"done","questions":[],"why_no_more":"w"}' '{"questions":[],"reason":"none"}')"
-  echo "$out" | grep -q '"done":true'
-  echo "$out" | grep -q '"incomplete":false'
-  test ! -e "$D/open-questions.md"
-  echo "next-question: ok"
-)
 
 # e. load-plan against a local bare origin
 origin="$scratch/origin.git"
@@ -285,8 +291,8 @@ git add -A
 git push -q origin main
 main_sha="$(git rev-parse HEAD)"
 git switch -q -c plans
-mkdir -p plans/s
-cp "$fx/serial.md" plans/s/plan.md
+mkdir -p plans/plans/issue-2
+cp "$fx/serial.md" plans/plans/issue-2/plan.md
 git add -A
 "${git_c[@]}" commit -qm "plan"
 git push -q origin plans
@@ -294,7 +300,7 @@ git switch -q main
 
 export ARTIFACTS_DIR="$scratch/art"
 mkdir -p "$ARTIFACTS_DIR"
-lp() { INPUTS_PLAN_REF=plans INPUTS_PLAN_PATH=plans/s/plan.md INPUTS_SHARED_DIR=/x "$@" bun "$loader"; }
+lp() { INPUTS_PLAN_REF=plans INPUTS_PLAN_PATH=plans/plans/issue-2/plan.md INPUTS_SHARED_DIR=/x "$@" bun "$loader"; }
 
 out="$(INPUTS_MODE=phase INPUTS_PHASE=p1 INPUTS_BASE="$main_sha" lp env)"
 echo "$out" | grep -q '"done":false'
@@ -303,7 +309,7 @@ echo "$out" | grep -q '"review_model":"medium"'
 test -f "$ARTIFACTS_DIR/plan.md" && test -f "$ARTIFACTS_DIR/context.json"
 echo "load-plan phase (not done): ok"
 
-"${git_c[@]}" commit -q --allow-empty -m "Phase one" -m "Plan-Phase: serial/p1"
+"${git_c[@]}" commit -q --allow-empty -m "Phase one" -m "Plan-Phase: issue-2/p1"
 done_sha="$(git rev-parse HEAD)"
 out="$(INPUTS_MODE=phase INPUTS_PHASE=p1 INPUTS_BASE="$done_sha" lp env)"
 echo "$out" | grep -q '"done":true'
@@ -315,174 +321,6 @@ INPUTS_MODE=deliver lp env | grep -q '"model":""'
 git switch -q -c feat/other
 if INPUTS_MODE=deliver lp env >/dev/null 2>&1; then echo "deliver on the wrong branch succeeded" >&2; exit 1; fi
 echo "load-plan deliver: ok"
-# f. publish-plan against a fresh bare origin: no plans branch yet, no .archon/config.yaml
-publisher="$repo_root/packs/devflow/devflow-plan/scripts/publish-plan.ts"
-porigin="$scratch/porigin.git"
-pclone="$scratch/pclone"
-git init -q --bare -b main "$porigin"
-git clone -q "$porigin" "$pclone" 2>/dev/null
-cd "$pclone"
-echo base > f.txt
-git add -A
-"${git_c[@]}" commit -qm base
-git push -q origin main
-stubs="$scratch/stubs"
-mkdir -p "$stubs"
-printf '#!/bin/sh\necho test/repo\n' > "$stubs/gh"
-printf '#!/bin/sh\ntouch "%s/archon-called"\n' "$scratch" > "$stubs/archon"
-chmod +x "$stubs/gh" "$stubs/archon"
-pub_art="$scratch/pub-art"
-mkdir -p "$pub_art"
-cp "$fx/serial.md" "$pub_art/plan.md"
-echo "# After implementing S" > "$pub_art/after.md"
-printf 'name: devflow-run-s\nnodes: []\n' > "$pub_art/devflow-run-s.yaml"
-publish() {
-  PATH="$stubs:$PATH" ARTIFACTS_DIR="$pub_art" WORKFLOW_ID=test INPUTS_SLUG="${PSLUG:-s}" INPUTS_TITLE=S \
-    INPUTS_WORKFLOW="${PWF:-devflow-run-s}" INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main \
-    bun "$publisher"
-}
-publish > "$scratch/publish1.json"
-git -C "$porigin" show plans:plans/s/plan.md >/dev/null
-git -C "$porigin" show plans:plans/s/after.md >/dev/null
-git -C "$porigin" show plans:plans/workflows/devflow-run-s.yaml >/dev/null
-test ! -e "$scratch/archon-called"
-grep -q extraWorkflowSources "$pub_art/published.md"
-grep -q 'assumptions: none' "$scratch/publish1.json"
-test -z "$(git branch --list 'plans-*')"
-test -z "$(git -C "$porigin" branch --list 'plans-*')"
-n1="$(git -C "$porigin" rev-list --count plans)"
-printf '\n## Assumptions\n\n- **A**: b.\n- **C**: d.\n' >> "$pub_art/plan.md"
-publish > "$scratch/publish2.json"
-grep -q 'assumptions: 2' "$scratch/publish2.json"
-grep -q '\*\*A\*\*: b\.' "$pub_art/published.md"
-n2="$(git -C "$porigin" rev-list --count plans)"
-test "$((n2 - n1))" -eq 1
-test "$(git -C "$porigin" log -1 --format=%s plans)" = "Plan s: S"
-echo "# refined" >> "$pub_art/plan.md"
-INPUTS_COMMIT_VERB=Refine publish > "$scratch/publish3.json"
-test "$(git -C "$porigin" log -1 --format=%s plans)" = "Refine s: S"
-if INPUTS_COMMIT_VERB=Bad publish >/dev/null 2>"$scratch/verb.err"; then echo "bad commit_verb succeeded" >&2; exit 1; fi
-grep -q "invalid commit_verb" "$scratch/verb.err"
-cp "$fx/serial.md" "$pub_art/plan.md"
-printf '### Unresolved validation findings\n\nThe large-tier review still reported these after its last round.\n\n- F1 [review, mechanical] p1: x\n' > "$pub_art/unresolved.md"
-publish > "$scratch/publish4.json"
-grep -q '"unresolved":1' "$scratch/publish4.json"
-pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
-test "$(echo "$pub_plan" | sed -n 3p)" = '> [!WARNING]'
-test "$(echo "$pub_plan" | grep -c '^### Unresolved validation findings$')" -eq 1
-risks_l="$(echo "$pub_plan" | grep -n '^## Risks and open questions$' | cut -d: -f1)"
-unres_l="$(echo "$pub_plan" | grep -n '^### Unresolved validation findings$' | cut -d: -f1)"
-man_l="$(echo "$pub_plan" | grep -n '^## Implementation manifest$' | cut -d: -f1)"
-test "$risks_l" -lt "$unres_l" && test "$unres_l" -lt "$man_l"
-publish >/dev/null
-test "$(git -C "$porigin" show plans:plans/s/plan.md | grep -c '^### Unresolved validation findings$')" -eq 1
-rm -f "$pub_art/unresolved.md"
-echo "publish-plan unresolved: ok"
-# incomplete: open interview questions, workflow published
-cp "$fx/serial.md" "$pub_art/plan.md"
-printf '### Q4 (asked by: planner)\n\n**Q?** a or b. **Recommendation: a).**\n\n### Q5 (asked by: challenger)\n\n**Q?** c or d. **Recommendation: c).**\n' > "$pub_art/open-questions.md"
-out="$(publish)"
-pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
-test "$(echo "$pub_plan" | sed -n 3p)" = '> [!WARNING]'
-echo "$pub_plan" | grep -q '^> Incomplete plan: 2 interview questions are still open'
-echo "$pub_plan" | grep -qF 'Running `devflow-run-s` now accepts the recommended defaults'
-test "$(echo "$pub_plan" | grep -c '^## Open questions$')" -eq 1
-git -C "$porigin" cat-file -e plans:plans/workflows/devflow-run-s.yaml
-echo "$out" | grep -q 'incomplete: 2 open questions'
-echo "$pub_plan" > "$pub_art/plan.md"
-publish >/dev/null
-pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
-test "$(echo "$pub_plan" | grep -c '^> Incomplete plan:')" -eq 1
-test "$(echo "$pub_plan" | grep -c '^## Open questions$')" -eq 1
-# withheld: the workflow is removed
-rm "$pub_art/open-questions.md"
-cp "$fx/serial.md" "$pub_art/plan.md"
-printf '### Unresolved validation findings\n\nThe plan test still reported these after its last fix round. They would break the generated\nworkflow, so it was not published.\n\n- F1 [validate_manifest, mechanical] plan: bad\n' > "$pub_art/unresolved.md"
-echo '{"withheld":true}' > "$pub_art/tested.json"
-out="$(publish)"
-if git -C "$porigin" cat-file -e plans:plans/workflows/devflow-run-s.yaml 2>/dev/null; then echo "withheld workflow was not removed" >&2; exit 1; fi
-pub_plan="$(git -C "$porigin" show plans:plans/s/plan.md)"
-echo "$pub_plan" | grep -q '1 validation findings would break the generated workflow'
-echo "$pub_plan" | grep -q 'There is no runnable'
-if echo "$pub_plan" | grep -qF 'Running `devflow-run-s`'; then echo "withheld note promises a run" >&2; exit 1; fi
-if echo "$pub_plan" | grep -q 'This plan was published with'; then echo "withheld plan has the review warning" >&2; exit 1; fi
-grep -q 'was removed from the plans branch' "$pub_art/published.md"
-grep -q 'Continue with devflow-refine' "$pub_art/published.md"
-echo "$out" | grep -q '"workflow":""'
-# clean up: republish the complete plan (restores the workflow file)
-rm "$pub_art/unresolved.md" "$pub_art/tested.json"
-cp "$fx/serial.md" "$pub_art/plan.md"
-publish >/dev/null
-echo "publish-plan incomplete: ok"
-echo "publish-plan: ok"
-if ARTIFACTS_DIR="$scratch" bun "$repo_root/packs/devflow/devflow-plan/scripts/render-run.ts" 2>"$scratch/rp.err"; then echo "render-run without inputs succeeded" >&2; exit 1; fi
-grep -q "input 'slug' is empty" "$scratch/rp.err"
-echo "render-run entry: ok"
-# g. load-published against the bare origin of section f
-loader2="$repo_root/packs/devflow/devflow-refine/scripts/load-published.ts"
-cp "$fx/serial.md" "$pub_art/plan.md"
-printf 'name: devflow-run-serial\nnodes: []\n' > "$pub_art/devflow-run-serial.yaml"
-PSLUG=serial PWF=devflow-run-serial publish >/dev/null
-cp "$fx/three-wide.md" "$pub_art/plan.md"
-printf 'name: devflow-run-three-wide\nnodes: []\n' > "$pub_art/devflow-run-three-wide.yaml"
-PSLUG=three-wide PWF=devflow-run-three-wide publish >/dev/null
-mkdir -p "$scratch/stubs2"
-printf '%s\n' '#!/bin/sh' 'case "$*" in *"pr list"*) echo "${GH_MERGED:-0}";; *) echo test/repo;; esac' > "$scratch/stubs2/gh"
-chmod +x "$scratch/stubs2/gh"
-mkdir -p "$scratch/lp2-art"
-lp2() { PATH="$scratch/stubs2:$PATH" ARTIFACTS_DIR="$scratch/lp2-art" INPUTS_PLANS_REF=plans INPUTS_PLANS_DIR=plans INPUTS_MAIN_BRANCH=main "$@" bun "$loader2"; }
-rm -rf "$scratch/lp2-art"/*
-msg1="refine serial: split p2 into two"
-out="$(lp2 env USER_MESSAGE="$msg1")"
-echo "$out" | grep -q '"slug":"serial"'
-echo "$out" | grep -q '"branch":"feat/serial"'
-echo "$out" | grep -q '"started":false'
-test -e "$scratch/lp2-art/original/plan.md"
-test -e "$scratch/lp2-art/original/after.md"
-out="$(lp2 env USER_MESSAGE="please refine https://github.com/test/repo/blob/plans/plans/three-wide/plan.md: add a phase")"
-echo "$out" | grep -q '"slug":"three-wide"'
-out="$(lp2 env USER_MESSAGE="refine plans/serial: add a phase")"
-echo "$out" | grep -q '"slug":"serial"'
-if lp2 env USER_MESSAGE="merge serial and three-wide plans" >/dev/null 2>"$scratch/lp2.err"; then echo "several plans succeeded" >&2; exit 1; fi
-grep -q "names more than one plan (serial, three-wide)" "$scratch/lp2.err"
-if lp2 env USER_MESSAGE="refine the plan please" >/dev/null 2>"$scratch/lp2.err"; then echo "no plan succeeded" >&2; exit 1; fi
-grep -q "no plan named" "$scratch/lp2.err"
-if lp2 env USER_MESSAGE="refine serial" >/dev/null 2>"$scratch/lp2.err"; then echo "no change succeeded" >&2; exit 1; fi
-grep -q "say what to change in the plan serial" "$scratch/lp2.err"
-printf '### Q1 (asked by: planner)\n\nA or b? **Recommendation: a).**\n' > "$pub_art/open-questions.md"
-cp "$fx/serial.md" "$pub_art/plan.md"
-PSLUG=serial PWF=devflow-run-serial publish >/dev/null
-out="$(lp2 env USER_MESSAGE="refine serial")"
-echo "$out" | grep -q '"slug":"serial"'
-echo "$out" | grep -q 'Continue the incomplete plan serial'
-out="$(lp2 env USER_MESSAGE="refine serial: add a phase")"
-echo "$out" | grep -q '"work":"refine serial: add a phase"'
-rm "$pub_art/open-questions.md"
-cp "$fx/serial.md" "$pub_art/plan.md"
-PSLUG=serial PWF=devflow-run-serial publish >/dev/null
-if lp2 env USER_MESSAGE="refine serial" >/dev/null 2>"$scratch/lp2.err"; then echo "bare slug on a complete plan succeeded" >&2; exit 1; fi
-echo "load-published incomplete: ok"
-out="$(lp2 env INPUTS_PLAN=three-wide USER_MESSAGE="refine serial: add a phase")"
-echo "$out" | grep -q '"slug":"three-wide"'
-if lp2 env INPUTS_PLAN=nope USER_MESSAGE="x" >/dev/null 2>"$scratch/lp2.err"; then echo "unknown plan succeeded" >&2; exit 1; fi
-grep -q "no plan 'nope' on plans" "$scratch/lp2.err"
-git push -q origin HEAD:refs/heads/feat/serial
-out="$(lp2 env USER_MESSAGE="$msg1")"
-echo "$out" | grep -q '"started":true'
-echo "$out" | grep -q '"reason":"branch"'
-echo "$out" | grep -q "is already being implemented"
-if lp2 env INPUTS_CHECK_ONLY=true USER_MESSAGE="$msg1" >/dev/null 2>"$scratch/lp2.err"; then echo "check-only on a started plan succeeded" >&2; exit 1; fi
-grep -q "Not refined: the plan serial is already being implemented" "$scratch/lp2.err"
-git push -q origin :refs/heads/feat/serial
-"${git_c[@]}" commit -q --allow-empty -m "Phase one" -m "Plan-Phase: serial/p1"
-git push -q origin HEAD:main
-out="$(lp2 env USER_MESSAGE="$msg1")"
-echo "$out" | grep -q '"reason":"merged"'
-out="$(lp2 env GH_MERGED=1 INPUTS_PLAN=three-wide USER_MESSAGE="add a phase")"
-echo "$out" | grep -q '"reason":"merged"'
-out="$(lp2 env GH_MERGED=0 INPUTS_CHECK_ONLY=true INPUTS_PLAN=three-wide USER_MESSAGE="add a phase")"
-test "$out" = '{"ok":true}'
-echo "load-published: ok"
 # h. pick-one
 pick="$repo_root/packs/devflow/.shared/pick-one.ts"
 test "$(INPUTS_MEDIUM='{"a":1}' bun "$pick")" = '{"a":1}'

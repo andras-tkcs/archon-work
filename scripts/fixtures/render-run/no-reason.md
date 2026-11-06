@@ -3,7 +3,7 @@
 ## Implementation manifest
 
 ```yaml
-plan_slug: no-reason
+plan_slug: issue-8
 feature_branch: feat/no-reason
 review_model: medium
 review_model_reason: two phases

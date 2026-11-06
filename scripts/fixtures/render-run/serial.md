@@ -3,7 +3,7 @@
 ## Implementation manifest
 
 ```yaml
-plan_slug: serial
+plan_slug: issue-2
 feature_branch: feat/serial
 review_model: medium
 review_model_reason: two phases

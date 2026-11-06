@@ -1,55 +1,86 @@
-# Green path: the interview ends at once, the plan is finalized, rendered and published.
+# The design is valid, the plan clears its test in the first round, and the five files are published.
 fixture:
   expect: completed
-preflight:
+  reached: [stage__load-design, draft-plan, plan-check, stage__publish, result]
+stage__preflight:
   shared_dir: /stub/devflow
   main_branch: main
-  branch_regex: "^(feature|fix|chore|tests)/[a-z0-9]+(-[a-z0-9]+)*$"
-setup: '{"hooks":[],"env_file":"project-env.sh"}'
-ask:
-  text: "x"
-draft:
-  status: done
-  questions: []
-  why_no_more: all settled
-challenge:
-  questions: []
-  reason: none
-next:
-  done: true
-  stop: false
-  incomplete: false
-  question: ""
-finalize:
-  scope: large
-  slug: x
-  branch: feat/x
-  title: X
-  prerequisites: true
-  after: false
+  branch_regex: "^(feat|fix|docs|chore)/[a-z0-9]+(-[a-z0-9]+)*$"
+stage__setup: '{"hooks":[],"env_file":"project-env.sh"}'
+stage__resolve:
+  issue: 7
+  slug: issue-7
+  folder: plans/plans/issue-7
+  title: Export reports as CSV
+  body: Reports can only be viewed in the browser.
+  comments: ""
+  url: https://github.com/o/r/issues/7
+  state: open
+  design_revision: 1
+  plan_revision: 0
+  design_present: true
+  plan_present: false
+  existing_branch: ""
+  plans_commit: 0123456789abcdef0123456789abcdef01234567
+  change: ""
+  started: false
+  refusal: ""
+stage__load-design:
+  design_revision: 1
+  refusal: ""
+draft-plan:
+  scope: small
+  title: Export reports as CSV
+  branch: feat/issue-7-csv-export
+  before: false
+  after: true
+  needs_refine_present: false
+  needs_refine_question: ""
+  needs_refine_why: ""
 render:
   ok: true
   error: ""
-  workflow: devflow-run-x
-  file: /stub/x.yaml
-  waves: 2
+  workflow: build-issue-7
+  file: /stub/art/build-issue-7.yaml
+  waves: 3
 plan-test:
   ok: true
   findings: []
 plan-review:
   clean: true
-  summary: ok
+  summary: every phase checked
   findings: []
 plan-check:
   done: true
   round: 1
   findings: 0
-plan-result:
-  slug: x
-  branch: feat/x
-  title: X
-  workflow: devflow-run-x
-publish:
-  commit: abc
-  workflow: devflow-run-x
-  message: ok
+  needs_refine_present: false
+  needs_refine_question: ""
+  needs_refine_why: ""
+stage__plan-result:
+  issue: 7
+  branch: feat/issue-7-csv-export
+  title: Export reports as CSV
+  workflow: build-issue-7
+stage__publish:
+  commit: 89abcdef0123456789abcdef0123456789abcdef
+  workflow: build-issue-7
+  revision: 1
+  unresolved: 0
+  message: published build-issue-7
+stage__result:
+  planned: true
+  issue: 7
+  plan_revision: 1
+  design_revision: 1
+  workflow: "build-issue-7"
+  needs_refine: false
+  unresolved_findings: 0
+result:
+  planned: true
+  issue: 7
+  plan_revision: 1
+  design_revision: 1
+  workflow: "build-issue-7"
+  needs_refine: false
+  unresolved_findings: 0

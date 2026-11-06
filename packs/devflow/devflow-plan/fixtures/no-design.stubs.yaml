@@ -1,0 +1,27 @@
+# The issue has no design yet: the run cancels at resolve's refusal, before any planning.
+fixture:
+  expect: cancelled
+  reached: [stage__refuse]
+stage__preflight:
+  shared_dir: /stub/devflow
+  main_branch: main
+  branch_regex: "^(feat|fix|docs|chore)/[a-z0-9]+(-[a-z0-9]+)*$"
+stage__setup: '{"hooks":[],"env_file":"project-env.sh"}'
+stage__resolve:
+  issue: 7
+  slug: issue-7
+  folder: plans/plans/issue-7
+  title: Export reports as CSV
+  body: Reports can only be viewed in the browser.
+  comments: ""
+  url: https://github.com/o/r/issues/7
+  state: open
+  design_revision: 0
+  plan_revision: 0
+  design_present: false
+  plan_present: false
+  existing_branch: ""
+  plans_commit: 0123456789abcdef0123456789abcdef01234567
+  change: ""
+  started: false
+  refusal: "Not planned: issue #7 has no design. Run: archon workflow run tkcs-lab/devflow:devflow-refine \"#7\""

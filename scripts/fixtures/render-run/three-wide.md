@@ -3,7 +3,7 @@
 ## Implementation manifest
 
 ```yaml
-plan_slug: three-wide
+plan_slug: issue-3
 feature_branch: feat/three-wide
 max_parallel: 3
 review_model: large
